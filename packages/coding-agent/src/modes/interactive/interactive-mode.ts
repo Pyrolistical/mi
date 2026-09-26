@@ -75,6 +75,7 @@ import { BUILTIN_SLASH_COMMANDS } from "../../core/slash-commands.ts";
 import type { SourceInfo } from "../../core/source-info.ts";
 import { withBuiltInRenderers } from "../../core/tools/renderers/index.ts";
 import type { TruncationResult } from "../../core/tools/truncate.ts";
+import type { UpdateChecker } from "../../core/update-check.ts";
 import { getUsageCostBreakdown } from "../../core/usage-totals.ts";
 import { copyToClipboard, readClipboardText } from "../../utils/clipboard.ts";
 import { extensionForImageMimeType, readClipboardImage } from "../../utils/clipboard-image.ts";
@@ -96,6 +97,7 @@ import { FooterComponent, formatTokens } from "./components/footer.ts";
 import { formatKeyText, keyDisplayText, keyText } from "./components/keybinding-hints.ts";
 import { ModelSelectorComponent } from "./components/model-selector.ts";
 import { ScopedModelsSelectorComponent } from "./components/scoped-models-selector.ts";
+import { UpdateStatusComponent } from "./components/update-status.ts";
 import { SessionSelectorComponent } from "./components/session-selector.ts";
 import { SettingsSelectorComponent } from "./components/settings-selector.ts";
 import { SkillInvocationMessageComponent } from "./components/skill-invocation-message.ts";
@@ -245,6 +247,7 @@ function createFuzzyAutocompleteItems<T>(
 }
 
 export interface InteractiveModeOptions {
+	updateChecker?: UpdateChecker;
 	startupDiagnostics?: AgentSessionRuntimeDiagnostic[];
 	modelFallbackMessage?: string;
 	initialMessage?: string;
@@ -333,6 +336,7 @@ export class InteractiveMode {
 	private extensionWidgetsAbove = new Map<string, Component & { dispose?(): void }>();
 	private extensionWidgetsBelow = new Map<string, Component & { dispose?(): void }>();
 	private widgetContainerAbove!: Container;
+	private readonly updateStatus = new UpdateStatusComponent();
 	private widgetContainerBelow!: Container;
 
 	private customFooter: (Component & { dispose?(): void }) | undefined = undefined;
@@ -582,6 +586,13 @@ export class InteractiveMode {
 
 		this.ui.start();
 		this.isInitialized = true;
+		this.options.updateChecker?.start(
+			(counts) => {
+				this.updateStatus.setCounts(counts);
+				this.ui.requestRender();
+			},
+			(error) => this.showWarning(`Update check failed: ${error instanceof Error ? error.message : String(error)}`),
+		);
 
 		this.builtInHeader = new Text("", 0, 0);
 		this.headerContainer.addChild(this.builtInHeader);
@@ -1578,28 +1589,20 @@ export class InteractiveMode {
 
 	private renderWidgets(): void {
 		if (!this.widgetContainerAbove || !this.widgetContainerBelow) return;
-		this.renderWidgetContainer(this.widgetContainerAbove, this.extensionWidgetsAbove, true, true);
-		this.renderWidgetContainer(this.widgetContainerBelow, this.extensionWidgetsBelow, false, false);
+		this.renderWidgetContainer(this.widgetContainerAbove, this.extensionWidgetsAbove, this.updateStatus);
+		this.renderWidgetContainer(this.widgetContainerBelow, this.extensionWidgetsBelow, undefined);
 		this.ui.requestRender();
 	}
 
 	private renderWidgetContainer(
 		container: Container,
 		widgets: Map<string, Component & { dispose?(): void }>,
-		spacerWhenEmpty: boolean,
-		leadingSpacer: boolean,
+		leadingLine: Component | undefined,
 	): void {
 		container.clear();
 
-		if (widgets.size === 0) {
-			if (spacerWhenEmpty) {
-				container.addChild(new Spacer(1));
-			}
-			return;
-		}
-
-		if (leadingSpacer) {
-			container.addChild(new Spacer(1));
+		if (leadingLine) {
+			container.addChild(leadingLine);
 		}
 		for (const component of widgets.values()) {
 			container.addChild(component);
@@ -4515,6 +4518,7 @@ export class InteractiveMode {
 	}
 
 	stop(): void {
+		this.options.updateChecker?.dispose();
 		this.disposeActiveSelector();
 		if (this.settingsManager.getShowTerminalProgress()) {
 			this.ui.terminal.setProgress(false);

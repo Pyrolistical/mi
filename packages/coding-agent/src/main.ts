@@ -24,7 +24,7 @@ import { buildInitialMessage } from "./cli/initial-message.ts";
 import { listModels } from "./cli/list-models.ts";
 import { selectSession } from "./cli/session-picker.ts";
 import { showStartupSelector } from "./cli/startup-ui.ts";
-import { APP_NAME, ENV_SESSION_DIR, expandTildePath, getAgentDir, VERSION } from "./config.ts";
+import { APP_NAME, ENV_SESSION_DIR, expandTildePath, getAgentDir, getPackageDir, VERSION } from "./config.ts";
 import { type CreateAgentSessionRuntimeFactory, createAgentSessionRuntime } from "./core/agent-session-runtime.ts";
 import {
 	type AgentSessionRuntimeDiagnostic,
@@ -41,6 +41,7 @@ import { assertValidSessionId, SessionManager } from "./core/session-manager.ts"
 import { collectSettingsDiagnostics, deduplicateDiagnostics } from "./core/settings-diagnostics.ts";
 import { SettingsManager } from "./core/settings-manager.ts";
 import { printTimings, resetTimings, time } from "./core/timings.ts";
+import { UpdateChecker } from "./core/update-check.ts";
 import { builtInExtensions } from "./extensions/index.ts";
 import { InteractiveMode } from "./modes/index.ts";
 import { isLocalPath, normalizePath, resolvePath } from "./utils/paths.ts";
@@ -672,6 +673,8 @@ export async function main(args: string[], options?: MainOptions) {
 		initialImages,
 		initialMessages: parsed.messages,
 		verbose: parsed.verbose,
+		updateChecker:
+			startupBenchmark || offlineMode ? undefined : await UpdateChecker.create(getPackageDir(), getAgentDir()),
 	});
 	if (startupBenchmark) {
 		await interactiveMode.init();

@@ -21,6 +21,7 @@ import type {
 	TextContent,
 	ToolResultMessage,
 	Usage,
+	UserMessage,
 } from "@earendil-works/pi-ai/compat";
 import {
 	clampThinkingLevel,
@@ -104,6 +105,7 @@ import {
 	type NormalizedBuildSystemPromptOptions,
 	normalizeBuildSystemPromptOptions,
 } from "./system-prompt.ts";
+import { type BackgroundCommandResult, BackgroundCommands, type BackgroundJob } from "./tools/background-commands.ts";
 import { type BashOperations, createLocalBashOperations } from "./tools/bash.ts";
 import { createAllToolDefinitions } from "./tools/index.ts";
 import { createToolDefinitionFromAgentTool } from "./tools/tool-definition-wrapper.ts";
@@ -168,7 +170,17 @@ export type AgentSessionEvent =
 			reason: "manual" | "threshold" | "overflow";
 	  }
 	| { type: "summarization_retry_finished" }
-	| { type: "bash_execution_update"; id?: string; delta: string };
+	| { type: "bash_execution_update"; id?: string; delta: string }
+	| { type: "background_commands_update"; running: number };
+
+function backgroundCommandMessage(result: BackgroundCommandResult) {
+	return {
+		customType: "background-command",
+		content: result.text,
+		display: true,
+		details: { toolCallId: result.toolCallId, command: result.command },
+	};
+}
 
 export type AgentSessionEventListener = (event: AgentSessionEvent) => void;
 
@@ -286,6 +298,10 @@ export class AgentSession {
 
 	private readonly _bashAbortControllers = new Set<AbortController>();
 	private _pendingBashMessages: BashExecutionMessage[] = [];
+	private readonly _backgroundCommands = new BackgroundCommands(
+		(result) => void this._deliverBackgroundCommand(result),
+		(running) => this._emit({ type: "background_commands_update", running }),
+	);
 
 	private _extensionRunner!: ExtensionRunner;
 	private _turnIndex = 0;
@@ -1005,6 +1021,10 @@ export class AgentSession {
 	}
 
 	dispose(): void {
+		this._appendQueuedCustomMessages();
+		for (const result of this._backgroundCommands.close()) {
+			this._appendCustomMessage({ role: "custom", ...backgroundCommandMessage(result), timestamp: Date.now() });
+		}
 		try {
 			this.abortRetry();
 			this.abortCompaction();
@@ -1212,6 +1232,7 @@ export class AgentSession {
 			this._runSystemPromptOptions = undefined;
 			this._flushPendingBashMessages();
 			this._flushPendingCustomMessages();
+			if (this._agentRunAbortRequested) this._appendQueuedCustomMessages();
 			await this._emitAgentSettled();
 		}
 	}
@@ -1351,63 +1372,82 @@ export class AgentSession {
 			return;
 		}
 
-		this._flushPendingBashMessages();
-		this._flushPendingCustomMessages();
-
-		if (!this.model) {
-			throw new Error(formatNoModelSelectedMessage());
-		}
-
-		const hasConfiguredAuth =
-			this._modelRuntime.hasConfiguredAuth(this.model.provider) ||
-			(await this._modelRuntime.checkAuth(this.model.provider)) !== undefined;
-		if (!hasConfiguredAuth) {
-			throw new Error(formatNoApiKeyFoundMessage(this.model.provider));
-		}
-
-		const lastAssistant = this._findLastAssistantMessage();
-		if (lastAssistant) {
-			await this._checkCompaction(lastAssistant, false);
-		}
-
-		const selectedToolsBefore = this._baseSystemPromptOptions.selectedTools;
-		const result = await this._extensionRunner.emitBeforeAgentStart(
+		await this._startAgentRun(
 			expandedText,
 			currentImages,
-			this._baseSystemPromptOptions,
-		);
-		const handlerEditedTools =
-			result.systemPromptOptions.selectedTools.length !== selectedToolsBefore.length ||
-			result.systemPromptOptions.selectedTools.some((name, index) => name !== selectedToolsBefore[index]);
-		if (!handlerEditedTools) result.systemPromptOptions.selectedTools = this.getActiveToolNames();
-
-		const messages: AgentMessage[] = [];
-		const userContent: (TextContent | ImageContent)[] = [{ type: "text", text: expandedText }];
-		userContent.push(...(currentImages ?? []));
-		messages.push({
-			role: "user",
-			content: userContent,
-			timestamp: Date.now(),
-		});
-
-		for (const msg of this._pendingNextTurnMessages) {
-			messages.push(msg);
-		}
-		this._pendingNextTurnMessages = [];
-
-		for (const msg of result.messages) {
-			messages.push({
-				role: "custom",
-				customType: msg.customType,
-				content: msg.content ?? [],
-				display: msg.display,
-				details: msg.details,
+			{
+				role: "user",
+				content: [{ type: "text", text: expandedText }, ...(currentImages ?? [])],
 				timestamp: Date.now(),
-			});
+			},
+			preflightResult,
+		);
+	}
+
+	private async _startAgentRun(
+		promptText: string,
+		promptImages: ImageContent[] | undefined,
+		leadingMessage: AgentMessage,
+		preflightResult?: (disposition: PromptDisposition) => void,
+	): Promise<void> {
+		this._isAgentRunActive = true;
+		const messages: AgentMessage[] = [];
+		try {
+			this._flushPendingBashMessages();
+			this._flushPendingCustomMessages();
+
+			if (!this.model) {
+				throw new Error(formatNoModelSelectedMessage());
+			}
+
+			const hasConfiguredAuth =
+				this._modelRuntime.hasConfiguredAuth(this.model.provider) ||
+				(await this._modelRuntime.checkAuth(this.model.provider)) !== undefined;
+			if (!hasConfiguredAuth) {
+				throw new Error(formatNoApiKeyFoundMessage(this.model.provider));
+			}
+
+			const lastAssistant = this._findLastAssistantMessage();
+			if (lastAssistant) {
+				await this._checkCompaction(lastAssistant, false);
+			}
+
+			const selectedToolsBefore = this._baseSystemPromptOptions.selectedTools;
+			const result = await this._extensionRunner.emitBeforeAgentStart(
+				promptText,
+				promptImages,
+				this._baseSystemPromptOptions,
+			);
+			const handlerEditedTools =
+				result.systemPromptOptions.selectedTools.length !== selectedToolsBefore.length ||
+				result.systemPromptOptions.selectedTools.some((name, index) => name !== selectedToolsBefore[index]);
+			if (!handlerEditedTools) result.systemPromptOptions.selectedTools = this.getActiveToolNames();
+
+			messages.push(leadingMessage);
+
+			for (const msg of this._pendingNextTurnMessages) {
+				messages.push(msg);
+			}
+			this._pendingNextTurnMessages = [];
+
+			for (const msg of result.messages) {
+				messages.push({
+					role: "custom",
+					customType: msg.customType,
+					content: msg.content ?? [],
+					display: msg.display,
+					details: msg.details,
+					timestamp: Date.now(),
+				});
+			}
+			const updateMessage = this._preparePromptAndToolLoadout(result.systemPromptOptions);
+			this._runSystemPromptOptions = result.systemPromptOptions;
+			if (updateMessage) messages.unshift(updateMessage);
+		} catch (error) {
+			this._isAgentRunActive = false;
+			this._resolveIdleWaitIfIdle();
+			throw error;
 		}
-		const updateMessage = this._preparePromptAndToolLoadout(result.systemPromptOptions);
-		this._runSystemPromptOptions = result.systemPromptOptions;
-		if (updateMessage) messages.unshift(updateMessage);
 
 		preflightResult?.("started");
 		await this._runAgentPrompt(messages);
@@ -1564,10 +1604,15 @@ export class AgentSession {
 			}
 		} else if (options?.triggerTurn) {
 			if (this._isEmittingAgentSettled) {
-				this._deferredSettledActions.push(async () => await this._runAgentPrompt(appMessage));
+				this._deferredSettledActions.push(async () => await this.sendCustomMessage(message, options));
 				return;
 			}
-			await this._runAgentPrompt(appMessage);
+			if (this.isCompacting) {
+				await this.waitForIdle();
+				await this.sendCustomMessage(message, options);
+				return;
+			}
+			await this._startAgentRun(contentText(appMessage.content), undefined, appMessage);
 		} else if (this.isStreaming) {
 			this._pendingCustomMessages.push(appMessage);
 		} else {
@@ -1585,6 +1630,12 @@ export class AgentSession {
 		this._refreshFinalizedContext();
 		this._emit({ type: "message_start", message: appMessage });
 		this._emit({ type: "message_end", message: appMessage });
+	}
+
+	private _appendQueuedCustomMessages(): void {
+		for (const message of this.agent.removeQueuedMessages((m): m is CustomMessage => m.role === "custom")) {
+			this._appendCustomMessage(message);
+		}
 	}
 
 	private _flushPendingCustomMessages(): void {
@@ -1633,9 +1684,13 @@ export class AgentSession {
 		const followUp = [...this._followUpMessages];
 		this._steeringMessages = [];
 		this._followUpMessages = [];
-		this.agent.clearAllQueues();
+		this.agent.removeQueuedMessages((m): m is UserMessage => m.role === "user");
 		this._emitQueueUpdate();
 		return { steering, followUp };
+	}
+
+	get backgroundJobs(): BackgroundJob[] {
+		return this._backgroundCommands.jobs;
 	}
 
 	get pendingMessageCount(): number {
@@ -1671,6 +1726,26 @@ export class AgentSession {
 			return;
 		}
 		await this._getIdleWaitPromise();
+	}
+
+	async waitForBackgroundCommands(): Promise<void> {
+		await this.waitForIdle();
+		while (this._backgroundCommands.size > 0) {
+			await this._backgroundCommands.next();
+			await this.waitForIdle();
+		}
+	}
+
+	private async _deliverBackgroundCommand(result: BackgroundCommandResult): Promise<void> {
+		try {
+			await this.sendCustomMessage(backgroundCommandMessage(result), { triggerTurn: true, deliverAs: "steer" });
+		} catch (err) {
+			this._extensionRunner.emitError({
+				extensionPath: "<runtime>",
+				event: "background_command",
+				error: err instanceof Error ? err.message : String(err),
+			});
+		}
 	}
 
 	private async _emitModelSelect(
@@ -2649,7 +2724,7 @@ export class AgentSession {
 					]),
 				)
 			: createAllToolDefinitions(this._cwd, {
-					bash: { commandPrefix: shellCommandPrefix, shellPath },
+					bash: { commandPrefix: shellCommandPrefix, shellPath, background: this._backgroundCommands },
 				});
 
 		this._baseToolDefinitions = new Map(

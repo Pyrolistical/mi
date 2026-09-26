@@ -167,6 +167,12 @@ class PendingMessageQueue {
 	clear(): void {
 		this.messages = [];
 	}
+
+	remove<T extends AgentMessage>(predicate: (message: AgentMessage) => message is T): T[] {
+		const removed = this.messages.filter(predicate);
+		this.messages = this.messages.filter((message) => !predicate(message));
+		return removed;
+	}
 }
 
 type ActiveRun = {
@@ -279,6 +285,10 @@ export class Agent {
 	clearAllQueues(): void {
 		this.clearSteeringQueue();
 		this.clearFollowUpQueue();
+	}
+
+	removeQueuedMessages<T extends AgentMessage>(predicate: (message: AgentMessage) => message is T): T[] {
+		return [...this.steeringQueue.remove(predicate), ...this.followUpQueue.remove(predicate)];
 	}
 
 	hasQueuedMessages(): boolean {

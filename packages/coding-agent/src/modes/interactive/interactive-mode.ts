@@ -82,6 +82,7 @@ import { extensionForImageMimeType, readClipboardImage } from "../../utils/clipb
 import { getCwdRelativePath } from "../../utils/paths.ts";
 import { killTrackedDetachedChildren } from "../../utils/shell.ts";
 import { AssistantMessageComponent } from "./components/assistant-message.ts";
+import { BackgroundJobsComponent } from "./components/background-jobs.ts";
 import { BashExecutionComponent } from "./components/bash-execution.ts";
 import { BranchSummaryMessageComponent } from "./components/branch-summary-message.ts";
 import { CompactionSummaryMessageComponent } from "./components/compaction-summary-message.ts";
@@ -96,8 +97,8 @@ import { FooterComponent, formatTokens } from "./components/footer.ts";
 import { formatKeyText, keyDisplayText, keyText } from "./components/keybinding-hints.ts";
 import { ModelSelectorComponent } from "./components/model-selector.ts";
 import { ScopedModelsSelectorComponent } from "./components/scoped-models-selector.ts";
-import { UpdateStatusComponent } from "./components/update-status.ts";
 import { SessionSelectorComponent } from "./components/session-selector.ts";
+import { BACKGROUND_JOBS_CLICK_TARGET, StatusRowComponent } from "./components/status-row.ts";
 import { SettingsSelectorComponent } from "./components/settings-selector.ts";
 import { SkillInvocationMessageComponent } from "./components/skill-invocation-message.ts";
 import {
@@ -333,7 +334,7 @@ export class InteractiveMode {
 	private extensionWidgetsAbove = new Map<string, Component & { dispose?(): void }>();
 	private extensionWidgetsBelow = new Map<string, Component & { dispose?(): void }>();
 	private widgetContainerAbove!: Container;
-	private readonly updateStatus = new UpdateStatusComponent();
+	private readonly statusRow = new StatusRowComponent();
 	private widgetContainerBelow!: Container;
 
 	private customFooter: (Component & { dispose?(): void }) | undefined = undefined;
@@ -582,9 +583,10 @@ export class InteractiveMode {
 
 		this.ui.start();
 		this.isInitialized = true;
+		this.ui.addClickHandler(BACKGROUND_JOBS_CLICK_TARGET, () => this.showBackgroundJobs());
 		this.options.updateChecker?.start(
 			(counts) => {
-				this.updateStatus.setCounts(counts);
+				this.statusRow.setUpdateCounts(counts);
 				this.ui.requestRender();
 			},
 			(error) => this.showWarning(`Update check failed: ${error instanceof Error ? error.message : String(error)}`),
@@ -689,7 +691,7 @@ export class InteractiveMode {
 		while (true) {
 			const userInput = await this.getUserInput();
 			try {
-				await this.session.prompt(userInput);
+				await this.session.prompt(userInput, { streamingBehavior: "steer" });
 			} catch (error: unknown) {
 				const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
 				this.showError(errorMessage);
@@ -1582,7 +1584,7 @@ export class InteractiveMode {
 
 	private renderWidgets(): void {
 		if (!this.widgetContainerAbove || !this.widgetContainerBelow) return;
-		this.renderWidgetContainer(this.widgetContainerAbove, this.extensionWidgetsAbove, this.updateStatus);
+		this.renderWidgetContainer(this.widgetContainerAbove, this.extensionWidgetsAbove, this.statusRow);
 		this.renderWidgetContainer(this.widgetContainerBelow, this.extensionWidgetsBelow, undefined);
 		this.ui.requestRender();
 	}
@@ -2253,6 +2255,7 @@ export class InteractiveMode {
 	}
 
 	private subscribeToAgent(): void {
+		this.statusRow.setBackgroundJobs(this.session.backgroundJobs.length);
 		this.unsubscribe = this.session.subscribe(async (event) => {
 			await this.handleEvent(event);
 		});
@@ -2446,6 +2449,11 @@ export class InteractiveMode {
 				break;
 
 			case "bash_execution_update":
+				break;
+
+			case "background_commands_update":
+				this.statusRow.setBackgroundJobs(event.running);
+				this.ui.requestRender();
 				break;
 
 			case "tool_execution_start": {
@@ -3461,6 +3469,14 @@ export class InteractiveMode {
 		this.editorContainer.addChild(created.component);
 		this.ui.setFocus(created.focus);
 		this.ui.requestRender();
+	}
+
+	private showBackgroundJobs(): void {
+		this.showSelector((done) => {
+			const timer = setInterval(() => this.ui.requestRender(), 1000);
+			const component = new BackgroundJobsComponent(() => this.session.backgroundJobs, Date.now, done);
+			return { component, focus: component, dispose: () => clearInterval(timer) };
+		});
 	}
 
 	private showSettingsSelector(): void {

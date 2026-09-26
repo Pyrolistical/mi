@@ -13,6 +13,7 @@ import {
 	untrackDetachedChildPid,
 } from "../../utils/shell.ts";
 import type { ExtensionContext, ToolDefinition } from "../extensions/types.ts";
+import type { BackgroundCommandResult, BackgroundCommands } from "./background-commands.ts";
 import { OutputAccumulator } from "./output-accumulator.ts";
 import { BASH_UPDATE_THROTTLE_MS, bashRenderers } from "./renderers/bash.ts";
 import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
@@ -20,6 +21,8 @@ import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, type TruncationResult
 
 const MAX_TIMEOUT_MS = 2_147_483_647;
 const MAX_TIMEOUT_SECONDS = MAX_TIMEOUT_MS / 1000;
+const DEFAULT_BACKGROUND_AFTER_MS = 2_000;
+const BACKGROUNDED = Symbol("backgrounded");
 
 function resolveTimeoutMs(timeout: number | undefined): number | undefined {
 	if (timeout === undefined) return undefined;
@@ -37,6 +40,11 @@ function resolveTimeoutMs(timeout: number | undefined): number | undefined {
 const bashSchema = Type.Object({
 	command: Type.String({ description: "Shell command to execute" }),
 	timeout: Type.Optional(Type.Number({ description: "Timeout in seconds (optional, no default timeout)" })),
+	background: Type.Optional(
+		Type.Boolean({
+			description: "Run in the background and return immediately (optional, slow commands are backgrounded anyway)",
+		}),
+	),
 });
 
 export type BashToolInput = Static<typeof bashSchema>;
@@ -159,6 +167,8 @@ export interface BashToolOptions {
 	shellPath?: string;
 	exposeSessionEnvironment?: boolean;
 	spawnHook?: BashSpawnHook;
+	background?: BackgroundCommands;
+	backgroundAfterMs?: number;
 }
 
 export type BashRenderState = {
@@ -166,6 +176,17 @@ export type BashRenderState = {
 	endedAt: number | undefined;
 	interval: NodeJS.Timeout | undefined;
 };
+
+interface ShellOutcome {
+	text: string;
+	details?: BashToolDetails;
+	status?: string;
+}
+
+function backgroundAfter(ms: number): Promise<typeof BACKGROUNDED> {
+	const timer = AbortSignal.timeout(ms);
+	return new Promise((resolve) => timer.addEventListener("abort", () => resolve(BACKGROUNDED), { once: true }));
+}
 
 export function createBashToolDefinition(
 	cwd: string,
@@ -175,19 +196,27 @@ export function createBashToolDefinition(
 	const commandPrefix = options?.commandPrefix;
 	const exposeSessionEnvironment = options?.exposeSessionEnvironment ?? true;
 	const spawnHook = options?.spawnHook;
+	const background = options?.background;
+	const backgroundAfterMs = options?.backgroundAfterMs ?? DEFAULT_BACKGROUND_AFTER_MS;
+	const backgroundDescription = background
+		? ` Commands still running after ${backgroundAfterMs / 1000} seconds, or started with background: true, continue in the background and their output is sent to you when they exit. Do not poll, sleep or wait for them; do other work, or end your turn if there is nothing else to do.`
+		: "";
 	return {
 		name: "bash",
 		label: "bash",
-		description: `Execute a bash command in the current working directory. Returns stdout and stderr. Output is truncated to last ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). If truncated, full output is saved to a temp file. Optionally provide a timeout in seconds.`,
+		description: `Execute a bash command in the current working directory. Returns stdout and stderr. Output is truncated to last ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). If truncated, full output is saved to a temp file. Optionally provide a timeout in seconds.${backgroundDescription}`,
 		parameters: bashSchema,
 		constrainedSampling: { type: "json_schema", strict: "prefer" },
 		async execute(
-			_toolCallId,
-			{ command, timeout }: { command: string; timeout?: number },
+			toolCallId,
+			{ command, timeout, background: runInBackground }: { command: string; timeout?: number; background?: boolean },
 			signal?: AbortSignal,
 			onUpdate?,
 			ctx?: ExtensionContext,
 		) {
+			if (runInBackground && !background) {
+				throw new Error("Background bash commands are not available");
+			}
 			const resolvedCommand = commandPrefix ? `${commandPrefix}\n${command}` : command;
 			const spawnContext = resolveSpawnContext(
 				resolvedCommand,
@@ -201,9 +230,10 @@ export function createBashToolDefinition(
 			let updateTimer: NodeJS.Timeout | undefined;
 			let updateDirty = false;
 			let lastUpdateAt = 0;
+			let backgrounded = false;
 
 			const emitOutputUpdate = () => {
-				if (!onUpdate || !updateDirty) return;
+				if (!onUpdate || !updateDirty || backgrounded) return;
 				updateDirty = false;
 				lastUpdateAt = Date.now();
 				const snapshot = output.snapshot({ persistIfTruncated: true });
@@ -280,12 +310,19 @@ export function createBashToolDefinition(
 
 			const appendStatus = (text: string, status: string) => `${text ? `${text}\n\n` : ""}${status}`;
 
-			try {
+			const commandAbort = new AbortController();
+			const abortCommand = () => commandAbort.abort();
+			const startedAt = Date.now();
+			let killedByUser = false;
+			if (signal?.aborted) abortCommand();
+			signal?.addEventListener("abort", abortCommand, { once: true });
+
+			const run = async (): Promise<ShellOutcome> => {
 				let exitCode: number | null;
 				try {
 					const result = await ops.exec(spawnContext.command, spawnContext.cwd, {
 						onData: handleData,
-						signal,
+						signal: commandAbort.signal,
 						timeout,
 						env: spawnContext.env,
 					});
@@ -294,26 +331,86 @@ export function createBashToolDefinition(
 					const snapshot = await finishOutput();
 					const { text } = formatOutput(snapshot, "");
 					if (err instanceof Error && err.message === "aborted") {
-						throw new Error(appendStatus(text, "Command aborted"));
+						return { text, status: killedByUser ? "Command killed by the user" : "Command aborted" };
 					}
 					if (err instanceof Error && err.message.startsWith("timeout:")) {
 						const timeoutSecs = err.message.split(":")[1];
-						throw new Error(appendStatus(text, `Command timed out after ${timeoutSecs} seconds`));
+						return { text, status: `Command timed out after ${timeoutSecs} seconds` };
 					}
 					throw err;
 				}
 
 				const snapshot = await finishOutput();
-				const { text: outputText, details } = formatOutput(snapshot);
+				const { text, details } = formatOutput(snapshot);
 				if (exitCode === null) {
-					throw new Error(appendStatus(outputText, "Command terminated without an exit code"));
+					return { text, details, status: "Command terminated without an exit code" };
 				}
 				if (exitCode !== 0) {
-					throw new Error(appendStatus(outputText, `Command exited with code ${exitCode}`));
+					return { text, details, status: `Command exited with code ${exitCode}` };
 				}
-				return { content: [{ type: "text", text: outputText }], details };
+				return { text, details };
+			};
+
+			const foreground = (outcome: ShellOutcome) => {
+				if (outcome.status) {
+					throw new Error(appendStatus(outcome.text, outcome.status));
+				}
+				return { content: [{ type: "text" as const, text: outcome.text }], details: outcome.details };
+			};
+
+			try {
+				if (!background) {
+					return foreground(await run());
+				}
+				const outcome = run();
+				const winner = await Promise.race([
+					outcome,
+					runInBackground ? Promise.resolve(BACKGROUNDED) : backgroundAfter(backgroundAfterMs),
+				]);
+				if (winner !== BACKGROUNDED) {
+					return foreground(winner);
+				}
+				backgrounded = true;
+				signal?.removeEventListener("abort", abortCommand);
+				background.signal.addEventListener("abort", abortCommand, { once: true });
+				const finished = (text: string): BackgroundCommandResult => ({
+					toolCallId,
+					command,
+					text: `Background command finished: ${command}\n\n${text}`,
+				});
+				const settle = async (): Promise<BackgroundCommandResult> => {
+					let text: string;
+					try {
+						const { text: outputText, status } = await outcome;
+						text = appendStatus(outputText, status ?? "Command exited with code 0");
+					} catch (err) {
+						text = err instanceof Error ? err.message : String(err);
+					} finally {
+						background.signal.removeEventListener("abort", abortCommand);
+					}
+					return finished(text);
+				};
+				const kill = () => {
+					killedByUser = true;
+					abortCommand();
+				};
+				const close = () => {
+					const { text } = formatOutput(output.snapshot({ persistIfTruncated: true }), "");
+					return finished(appendStatus(text, "Command killed because the session closed"));
+				};
+				background.add({ command, startedAt, kill, close }, settle());
+				return {
+					content: [
+						{
+							type: "text",
+							text: "Command is running in the background. Its output will be sent to you when it exits.",
+						},
+					],
+					details: undefined,
+				};
 			} finally {
 				clearUpdateTimer();
+				if (!backgrounded) signal?.removeEventListener("abort", abortCommand);
 			}
 		},
 		...bashRenderers,

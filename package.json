@@ -9,7 +9,8 @@
 		"test": "bun scripts/run-tests.ts",
 		"mi": "bun packages/coding-agent/src/cli.ts",
 		"typecheck": "tsc --noEmit",
-		"format": "prettier --write ."
+		"format": "prettier --write .",
+		"count-lines": "bun scripts/count-lines.ts"
 	},
 	"devDependencies": {
 		"@types/bun": "^1.4.0",

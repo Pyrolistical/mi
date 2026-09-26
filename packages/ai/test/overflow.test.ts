@@ -85,6 +85,11 @@ describe("isContextOverflow", () => {
 		expect(isContextOverflow(message, 32768)).toBe(false);
 	});
 
+	it("treats bodyless 413 payload too large errors as overflow for any provider", () => {
+		expect(isContextOverflow(createErrorMessage("413 status code (no body)", "cerebras"), 131072)).toBe(true);
+		expect(isContextOverflow(createErrorMessage("413 status code (no body)", "5090"), 262144)).toBe(true);
+	});
+
 	it("does not treat Bedrock throttling 'Too many tokens' as overflow", () => {
 		const message = createErrorMessage("Throttling error: Too many tokens, please wait before trying again.");
 		expect(isContextOverflow(message, 200000)).toBe(false);

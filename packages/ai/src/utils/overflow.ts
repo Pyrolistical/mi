@@ -27,6 +27,8 @@ const OVERFLOW_PATTERNS = [
 	/token limit exceeded/i,
 ];
 
+const BODYLESS_PAYLOAD_TOO_LARGE_PATTERN = /^413\s*(?:status code)?\s*\(no body\)/i;
+
 const NON_OVERFLOW_PATTERNS = [/^(Throttling error|Service unavailable):/i, /rate limit/i, /too many requests/i];
 
 export function isContextOverflow(message: AssistantMessage, contextWindow?: number): boolean {
@@ -34,6 +36,9 @@ export function isContextOverflow(message: AssistantMessage, contextWindow?: num
 		const isNonOverflow = NON_OVERFLOW_PATTERNS.some((p) => p.test(message.errorMessage!));
 		if (!isNonOverflow) {
 			if (OVERFLOW_PATTERNS.some((p) => p.test(message.errorMessage!))) {
+				return true;
+			}
+			if (BODYLESS_PAYLOAD_TOO_LARGE_PATTERN.test(message.errorMessage)) {
 				return true;
 			}
 		}

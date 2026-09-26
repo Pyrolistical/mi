@@ -91,78 +91,14 @@ describe("readClipboardText", () => {
 });
 
 describe("copyToClipboard", () => {
-	test("macOS uses pbcopy and skips OSC 52", async () => {
-		await copyToClipboard("hello");
-		expect(mocks.command).toHaveBeenCalledWith("pbcopy", [], { input: "hello", timeoutMs: 5000 });
-		expect(osc52Writes).toHaveLength(0);
-	});
-	test("Linux uses xclip with a display", async () => {
-		mocks.platform.mockReturnValue("linux");
+	test.each(["darwin", "linux"] as const)("%s: writes OSC 52 without running commands", async (platform) => {
+		mocks.platform.mockReturnValue(platform);
 		stubEnv("DISPLAY", ":0");
 		await copyToClipboard("hello");
-		expect(mocks.command).toHaveBeenCalledWith("xclip", ["-selection", "clipboard"], {
-			input: "hello",
-			timeoutMs: 5000,
-		});
-	});
-	test("waits for the command write before emitting remote OSC 52", async () => {
-		stubEnv("SSH_CONNECTION", "client server");
-		let complete = (_value: Buffer | undefined) => {};
-		mocks.command.mockReturnValue(
-			new Promise<Buffer | undefined>((resolve) => {
-				complete = resolve;
-			}),
-		);
-		const copy = copyToClipboard("hello");
-		expect(osc52Writes).toHaveLength(0);
-		complete(Buffer.alloc(0));
-		await copy;
-		expect(osc52Writes).toHaveLength(1);
-	});
-	test("tries xclip and xsel after wl-copy fails", async () => {
-		mocks.platform.mockReturnValue("linux");
-		stubEnv("WAYLAND_DISPLAY", "wayland-0");
-		stubEnv("DISPLAY", ":0");
-		mocks.command.mockImplementation(async (name) => (name === "xsel" ? Buffer.alloc(0) : undefined));
-		await copyToClipboard("hello");
-		expect(mocks.command.mock.calls.map(([name]) => name)).toEqual(["wl-copy", "xclip", "xsel"]);
-		expect(osc52Writes).toHaveLength(0);
-	});
-	test("local Linux failure does not report an unverified OSC 52 write as success", async () => {
-		mocks.platform.mockReturnValue("linux");
-		stubEnv("DISPLAY", ":0");
-		mocks.command.mockResolvedValue(undefined);
-		await expect(copyToClipboard("hello")).rejects.toThrow(
-			"Clipboard unavailable: install `xclip` or `xsel`, or check X11 access",
-		);
-		expect(mocks.command.mock.calls.map(([name]) => name)).toEqual(["xclip", "xsel"]);
-		expect(osc52Writes).toHaveLength(0);
-	});
-	test("display-less Linux falls back to OSC 52", async () => {
-		mocks.platform.mockReturnValue("linux");
-		await copyToClipboard("hello");
+		expect(osc52Writes).toEqual([`\x1b]52;c;${Buffer.from("hello").toString("base64")}\x07`]);
 		expect(mocks.command).not.toHaveBeenCalled();
-		expect(osc52Writes).toHaveLength(1);
-	});
-	test("reports the Wayland clipboard tool instead of the X11 fallback", async () => {
-		mocks.platform.mockReturnValue("linux");
-		stubEnv("WAYLAND_DISPLAY", "wayland-0");
-		stubEnv("DISPLAY", ":0");
-		mocks.command.mockResolvedValue(undefined);
-		await expect(copyToClipboard("hello")).rejects.toThrow(
-			"Clipboard unavailable: install `wl-clipboard` (`wl-copy`) or check Wayland access",
-		);
-		expect(mocks.command.mock.calls.map(([name]) => name)).toEqual(["wl-copy", "xclip", "xsel"]);
-	});
-	test("uses OSC 52 when command writes fail in a remote session", async () => {
-		stubEnv("SSH_CONNECTION", "client server");
-		mocks.command.mockResolvedValue(undefined);
-		await copyToClipboard("hello");
-		expect(osc52Writes).toHaveLength(1);
 	});
 	test("does not emit oversized OSC 52 payloads", async () => {
-		stubEnv("SSH_CONNECTION", "client server");
-		mocks.command.mockResolvedValue(undefined);
 		await expect(copyToClipboard("x".repeat(80_000))).rejects.toThrow(
 			"Clipboard unavailable: text exceeds the OSC 52 size limit",
 		);

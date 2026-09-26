@@ -1,5 +1,5 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import { APP_NAME, CONFIG_DIR_NAME, ENV_AGENT_DIR, ENV_SESSION_DIR } from "../config.ts";
+import { APP_NAME, ENV_AGENT_DIR, ENV_SESSION_DIR, XDG_CONFIG_DIR_NAME } from "../config.ts";
 import type { ExtensionFlag } from "../core/extensions/types.ts";
 
 export interface Args {
@@ -300,7 +300,7 @@ Examples:
   ${APP_NAME} --exclude-tools ask_question
 
 Environment Variables:
-  ${ENV_AGENT_DIR.padEnd(32)} - Config directory (default: ~/${CONFIG_DIR_NAME}/agent)
+  ${ENV_AGENT_DIR.padEnd(32)} - Config directory (default: $XDG_CONFIG_HOME/${XDG_CONFIG_DIR_NAME})
   ${ENV_SESSION_DIR.padEnd(32)} - Session storage directory (overridden by --session-dir)
   MI_PACKAGE_DIR                   - Override package directory (for Nix/Guix store paths)
   MI_OFFLINE                       - Disable startup network operations when set to 1/true/yes

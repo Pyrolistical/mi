@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { afterEach, describe, expect, test } from "bun:test";
-import { findNodePackageDir } from "../src/config.ts";
+import { findNodePackageDir, getAgentDir } from "../src/config.ts";
 
 let tempDir: string | undefined;
 
@@ -23,5 +23,20 @@ describe("findNodePackageDir", () => {
 		writeFileSync(join(distDir, "package.json"), "{}");
 
 		expect(findNodePackageDir(bundleDir)).toBe(tempDir);
+	});
+});
+
+describe("getAgentDir", () => {
+	const saved = process.env.XDG_CONFIG_HOME;
+
+	afterEach(() => {
+		if (saved === undefined) delete process.env.XDG_CONFIG_HOME;
+		else process.env.XDG_CONFIG_HOME = saved;
+	});
+
+	test("uses XDG_CONFIG_HOME", () => {
+		process.env.XDG_CONFIG_HOME = "/xdg/config";
+
+		expect(getAgentDir()).toBe("/xdg/config/mi");
 	});
 });

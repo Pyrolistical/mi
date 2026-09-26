@@ -14,7 +14,7 @@ describe("SettingsManager", () => {
 			rmSync(testDir, { recursive: true });
 		}
 		mkdirSync(agentDir, { recursive: true });
-		mkdirSync(join(projectDir, ".pi"), { recursive: true });
+		mkdirSync(join(projectDir, ".mi"), { recursive: true });
 	});
 
 	afterEach(() => {
@@ -160,7 +160,7 @@ describe("SettingsManager", () => {
 	describe("error tracking", () => {
 		it("should collect and clear load errors via drainErrors", () => {
 			const globalSettingsPath = join(agentDir, "settings.json");
-			const projectSettingsPath = join(projectDir, ".pi", "settings.json");
+			const projectSettingsPath = join(projectDir, ".mi", "settings.json");
 			writeFileSync(globalSettingsPath, "{ invalid global json");
 			writeFileSync(projectSettingsPath, "{ invalid project json");
 
@@ -183,11 +183,11 @@ describe("SettingsManager", () => {
 			const settingsPath = join(agentDir, "settings.json");
 			writeFileSync(settingsPath, JSON.stringify({ defaultProvider: "openai" }));
 
-			rmSync(join(projectDir, ".pi"), { recursive: true });
+			rmSync(join(projectDir, ".mi"), { recursive: true });
 
 			const manager = SettingsManager.create(projectDir, agentDir);
 
-			expect(existsSync(join(projectDir, ".pi"))).toBe(false);
+			expect(existsSync(join(projectDir, ".mi"))).toBe(false);
 
 			expect(manager.getDefaultProvider()).toBe("openai");
 		});
@@ -196,18 +196,18 @@ describe("SettingsManager", () => {
 			const settingsPath = join(agentDir, "settings.json");
 			writeFileSync(settingsPath, JSON.stringify({ defaultProvider: "openai" }));
 
-			rmSync(join(projectDir, ".pi"), { recursive: true });
+			rmSync(join(projectDir, ".mi"), { recursive: true });
 
 			const manager = SettingsManager.create(projectDir, agentDir);
 
-			expect(existsSync(join(projectDir, ".pi"))).toBe(false);
+			expect(existsSync(join(projectDir, ".mi"))).toBe(false);
 
 			manager.setProjectExtensionPaths(["./ext.ts"]);
 			await manager.flush();
 
-			expect(existsSync(join(projectDir, ".pi"))).toBe(true);
+			expect(existsSync(join(projectDir, ".mi"))).toBe(true);
 
-			expect(existsSync(join(projectDir, ".pi", "settings.json"))).toBe(true);
+			expect(existsSync(join(projectDir, ".mi", "settings.json"))).toBe(true);
 		});
 	});
 
@@ -310,7 +310,7 @@ describe("SettingsManager", () => {
 
 			expect(SettingsManager.create(projectDir, agentDir).getDefaultTools()).toEqual(["read", "bash"]);
 
-			writeFileSync(join(projectDir, ".pi", "settings.json"), JSON.stringify({ defaultTools: ["edit"] }));
+			writeFileSync(join(projectDir, ".mi", "settings.json"), JSON.stringify({ defaultTools: ["edit"] }));
 
 			expect(SettingsManager.create(projectDir, agentDir).getDefaultTools()).toEqual(["edit"]);
 		});
@@ -336,7 +336,7 @@ describe("SettingsManager", () => {
 
 		it("should return project sessionDir, overriding global", () => {
 			writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ sessionDir: "/global/sessions" }));
-			writeFileSync(join(projectDir, ".pi", "settings.json"), JSON.stringify({ sessionDir: "./sessions" }));
+			writeFileSync(join(projectDir, ".mi", "settings.json"), JSON.stringify({ sessionDir: "./sessions" }));
 			const manager = SettingsManager.create(projectDir, agentDir);
 			expect(manager.getSessionDir()).toBe("./sessions");
 		});

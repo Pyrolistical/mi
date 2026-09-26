@@ -38,17 +38,17 @@ describe("extension crash attribution", () => {
 
 	test("decodes frame paths independently from malformed error text", () => {
 		const extension: StackExtension = {
-			path: "/Users/reporter/.pi/agent/extensions/local memory/index.ts",
-			resolvedPath: "/Users/reporter/.pi/agent/extensions/local memory/index.ts",
+			path: "/Users/reporter/.mi/agent/extensions/local memory/index.ts",
+			resolvedPath: "/Users/reporter/.mi/agent/extensions/local memory/index.ts",
 			sourceInfo: {
-				path: "/Users/reporter/.pi/agent/extensions/local memory/index.ts",
+				path: "/Users/reporter/.mi/agent/extensions/local memory/index.ts",
 				source: "local",
 				scope: "user",
-				baseDir: "/Users/reporter/.pi/agent/extensions",
+				baseDir: "/Users/reporter/.mi/agent/extensions",
 			},
 		};
 		const stack =
-			"Error: progress 100%\n    at run (file:///Users/reporter/.pi/agent/extensions/local%20memory/worker.ts:4:2)";
+			"Error: progress 100%\n    at run (file:///Users/reporter/.mi/agent/extensions/local%20memory/worker.ts:4:2)";
 
 		expect(findExtensionStackMatches(stack, [extension])).toEqual([extension.path]);
 	});

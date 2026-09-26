@@ -63,6 +63,7 @@ const piConfigName: string | undefined = pkg.piConfig?.name;
 export const APP_NAME: string = piConfigName || "pi";
 export const APP_TITLE: string = piConfigName ? APP_NAME : "π";
 export const CONFIG_DIR_NAME: string = pkg.piConfig?.configDir || ".pi";
+export const XDG_CONFIG_DIR_NAME: string = CONFIG_DIR_NAME.replace(/^\./, "");
 export const VERSION: string = pkg.version || "0.0.0";
 
 export const ENV_AGENT_DIR = `${APP_NAME.toUpperCase()}_CODING_AGENT_DIR`;
@@ -77,7 +78,7 @@ export function getAgentDir(): string {
 	if (envDir) {
 		return expandTildePath(envDir);
 	}
-	return join(homedir(), CONFIG_DIR_NAME, "agent");
+	return join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), XDG_CONFIG_DIR_NAME);
 }
 
 export function getBinDir(): string {

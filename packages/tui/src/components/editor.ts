@@ -1,4 +1,4 @@
-import type { AutocompleteProvider, AutocompleteSuggestions } from "../autocomplete.ts";
+import type { AutocompleteItem, AutocompleteProvider, AutocompleteSuggestions } from "../autocomplete.ts";
 import { getKeybindings } from "../keybindings.ts";
 import { decodePrintableKey, matchesKey } from "../keys.ts";
 import { KillRing } from "../kill-ring.ts";
@@ -255,6 +255,8 @@ export class Editor implements Component, Focusable {
 	private autocompleteList?: SelectList;
 	private autocompleteState: "regular" | "force" | null = null;
 	private autocompletePrefix: string = "";
+	private autocompleteItems: AutocompleteItem[] = [];
+	private autocompleteCommonPrefix: string | undefined;
 	private autocompleteMaxVisible: number = 5;
 	private autocompleteAbort?: AbortController;
 	private autocompleteDebounceTimer?: ReturnType<typeof setTimeout>;
@@ -571,6 +573,13 @@ export class Editor implements Component, Focusable {
 			}
 
 			if (kb.matches(data, "tui.input.tab")) {
+				if (this.autocompleteCommonPrefix !== undefined) {
+					this.insertCommonPrefix(this.autocompleteCommonPrefix, this.autocompletePrefix);
+					this.autocompletePrefix = this.autocompleteCommonPrefix;
+					this.autocompleteCommonPrefix = undefined;
+					return;
+				}
+				if (this.autocompleteItems.length > 1) return;
 				const selected = this.autocompleteList.getSelectedItem();
 				if (selected && this.autocompleteProvider) {
 					this.pushUndoSnapshot();
@@ -1960,7 +1969,23 @@ export class Editor implements Component, Focusable {
 			return;
 		}
 
-		this.applyAutocompleteSuggestions(suggestions, options.force ? "force" : "regular");
+		if (options.force && options.explicitTab && suggestions.commonPrefix !== undefined) {
+			this.insertCommonPrefix(suggestions.commonPrefix, suggestions.prefix);
+			this.applyAutocompleteSuggestions({ items: suggestions.items, prefix: suggestions.commonPrefix }, "force");
+		} else {
+			this.applyAutocompleteSuggestions(suggestions, options.force ? "force" : "regular");
+		}
+		this.tui.requestRender();
+	}
+
+	private insertCommonPrefix(common: string, prefix: string): void {
+		this.pushUndoSnapshot();
+		this.lastAction = null;
+		const line = this.state.lines[this.state.cursorLine] || "";
+		const start = this.state.cursorCol - prefix.length;
+		this.state.lines[this.state.cursorLine] = line.slice(0, start) + common + line.slice(this.state.cursorCol);
+		this.setCursorCol(start + common.length);
+		if (this.onChange) this.onChange(this.getText());
 		this.tui.requestRender();
 	}
 
@@ -1982,6 +2007,8 @@ export class Editor implements Component, Focusable {
 
 	private applyAutocompleteSuggestions(suggestions: AutocompleteSuggestions, state: "regular" | "force"): void {
 		this.autocompletePrefix = suggestions.prefix;
+		this.autocompleteItems = suggestions.items;
+		this.autocompleteCommonPrefix = suggestions.commonPrefix;
 		this.autocompleteList = this.createAutocompleteList(suggestions.prefix, suggestions.items);
 
 		const bestMatchIndex = this.getBestAutocompleteMatchIndex(suggestions.items, suggestions.prefix);
@@ -2005,6 +2032,8 @@ export class Editor implements Component, Focusable {
 	private clearAutocompleteUi(): void {
 		this.autocompleteState = null;
 		this.autocompleteList = undefined;
+		this.autocompleteItems = [];
+		this.autocompleteCommonPrefix = undefined;
 		this.autocompletePrefix = "";
 	}
 

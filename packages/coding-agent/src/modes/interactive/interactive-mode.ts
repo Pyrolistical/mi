@@ -81,7 +81,6 @@ import { copyToClipboard, readClipboardText } from "../../utils/clipboard.ts";
 import { extensionForImageMimeType, readClipboardImage } from "../../utils/clipboard-image.ts";
 import { getCwdRelativePath } from "../../utils/paths.ts";
 import { killTrackedDetachedChildren } from "../../utils/shell.ts";
-import { ensureTool, type ToolStatus } from "../../utils/tools-manager.ts";
 import { AssistantMessageComponent } from "./components/assistant-message.ts";
 import { BashExecutionComponent } from "./components/bash-execution.ts";
 import { BranchSummaryMessageComponent } from "./components/branch-summary-message.ts";
@@ -270,7 +269,6 @@ export class InteractiveMode {
 	private editorComponentFactory: EditorFactory | undefined;
 	private autocompleteProvider: AutocompleteProvider | undefined;
 	private autocompleteProviderWrappers: AutocompleteProviderFactory[] = [];
-	private fdPath: string | undefined;
 	private editorContainer: Container;
 	private activeSelectorToken?: object;
 	private activeSelectorDispose?: () => void;
@@ -296,7 +294,6 @@ export class InteractiveMode {
 
 	private lastStatusSpacer: Spacer | undefined = undefined;
 	private lastStatusText: Text | undefined = undefined;
-	private managedToolStatusStarted = false;
 
 	private streamingComponent: AssistantMessageComponent | undefined = undefined;
 	private readonly entriesRenderedByBoundaryCompaction = new Set<string>();
@@ -525,7 +522,6 @@ export class InteractiveMode {
 		return new CombinedAutocompleteProvider(
 			[...slashCommands, ...templateCommands, ...extensionCommands, ...skillCommandList],
 			this.sessionManager.getCwd(),
-			this.fdPath,
 		);
 	}
 
@@ -597,9 +593,6 @@ export class InteractiveMode {
 		this.builtInHeader = new Text("", 0, 0);
 		this.headerContainer.addChild(this.builtInHeader);
 		this.ui.requestRender();
-
-		this.fdPath = ensureTool("fd", (status) => this.showManagedToolStatus(status));
-		ensureTool("rg", (status) => this.showManagedToolStatus(status));
 
 		this.setupKeyHandlers();
 		this.setupEditorSubmitHandler();
@@ -2640,19 +2633,6 @@ export class InteractiveMode {
 				? [{ type: "text", text: message.content }]
 				: message.content.filter((c: { type: string }) => c.type === "text");
 		return textBlocks.map((c) => (c as { text: string }).text).join("");
-	}
-
-	private showManagedToolStatus(status: ToolStatus): void {
-		if (!this.managedToolStatusStarted) {
-			this.chatContainer.addChild(new Spacer(1));
-			this.managedToolStatusStarted = true;
-		}
-		const message = status.type === "warning" ? `Warning: ${status.message}` : status.message;
-		const color = status.type === "warning" ? "warning" : "dim";
-		this.chatContainer.addChild(new Text(theme.fg(color, message), 1, 0));
-		this.lastStatusSpacer = undefined;
-		this.lastStatusText = undefined;
-		this.ui.requestRender();
 	}
 
 	private showStatus(message: string): void {

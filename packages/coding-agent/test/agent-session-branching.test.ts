@@ -37,7 +37,7 @@ describe.skipIf(!API_KEY)("AgentSession forking", () => {
 
 	async function createSession(noSession: boolean = false) {
 		const model = openaiModel("gpt-5-mini");
-		sessionManager = noSession ? SessionManager.inMemory(tempDir) : SessionManager.create(tempDir);
+		sessionManager = noSession ? SessionManager.inMemory(tempDir) : SessionManager.create(tempDir, tempDir);
 		const authStorage = AuthStorage.create(join(tempDir, "auth.json"));
 		await authStorage.modify("openai", async () => ({ type: "api_key", key: API_KEY! }));
 
@@ -93,14 +93,14 @@ describe.skipIf(!API_KEY)("AgentSession forking", () => {
 		expect(result.selectedText).toBe("Say hello");
 
 		expect(session.messages.length).toBe(0);
-		expect(session.sessionFile).not.toBeNull();
-		expect(existsSync(session.sessionFile!)).toBe(false);
+		expect(session.sessionManager.isPersisted()).toBe(true);
+		expect(session.sessionManager.isSaved()).toBe(false);
 	});
 
 	it("should support in-memory forking in --no-session mode", async () => {
 		await createSession(true);
 
-		expect(session.sessionFile).toBeUndefined();
+		expect(session.sessionManager.isPersisted()).toBe(false);
 
 		await session.prompt("Say hi");
 		await session.agent.waitForIdle();
@@ -115,7 +115,7 @@ describe.skipIf(!API_KEY)("AgentSession forking", () => {
 		expect(result.selectedText).toBe("Say hi");
 
 		expect(session.messages.length).toBe(0);
-		expect(session.sessionFile).toBeUndefined();
+		expect(session.sessionManager.isPersisted()).toBe(false);
 	});
 
 	it("should fork from middle of conversation", async () => {

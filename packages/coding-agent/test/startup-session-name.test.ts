@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "bun:test";
 import { ENV_AGENT_DIR } from "../src/config.ts";
+import { SessionManager } from "../src/core/session-manager.ts";
 
 const cliPath = resolve(__dirname, "../src/cli.ts");
 const tempDirs: string[] = [];
@@ -52,15 +53,6 @@ function createSessionFile(projectDir: string, sessionFile: string): void {
 			},
 		)}\n`,
 	);
-}
-
-function readSessionInfoNames(sessionFile: string): string[] {
-	return readFileSync(sessionFile, "utf8")
-		.trim()
-		.split("\n")
-		.map((line) => JSON.parse(line) as { type?: string; name?: string })
-		.filter((entry) => entry.type === "session_info")
-		.map((entry) => entry.name ?? "");
 }
 
 async function runCli(args: string[], dirs: CliDirs): Promise<CliResult> {
@@ -116,6 +108,7 @@ describe("startup session name", () => {
 
 		expect(result.code).toBe(1);
 		expect(result.signal).toBeNull();
-		expect(readSessionInfoNames(dirs.sessionFile)).toEqual(["CLI Named Session"]);
+		const session = SessionManager.open("existing-session", join(dirs.agentDir, "sessions"));
+		expect(session.getSessionName()).toBe("CLI Named Session");
 	});
 });

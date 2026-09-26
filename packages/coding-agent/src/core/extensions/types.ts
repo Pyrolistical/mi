@@ -221,7 +221,7 @@ export interface ExtensionCommandContext extends ExtensionContext {
 	): Promise<{ cancelled: boolean }>;
 
 	switchSession(
-		sessionPath: string,
+		sessionId: string,
 		options?: { withSession?: (ctx: ReplacedSessionContext) => Promise<void> },
 	): Promise<{ cancelled: boolean }>;
 
@@ -312,7 +312,7 @@ export interface ResourcesDiscoverResult {
 export interface SessionStartEvent {
 	type: "session_start";
 	reason: "startup" | "reload" | "new" | "resume" | "fork";
-	previousSessionFile?: string;
+	previousSessionId?: string;
 }
 
 export interface SessionInfoChangedEvent {
@@ -323,7 +323,7 @@ export interface SessionInfoChangedEvent {
 export interface SessionBeforeSwitchEvent {
 	type: "session_before_switch";
 	reason: "new" | "resume";
-	targetSessionFile?: string;
+	targetSessionId?: string;
 }
 
 export interface SessionBeforeForkEvent {
@@ -362,7 +362,7 @@ export interface SessionCompactFailedEvent {
 export interface SessionShutdownEvent {
 	type: "session_shutdown";
 	reason: "quit" | "reload" | "new" | "resume" | "fork";
-	targetSessionFile?: string;
+	targetSessionId?: string;
 }
 
 export interface TreePreparation {
@@ -1166,7 +1166,7 @@ export interface ExtensionCommandContextActions {
 		options?: { summarize?: boolean; customInstructions?: string; replaceInstructions?: boolean; label?: string },
 	) => Promise<{ cancelled: boolean }>;
 	switchSession: (
-		sessionPath: string,
+		sessionId: string,
 		options?: { withSession?: (ctx: ReplacedSessionContext) => Promise<void> },
 	) => Promise<{ cancelled: boolean }>;
 	reload: () => Promise<void>;

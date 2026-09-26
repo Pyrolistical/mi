@@ -1,15 +1,16 @@
 import { setKeybindings } from "@earendil-works/pi-tui";
 import { KeybindingsManager } from "../core/keybindings.ts";
-import type { SessionInfo, SessionListProgress } from "../core/session-manager.ts";
+import type { SessionInfo } from "../core/session-manager.ts";
 import type { SettingsManager } from "../core/settings-manager.ts";
 import { SessionSelectorComponent } from "../modes/interactive/components/session-selector.ts";
 import { createStartupTui, startStartupTui } from "./startup-ui.ts";
 
-type SessionsLoader = (onProgress?: SessionListProgress, signal?: AbortSignal) => Promise<SessionInfo[]>;
+type SessionsLoader = () => SessionInfo[];
 
 export async function selectSession(
 	currentSessionsLoader: SessionsLoader,
 	allSessionsLoader: SessionsLoader,
+	deleteSession: (sessionId: string) => void,
 	settingsManager: SettingsManager,
 ): Promise<string | null> {
 	const ui = await createStartupTui(settingsManager);
@@ -21,11 +22,12 @@ export async function selectSession(
 		const selector = new SessionSelectorComponent(
 			currentSessionsLoader,
 			allSessionsLoader,
-			(path: string) => {
+			deleteSession,
+			(sessionId: string) => {
 				if (!resolved) {
 					resolved = true;
 					ui.stop();
-					resolve(path);
+					resolve(sessionId);
 				}
 			},
 			() => {

@@ -1,25 +1,20 @@
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
-import { stubEnv, unstubAllEnvs } from "../../test-helpers.ts";
-import { ENV_AGENT_DIR } from "../../../src/config.ts";
-import { SessionManager } from "../../../src/core/session-manager.ts";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
+import { importLegacyJsonlSessions, SessionManager } from "../../../src/core/session-manager.ts";
 
-describe("regression #7497: discover sessions through symlinked directories", () => {
+describe("regression #7497: import legacy sessions through symlinked directories", () => {
 	let tempDir: string;
 	let sessionsDir: string;
 
 	beforeEach(() => {
 		tempDir = mkdtempSync(join(tmpdir(), "pi-session-discovery-"));
-		const agentDir = join(tempDir, "agent");
-		sessionsDir = join(agentDir, "sessions");
+		sessionsDir = join(tempDir, "agent", "sessions");
 		mkdirSync(sessionsDir, { recursive: true });
-		stubEnv(ENV_AGENT_DIR, agentDir);
 	});
 
 	afterEach(() => {
-		unstubAllEnvs();
 		rmSync(tempDir, { recursive: true, force: true });
 	});
 
@@ -37,38 +32,37 @@ describe("regression #7497: discover sessions through symlinked directories", ()
 		);
 	}
 
-	it("discovers a session through a directory link and preserves the alias path", async () => {
+	it("imports a session through a directory link", () => {
 		const targetDir = join(tempDir, "linked-sessions");
 		writeSession(targetDir, "linked");
 		const aliasDir = join(sessionsDir, "--linked--");
 		symlinkSync(targetDir, aliasDir, "dir");
 
-		const sessions = await SessionManager.listAll();
+		importLegacyJsonlSessions(sessionsDir);
 
-		expect(sessions.map((session) => session.id)).toEqual(["linked"]);
-		expect(sessions[0]?.path).toBe(join(aliasDir, "linked.jsonl"));
+		expect(SessionManager.listAll(sessionsDir).map((session) => session.id)).toEqual(["linked"]);
 	});
 
-	it("ignores a broken directory link without hiding valid sessions", async () => {
+	it("ignores a broken directory link without hiding valid sessions", () => {
 		writeSession(join(sessionsDir, "--regular--"), "regular");
 		const targetDir = join(tempDir, "removed-sessions");
 		mkdirSync(targetDir);
 		symlinkSync(targetDir, join(sessionsDir, "--broken--"), "dir");
 		rmSync(targetDir, { recursive: true });
 
-		const sessions = await SessionManager.listAll();
+		importLegacyJsonlSessions(sessionsDir);
 
-		expect(sessions.map((session) => session.id)).toEqual(["regular"]);
+		expect(SessionManager.listAll(sessionsDir).map((session) => session.id)).toEqual(["regular"]);
 	});
 
-	it("ignores links to files", async () => {
+	it("ignores links to files", () => {
 		writeSession(join(sessionsDir, "--regular--"), "regular");
 		const targetFile = join(tempDir, "not-a-directory");
 		writeFileSync(targetFile, "");
 		symlinkSync(targetFile, join(sessionsDir, "--file--"), "file");
 
-		const sessions = await SessionManager.listAll();
+		importLegacyJsonlSessions(sessionsDir);
 
-		expect(sessions.map((session) => session.id)).toEqual(["regular"]);
+		expect(SessionManager.listAll(sessionsDir).map((session) => session.id)).toEqual(["regular"]);
 	});
 });

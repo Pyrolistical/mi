@@ -1,6 +1,6 @@
 import { createModelRegistry, getModelRuntime, writeOpenAIModelsJson } from "./model-runtime-test-utils.ts";
 
-import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Agent } from "@earendil-works/pi-agent-core";
@@ -45,16 +45,6 @@ export function assistantMsg(text: string) {
 		stopReason: "stop" as const,
 		timestamp: Date.now(),
 	};
-}
-
-export function readSessionFileRoles(file: string): string[] {
-	return readFileSync(file, "utf-8")
-		.trim()
-		.split("\n")
-		.map((line) => {
-			const record = JSON.parse(line);
-			return record.message?.role ?? record.type;
-		});
 }
 
 export interface TestSessionOptions {

@@ -12,7 +12,6 @@ async function flushPromises(): Promise<void> {
 
 function makeSession(overrides: Partial<SessionInfo> & { id: string }): SessionInfo {
 	return {
-		path: overrides.path ?? `/tmp/${overrides.id}.jsonl`,
 		id: overrides.id,
 		cwd: overrides.cwd ?? "",
 		name: overrides.name,
@@ -37,8 +36,9 @@ describe("session selector rename", () => {
 		const sessions = [makeSession({ id: "a" })];
 		const keybindings = new KeybindingsManager();
 		const selector = new SessionSelectorComponent(
-			async () => sessions,
-			async () => [],
+			() => sessions,
+			() => [],
+			() => {},
 			() => {},
 			() => {},
 			() => {},
@@ -56,8 +56,9 @@ describe("session selector rename", () => {
 		const sessions = [makeSession({ id: "a" })];
 		const keybindings = new KeybindingsManager();
 		const selector = new SessionSelectorComponent(
-			async () => sessions,
-			async () => [],
+			() => sessions,
+			() => [],
+			() => {},
 			() => {},
 			() => {},
 			() => {},
@@ -77,8 +78,9 @@ describe("session selector rename", () => {
 
 		const keybindings = new KeybindingsManager();
 		const selector = new SessionSelectorComponent(
-			async () => sessions,
-			async () => [],
+			() => sessions,
+			() => [],
+			() => {},
 			() => {},
 			() => {},
 			() => {},
@@ -99,6 +101,6 @@ describe("session selector rename", () => {
 		await flushPromises();
 
 		expect(renameSession).toHaveBeenCalledTimes(1);
-		expect(renameSession).toHaveBeenCalledWith(sessions[0]!.path, "XOld");
+		expect(renameSession).toHaveBeenCalledWith("a", "XOld");
 	});
 });

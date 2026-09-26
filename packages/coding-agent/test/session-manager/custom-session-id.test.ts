@@ -1,6 +1,6 @@
-import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { describe, expect, it } from "bun:test";
 import { SessionManager } from "../../src/core/session-manager.ts";
 
@@ -17,7 +17,7 @@ describe("SessionManager.newSession with custom id", () => {
 		const session = SessionManager.inMemory(process.cwd(), { id: "memory-session-id" });
 		expect(session.getSessionId()).toBe("memory-session-id");
 		expect(session.getHeader()!.id).toBe("memory-session-id");
-		expect(session.getSessionFile()).toBeUndefined();
+		expect(session.isPersisted()).toBe(false);
 	});
 
 	it("allows alphanumeric session ids with interior punctuation", () => {
@@ -76,10 +76,7 @@ describe("SessionManager.newSession with custom id", () => {
 
 		expect(session.getSessionId()).toBe("created-session-id");
 		expect(session.getHeader()!.id).toBe("created-session-id");
-		const sessionFile = session.getSessionFile()!;
-		expect(sessionFile).toContain("created-session-id");
-		expect(basename(sessionFile)).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z_created-session-id\.jsonl$/);
-		expect(existsSync(sessionFile)).toBe(false);
+		expect(SessionManager.exists("created-session-id", tempDir)).toBe(false);
 	});
 
 	it("generates a UUIDv7 id when creating a branched session", () => {
@@ -96,74 +93,56 @@ describe("SessionManager.newSession with custom id", () => {
 		expect(session.getHeader()!.id).toBe(session.getSessionId());
 	});
 
-	it("generates a UUIDv7 id when forking from another session file", () => {
+	it("generates a UUIDv7 id when forking from another session", () => {
 		const tempDir = mkdtempSync(join(tmpdir(), "pi-session-manager-"));
-		const sourcePath = join(tempDir, "source.jsonl");
-		writeFileSync(
-			sourcePath,
-			`${[
-				JSON.stringify({
-					type: "session",
-					version: 3,
-					id: "legacy-session-id",
-					timestamp: new Date().toISOString(),
-					cwd: tempDir,
-				}),
-				JSON.stringify({
-					type: "message",
-					id: "entry-1",
-					parentId: null,
-					timestamp: new Date().toISOString(),
-					message: {
-						role: "assistant",
-						content: [{ type: "text", text: "hello" }],
-						api: "openai-responses",
-						provider: "openai",
-						model: "gpt-5.4",
-						usage: {
-							input: 0,
-							output: 0,
-							cacheRead: 0,
-							cacheWrite: 0,
-							totalTokens: 0,
-							cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-						},
-						stopReason: "stop",
-						timestamp: Date.now(),
-					},
-				}),
-			].join("\n")}
-`,
-		);
+		const source = SessionManager.create(tempDir, tempDir, { id: "source-session-id" });
+		source.appendMessage({
+			role: "assistant",
+			content: [{ type: "text", text: "hello" }],
+			api: "openai-responses",
+			provider: "openai",
+			model: "gpt-5.4",
+			usage: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 0,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			},
+			stopReason: "stop",
+			timestamp: 1,
+		});
 
-		const forked = SessionManager.forkFrom(sourcePath, tempDir, tempDir);
+		const forked = SessionManager.forkFrom("source-session-id", tempDir, tempDir);
 		const header = forked.getHeader();
-		expect(header).not.toBeNull();
 		expect(header!.id).toMatch(UUID_V7_RE);
-		expect(header!.parentSession).toBe(sourcePath);
+		expect(header!.parentSession).toBe("source-session-id");
 	});
 
-	it("uses the provided id when forking from another session file", () => {
+	it("uses the provided id when forking from another session", () => {
 		const tempDir = mkdtempSync(join(tmpdir(), "pi-session-manager-"));
-		const sourcePath = join(tempDir, "source.jsonl");
-		writeFileSync(
-			sourcePath,
-			`${JSON.stringify({
-				type: "session",
-				version: 3,
-				id: "source-session-id",
-				timestamp: new Date().toISOString(),
-				cwd: tempDir,
-			})}\n`,
-		);
+		const source = SessionManager.create(tempDir, tempDir, { id: "source-session-id" });
+		source.appendMessage({
+			role: "assistant",
+			content: [{ type: "text", text: "hello" }],
+			api: "openai-responses",
+			provider: "openai",
+			model: "gpt-5.4",
+			usage: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+				totalTokens: 0,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+			},
+			stopReason: "stop",
+			timestamp: 1,
+		});
 
-		const forked = SessionManager.forkFrom(sourcePath, tempDir, tempDir, { id: "forked-session-id" });
-		const header = forked.getHeader();
-		expect(header).not.toBeNull();
-		expect(header!.id).toBe("forked-session-id");
-		expect(header!.parentSession).toBe(sourcePath);
-		const sessionFile = forked.getSessionFile()!;
-		expect(sessionFile).toContain("forked-session-id");
-		expect(basename(sessionFile)).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z_forked-session-id\.jsonl$/);
+		const forked = SessionManager.forkFrom("source-session-id", tempDir, tempDir, { id: "forked-session-id" });
+		expect(forked.getHeader()!.parentSession).toBe("source-session-id");
+		expect(SessionManager.open("forked-session-id", tempDir).getEntries()).toHaveLength(1);
 	});
 });

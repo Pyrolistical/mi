@@ -31,11 +31,12 @@ interface AppKeybindings {
 	"app.session.tree": true;
 	"app.session.fork": true;
 	"app.session.resume": true;
+	"app.prompt.search": true;
 	"app.tree.foldOrUp": true;
 	"app.tree.unfoldOrDown": true;
 	"app.tree.editLabel": true;
 	"app.tree.toggleLabelTimestamp": true;
-	"app.session.togglePath": true;
+	"app.session.toggleId": true;
 	"app.session.toggleSort": true;
 	"app.session.rename": true;
 	"app.session.delete": true;
@@ -116,6 +117,7 @@ const KEYBINDINGS = {
 	"app.session.tree": { defaultKeys: [], description: "Open session tree" },
 	"app.session.fork": { defaultKeys: [], description: "Fork current session" },
 	"app.session.resume": { defaultKeys: [], description: "Resume a session" },
+	"app.prompt.search": { defaultKeys: "ctrl+r", description: "Search previous prompts" },
 	"app.tree.foldOrUp": {
 		defaultKeys: process.platform === "darwin" ? ["alt+left", "ctrl+left"] : ["ctrl+left", "alt+left"],
 		description: "Fold tree branch or move up",
@@ -132,9 +134,9 @@ const KEYBINDINGS = {
 		defaultKeys: "shift+t",
 		description: "Toggle tree label timestamps",
 	},
-	"app.session.togglePath": {
+	"app.session.toggleId": {
 		defaultKeys: "ctrl+p",
-		description: "Toggle session path display",
+		description: "Toggle session id display",
 	},
 	"app.session.toggleSort": {
 		defaultKeys: "ctrl+s",

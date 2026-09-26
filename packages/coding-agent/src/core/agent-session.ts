@@ -237,7 +237,6 @@ export interface ModelCycleResult {
 }
 
 export interface SessionStats {
-	sessionFile: string | undefined;
 	sessionId: string;
 	userMessages: number;
 	assistantMessages: number;
@@ -1122,10 +1121,6 @@ export class AgentSession {
 
 	get followUpMode(): "all" | "one-at-a-time" {
 		return this.agent.followUpMode;
-	}
-
-	get sessionFile(): string | undefined {
-		return this.sessionManager.getSessionFile();
 	}
 
 	get sessionId(): string {
@@ -3196,7 +3191,6 @@ export class AgentSession {
 		}
 
 		return {
-			sessionFile: this.sessionFile,
 			sessionId: this.sessionId,
 			userMessages,
 			assistantMessages,

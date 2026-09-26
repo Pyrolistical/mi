@@ -6,7 +6,6 @@ function makeSession(
 	overrides: Partial<SessionInfo> & { id: string; modified: Date; allMessagesText: string },
 ): SessionInfo {
 	return {
-		path: `/tmp/${overrides.id}.jsonl`,
 		id: overrides.id,
 		cwd: overrides.cwd ?? "",
 		name: overrides.name,

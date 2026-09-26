@@ -97,6 +97,7 @@ import { FooterComponent, formatTokens } from "./components/footer.ts";
 import { formatKeyText, keyDisplayText, keyText } from "./components/keybinding-hints.ts";
 import { ModelSelectorComponent } from "./components/model-selector.ts";
 import { ScopedModelsSelectorComponent } from "./components/scoped-models-selector.ts";
+import { PromptSearchComponent } from "./components/prompt-search.ts";
 import { SessionSelectorComponent } from "./components/session-selector.ts";
 import { BACKGROUND_JOBS_CLICK_TARGET, StatusRowComponent } from "./components/status-row.ts";
 import { SettingsSelectorComponent } from "./components/settings-selector.ts";
@@ -222,10 +223,7 @@ function quoteIfNeeded(value: string): string {
 
 export function formatResumeCommand(sessionManager: SessionManager): string | undefined {
 	if (!process.stdout.isTTY) return undefined;
-	if (!sessionManager.isPersisted()) return undefined;
-
-	const sessionFile = sessionManager.getSessionFile();
-	if (!sessionFile || !fs.existsSync(sessionFile)) return undefined;
+	if (!sessionManager.isSaved()) return undefined;
 
 	const args = [APP_NAME];
 	if (!sessionManager.usesDefaultSessionDir()) {
@@ -1322,7 +1320,7 @@ export class InteractiveMode {
 				recordCrash({
 					kind,
 					error,
-					sessionFile: this.session.sessionFile,
+					sessionId: this.sessionManager.isPersisted() ? this.sessionManager.getSessionId() : undefined,
 					cwd: this.session.sessionManager.getCwd(),
 				}) !== undefined
 			);
@@ -1332,7 +1330,7 @@ export class InteractiveMode {
 	}
 
 	private crashReportInstructions(): string {
-		const resume = this.session.sessionFile ? ` Run \`${APP_NAME} -r\` to resume the session.` : "";
+		const resume = this.sessionManager.isPersisted() ? ` Run \`${APP_NAME} -r\` to resume the session.` : "";
 		return `Crash details were written to the crash log.${resume}`;
 	}
 
@@ -2075,6 +2073,7 @@ export class InteractiveMode {
 		this.defaultEditor.onAction("app.session.tree", () => this.showTreeSelector());
 		this.defaultEditor.onAction("app.session.fork", () => this.showUserMessageSelector());
 		this.defaultEditor.onAction("app.session.resume", () => this.showSessionSelector());
+		this.defaultEditor.onAction("app.prompt.search", () => this.showPromptSearch());
 
 		this.defaultEditor.onChange = (text: string) => {
 			const wasBashMode = this.isBashMode;
@@ -4115,21 +4114,14 @@ export class InteractiveMode {
 
 	private showSessionSelector(): void {
 		this.showSelector((done) => {
+			const sessionDir = this.sessionManager.getSessionDir();
 			const selector = new SessionSelectorComponent(
-				(onProgress, signal) =>
-					SessionManager.list(
-						this.sessionManager.getCwd(),
-						this.sessionManager.getSessionDir(),
-						onProgress,
-						signal,
-					),
-				(onProgress, signal) =>
-					this.sessionManager.usesDefaultSessionDir()
-						? SessionManager.listAll(onProgress, signal)
-						: SessionManager.listAll(this.sessionManager.getSessionDir(), onProgress, signal),
-				async (sessionPath) => {
+				() => SessionManager.list(this.sessionManager.getCwd(), sessionDir),
+				() => SessionManager.listAll(sessionDir),
+				(sessionId) => SessionManager.delete(sessionId, sessionDir),
+				async (sessionId) => {
 					done();
-					await this.handleResumeSession(sessionPath);
+					await this.handleResumeSession(sessionId);
 				},
 				() => {
 					done();
@@ -4140,29 +4132,55 @@ export class InteractiveMode {
 				},
 				() => this.ui.requestRender(),
 				{
-					renameSession: async (sessionFilePath: string, nextName: string | undefined) => {
+					renameSession: async (sessionId: string, nextName: string | undefined) => {
 						const next = (nextName ?? "").trim();
 						if (!next) return;
-						const mgr = SessionManager.open(sessionFilePath);
+						const mgr = SessionManager.open(sessionId, sessionDir);
 						mgr.appendSessionInfo(next);
 					},
 					showRenameHint: true,
 					keybindings: this.keybindings,
 				},
 
-				this.sessionManager.getSessionFile(),
+				this.sessionManager.getSessionId(),
 			);
 			return { component: selector, focus: selector };
 		});
 	}
 
+	private showPromptSearch(): void {
+		this.showSelector((done) => {
+			const sessionDir = this.sessionManager.getSessionDir();
+			const search = new PromptSearchComponent(
+				(query, limit) => SessionManager.searchPrompts(query, limit, sessionDir),
+				(sessionId) => SessionManager.sessionPrompts(sessionId, sessionDir),
+				() => {
+					const width = this.ui.terminal.columns;
+					const reserved =
+						this.footerContainer.render(width).length + this.widgetContainerBelow.render(width).length + 1;
+					return this.ui.terminal.rows - reserved;
+				},
+				(prompt) => {
+					done();
+					this.editor.setText(prompt);
+					this.ui.requestRender();
+				},
+				() => {
+					done();
+					this.ui.requestRender();
+				},
+			);
+			return { component: search, focus: search };
+		});
+	}
+
 	private async handleResumeSession(
-		sessionPath: string,
+		sessionId: string,
 		options?: Parameters<ExtensionCommandContext["switchSession"]>[1],
 	): Promise<{ cancelled: boolean }> {
 		this.clearStatusIndicator();
 		try {
-			const result = await this.runtimeHost.switchSession(sessionPath, {
+			const result = await this.runtimeHost.switchSession(sessionId, {
 				withSession: options?.withSession,
 			});
 			if (result.cancelled) {
@@ -4177,7 +4195,7 @@ export class InteractiveMode {
 					this.showStatus("Resume cancelled");
 					return { cancelled: true };
 				}
-				const result = await this.runtimeHost.switchSession(sessionPath, {
+				const result = await this.runtimeHost.switchSession(sessionId, {
 					cwdOverride: selectedCwd,
 					withSession: options?.withSession,
 				});
@@ -4325,7 +4343,7 @@ export class InteractiveMode {
 		if (sessionName) {
 			info += `${theme.fg("dim", "Name:")} ${sessionName}\n`;
 		}
-		info += `${theme.fg("dim", "File:")} ${stats.sessionFile ?? "In-memory"}\n`;
+		info += `${theme.fg("dim", "Storage:")} ${this.sessionManager.isPersisted() ? this.sessionManager.getSessionDir() : "In-memory"}\n`;
 		info += `${theme.fg("dim", "ID:")} ${stats.sessionId}\n\n`;
 		info += `${"Messages"}\n`;
 		info += `${theme.fg("dim", "Total:")} ${stats.totalMessages}\n`;

@@ -93,7 +93,7 @@ describe("AgentSessionRuntime session lifecycle events", () => {
 		const runtimeHost = await createAgentSessionRuntime(createRuntime, {
 			cwd: tempDir,
 			agentDir: tempDir,
-			sessionManager: SessionManager.create(tempDir),
+			sessionManager: SessionManager.create(tempDir, tempDir),
 		});
 		await runtimeHost.session.bindExtensions({});
 
@@ -126,29 +126,29 @@ describe("AgentSessionRuntime session lifecycle events", () => {
 		events.length = 0;
 
 		await runtimeHost.session.prompt("hello");
-		const originalSessionFile = runtimeHost.session.sessionFile;
-		expect(originalSessionFile).toBeTruthy();
+		const originalSessionId = runtimeHost.session.sessionId;
+		expect(originalSessionId).toBeTruthy();
 
 		const newSessionResult = await runtimeHost.newSession();
 		expect(newSessionResult.cancelled).toBe(false);
 		await runtimeHost.session.bindExtensions({});
-		const secondSessionFile = runtimeHost.session.sessionFile;
+		const secondSessionId = runtimeHost.session.sessionId;
 		expect(events).toEqual([
-			{ type: "session_before_switch", reason: "new", targetSessionFile: undefined },
-			{ type: "session_shutdown", reason: "new", targetSessionFile: secondSessionFile },
-			{ type: "session_start", reason: "new", previousSessionFile: originalSessionFile },
+			{ type: "session_before_switch", reason: "new", targetSessionId: undefined },
+			{ type: "session_shutdown", reason: "new", targetSessionId: secondSessionId },
+			{ type: "session_start", reason: "new", previousSessionId: originalSessionId },
 		]);
 
 		events.length = 0;
-		expect(secondSessionFile).toBeTruthy();
+		expect(secondSessionId).toBeTruthy();
 
-		const switchResult = await runtimeHost.switchSession(originalSessionFile!);
+		const switchResult = await runtimeHost.switchSession(originalSessionId);
 		expect(switchResult.cancelled).toBe(false);
 		await runtimeHost.session.bindExtensions({});
 		expect(events).toEqual([
-			{ type: "session_before_switch", reason: "resume", targetSessionFile: originalSessionFile },
-			{ type: "session_shutdown", reason: "resume", targetSessionFile: originalSessionFile },
-			{ type: "session_start", reason: "resume", previousSessionFile: secondSessionFile },
+			{ type: "session_before_switch", reason: "resume", targetSessionId: originalSessionId },
+			{ type: "session_shutdown", reason: "resume", targetSessionId: originalSessionId },
+			{ type: "session_start", reason: "resume", previousSessionId: secondSessionId },
 		]);
 	});
 
@@ -168,12 +168,12 @@ describe("AgentSessionRuntime session lifecycle events", () => {
 		events.length = 0;
 
 		await runtimeHost.session.prompt("hello");
-		const originalSessionFile = runtimeHost.session.sessionFile;
+		const originalSessionId = runtimeHost.session.sessionId;
 
 		const result = await runtimeHost.newSession();
 		expect(result.cancelled).toBe(true);
-		expect(runtimeHost.session.sessionFile).toBe(originalSessionFile);
-		expect(events).toEqual([{ type: "session_before_switch", reason: "new", targetSessionFile: undefined }]);
+		expect(runtimeHost.session.sessionId).toBe(originalSessionId);
+		expect(events).toEqual([{ type: "session_before_switch", reason: "new", targetSessionId: undefined }]);
 	});
 
 	it("runs beforeSessionInvalidate after session_shutdown and before rebindSession", async () => {
@@ -226,7 +226,7 @@ describe("AgentSessionRuntime session lifecycle events", () => {
 
 		await runtimeHost.session.prompt("hello");
 		const userMessage = runtimeHost.session.getUserMessagesForForking()[0];
-		const previousSessionFile = runtimeHost.session.sessionFile;
+		const previousSessionId = runtimeHost.session.sessionId;
 
 		const successResult = await runtimeHost.fork(userMessage.entryId);
 		expect(successResult.cancelled).toBe(false);
@@ -234,8 +234,8 @@ describe("AgentSessionRuntime session lifecycle events", () => {
 		await runtimeHost.session.bindExtensions({});
 		expect(events).toEqual([
 			{ type: "session_before_fork", entryId: userMessage.entryId, position: "before" },
-			{ type: "session_shutdown", reason: "fork", targetSessionFile: runtimeHost.session.sessionFile },
-			{ type: "session_start", reason: "fork", previousSessionFile },
+			{ type: "session_shutdown", reason: "fork", targetSessionId: runtimeHost.session.sessionId },
+			{ type: "session_start", reason: "fork", previousSessionId },
 		]);
 
 		events.length = 0;

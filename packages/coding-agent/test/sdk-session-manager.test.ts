@@ -35,13 +35,8 @@ describe("createAgentSession session manager defaults", () => {
 			model: model!,
 		});
 
-		const safePath = `--${cwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-")}--`;
-		const expectedSessionDir = join(agentDir, "sessions", safePath);
-		const sessionDir = session.sessionManager.getSessionDir();
-		const sessionFile = session.sessionManager.getSessionFile();
-
-		expect(sessionDir).toBe(expectedSessionDir);
-		expect(sessionFile?.startsWith(`${expectedSessionDir}/`)).toBe(true);
+		expect(session.sessionManager.getSessionDir()).toBe(join(agentDir, "sessions"));
+		expect(session.sessionManager.isPersisted()).toBe(true);
 
 		session.dispose();
 	});
@@ -103,25 +98,18 @@ describe("createAgentSession session manager defaults", () => {
 			model: model!,
 			thinkingLevel: "high",
 		});
-		expect(session.sessionFile).toBeTruthy();
 
 		const bashTool = session.agent.state.tools.find((tool) => tool.name === "bash");
 		expect(bashTool).toBeTruthy();
 		const result = await bashTool!.execute("test", {
-			command: `printf '%s\\n' "$MI_SESSION_ID" "$MI_SESSION_FILE" "$MI_PROVIDER" "$MI_MODEL" "$MI_REASONING_LEVEL"`,
+			command: `printf '%s\\n' "$MI_SESSION_ID" "$MI_PROVIDER" "$MI_MODEL" "$MI_REASONING_LEVEL"`,
 		});
 		const output = result.content
 			.filter((item): item is { type: "text"; text: string } => item.type === "text")
 			.map((item) => item.text)
 			.join("");
 
-		expect<unknown>(output.trim().split("\n")).toEqual([
-			session.sessionId,
-			session.sessionFile,
-			model!.provider,
-			model!.id,
-			session.thinkingLevel,
-		]);
+		expect(output.trim().split("\n")).toEqual([session.sessionId, model!.provider, model!.id, session.thinkingLevel]);
 
 		session.dispose();
 	});

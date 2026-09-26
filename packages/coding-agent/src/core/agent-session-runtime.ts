@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { Model } from "@earendil-works/pi-ai/compat";
 import type { AgentSession } from "./agent-session.ts";
@@ -85,10 +84,7 @@ export class AgentSessionRuntime {
 		this.beforeSessionInvalidate = beforeSessionInvalidate;
 	}
 
-	private async emitBeforeSwitch(
-		reason: "new" | "resume",
-		targetSessionFile?: string,
-	): Promise<{ cancelled: boolean }> {
+	private async emitBeforeSwitch(reason: "new" | "resume", targetSessionId?: string): Promise<{ cancelled: boolean }> {
 		const runner = this.session.extensionRunner;
 		if (!runner.hasHandlers("session_before_switch")) {
 			return { cancelled: false };
@@ -97,7 +93,7 @@ export class AgentSessionRuntime {
 		const result = await runner.emit({
 			type: "session_before_switch",
 			reason,
-			targetSessionFile,
+			targetSessionId,
 		});
 		return { cancelled: result?.cancel === true };
 	}
@@ -119,15 +115,19 @@ export class AgentSessionRuntime {
 		return { cancelled: result?.cancel === true };
 	}
 
-	private async teardownCurrent(reason: SessionShutdownEvent["reason"], targetSessionFile?: string): Promise<void> {
+	private async teardownCurrent(reason: SessionShutdownEvent["reason"], targetSessionId?: string): Promise<void> {
 		await this.session.abort();
 		await emitSessionShutdownEvent(this.session.extensionRunner, {
 			type: "session_shutdown",
 			reason,
-			targetSessionFile,
+			targetSessionId,
 		});
 		this.beforeSessionInvalidate?.();
 		this.session.dispose();
+	}
+
+	private previousSessionId(): string | undefined {
+		return this.session.sessionManager.isPersisted() ? this.session.sessionManager.getSessionId() : undefined;
 	}
 
 	private apply(result: CreateAgentSessionRuntimeResult): void {
@@ -147,27 +147,31 @@ export class AgentSessionRuntime {
 	}
 
 	async switchSession(
-		sessionPath: string,
+		sessionId: string,
 		options?: {
 			cwdOverride?: string;
 			withSession?: (ctx: ReplacedSessionContext) => Promise<void>;
 		},
 	): Promise<{ cancelled: boolean }> {
-		const beforeResult = await this.emitBeforeSwitch("resume", sessionPath);
+		const beforeResult = await this.emitBeforeSwitch("resume", sessionId);
 		if (beforeResult.cancelled) {
 			return beforeResult;
 		}
 
-		const previousSessionFile = this.session.sessionFile;
-		const sessionManager = SessionManager.open(sessionPath, undefined, options?.cwdOverride);
+		const previousSessionId = this.previousSessionId();
+		const sessionManager = SessionManager.open(
+			sessionId,
+			this.session.sessionManager.getSessionDir(),
+			options?.cwdOverride,
+		);
 		assertSessionCwdExists(sessionManager, this.cwd);
-		await this.teardownCurrent("resume", sessionManager.getSessionFile());
+		await this.teardownCurrent("resume", sessionId);
 		this.apply(
 			await this.createRuntime({
 				cwd: sessionManager.getCwd(),
 				agentDir: this.services.agentDir,
 				sessionManager,
-				sessionStartEvent: { type: "session_start", reason: "resume", previousSessionFile },
+				sessionStartEvent: { type: "session_start", reason: "resume", previousSessionId },
 			}),
 		);
 		await this.finishSessionReplacement(options?.withSession);
@@ -184,7 +188,7 @@ export class AgentSessionRuntime {
 			return beforeResult;
 		}
 
-		const previousSessionFile = this.session.sessionFile;
+		const previousSessionId = this.previousSessionId();
 		const { model, thinkingLevel } = this.session;
 		const sessionDir = this.session.sessionManager.getSessionDir();
 		const sessionManager = this.session.sessionManager.isPersisted()
@@ -194,13 +198,13 @@ export class AgentSessionRuntime {
 			sessionManager.newSession({ parentSession: options.parentSession });
 		}
 
-		await this.teardownCurrent("new", sessionManager.getSessionFile());
+		await this.teardownCurrent("new", sessionManager.getSessionId());
 		this.apply(
 			await this.createRuntime({
 				cwd: this.cwd,
 				agentDir: this.services.agentDir,
 				sessionManager,
-				sessionStartEvent: { type: "session_start", reason: "new", previousSessionFile },
+				sessionStartEvent: { type: "session_start", reason: "new", previousSessionId },
 				model,
 				thinkingLevel,
 			}),
@@ -240,63 +244,40 @@ export class AgentSessionRuntime {
 			selectedText = extractUserMessageText(selectedEntry.message.content);
 		}
 
-		const previousSessionFile = this.session.sessionFile;
-		if (this.session.sessionManager.isPersisted()) {
-			const currentSessionFile = this.session.sessionFile;
-			if (!currentSessionFile) {
-				throw new Error("Persisted session is missing a session file");
+		const previousSessionId = this.previousSessionId();
+		const currentSessionManager = this.session.sessionManager;
+		let sessionManager: SessionManager;
+		if (!currentSessionManager.isPersisted()) {
+			sessionManager = currentSessionManager;
+			await this.teardownCurrent("fork");
+			if (targetLeafId) {
+				sessionManager.createBranchedSession(targetLeafId);
+			} else {
+				sessionManager.newSession();
 			}
-			const sessionDir = this.session.sessionManager.getSessionDir();
-			if (!targetLeafId) {
-				const sessionManager = SessionManager.create(this.cwd, sessionDir);
-				sessionManager.newSession({ parentSession: currentSessionFile });
-				await this.teardownCurrent("fork", sessionManager.getSessionFile());
-				this.apply(
-					await this.createRuntime({
-						cwd: this.cwd,
-						agentDir: this.services.agentDir,
-						sessionManager,
-						sessionStartEvent: { type: "session_start", reason: "fork", previousSessionFile },
-					}),
-				);
-				await this.finishSessionReplacement(options?.withSession);
-				return { cancelled: false, selectedText };
-			}
-
-			if (!existsSync(currentSessionFile)) {
+		} else if (!targetLeafId) {
+			sessionManager = SessionManager.create(this.cwd, currentSessionManager.getSessionDir(), {
+				parentSession: previousSessionId,
+			});
+			await this.teardownCurrent("fork", sessionManager.getSessionId());
+		} else {
+			if (!currentSessionManager.isSaved()) {
 				throw new Error("This session has not been saved yet. Send a message before cloning or forking it.");
 			}
-			const sessionManager = SessionManager.open(currentSessionFile, sessionDir);
-			const forkedSessionPath = sessionManager.createBranchedSession(targetLeafId);
-			if (!forkedSessionPath) {
-				throw new Error("Failed to create forked session");
-			}
-			await this.teardownCurrent("fork", sessionManager.getSessionFile());
-			this.apply(
-				await this.createRuntime({
-					cwd: sessionManager.getCwd(),
-					agentDir: this.services.agentDir,
-					sessionManager,
-					sessionStartEvent: { type: "session_start", reason: "fork", previousSessionFile },
-				}),
+			sessionManager = SessionManager.open(
+				currentSessionManager.getSessionId(),
+				currentSessionManager.getSessionDir(),
+				currentSessionManager.getCwd(),
 			);
-			await this.finishSessionReplacement(options?.withSession);
-			return { cancelled: false, selectedText };
-		}
-
-		const sessionManager = this.session.sessionManager;
-		await this.teardownCurrent("fork", sessionManager.getSessionFile());
-		if (!targetLeafId) {
-			sessionManager.newSession({ parentSession: previousSessionFile });
-		} else {
-			sessionManager.createBranchedSession(targetLeafId);
+			const forkedSessionId = sessionManager.createBranchedSession(targetLeafId);
+			await this.teardownCurrent("fork", forkedSessionId);
 		}
 		this.apply(
 			await this.createRuntime({
-				cwd: this.cwd,
+				cwd: sessionManager.getCwd(),
 				agentDir: this.services.agentDir,
 				sessionManager,
-				sessionStartEvent: { type: "session_start", reason: "fork", previousSessionFile },
+				sessionStartEvent: { type: "session_start", reason: "fork", previousSessionId },
 			}),
 		);
 		await this.finishSessionReplacement(options?.withSession);

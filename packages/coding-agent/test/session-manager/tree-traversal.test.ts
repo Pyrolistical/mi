@@ -1,9 +1,9 @@
-import { existsSync, mkdirSync, rmSync } from "fs";
+import { mkdtempSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { describe, expect, it } from "bun:test";
 import { type CustomEntry, SessionManager } from "../../src/core/session-manager.ts";
-import { assistantMsg, readSessionFileRoles, userMsg } from "../utilities.ts";
+import { assistantMsg, userMsg } from "../utilities.ts";
 
 describe("SessionManager append and tree traversal", () => {
 	describe("append operations", () => {
@@ -436,7 +436,7 @@ describe("createBranchedSession", () => {
 		const _id5 = session.appendMessage(userMsg("5"));
 
 		const result = session.createBranchedSession(id2);
-		expect(result).toBeUndefined();
+		expect(result).toBe(session.getSessionId());
 
 		const entries = session.getEntries();
 		expect(entries).toHaveLength(2);
@@ -462,36 +462,36 @@ describe("createBranchedSession", () => {
 		expect(entries.map((e) => e.id)).toEqual([id1, id2, id4, id5]);
 	});
 
-	it("does not duplicate entries when forking from before the first user message", () => {
-		const tempDir = join(tmpdir(), `session-fork-dedup-${Date.now()}`);
-		mkdirSync(tempDir, { recursive: true });
+	it("defers saving a branched session until its first user message", () => {
+		const tempDir = mkdtempSync(join(tmpdir(), "session-fork-dedup-"));
 
 		try {
 			const session = SessionManager.create(tempDir, tempDir);
-			const modelChangeId = session.appendModelChange("anthropic", "claude-sonnet-4-5");
+			const modelChangeId = session.appendModelChange("openai", "gpt-4o");
 			session.appendMessage(userMsg("first question"));
 			session.appendMessage(assistantMsg("first answer"));
 
-			const newFile = session.createBranchedSession(modelChangeId);
-			expect(newFile).toBeDefined();
-
-			expect(existsSync(newFile!)).toBe(false);
+			const newId = session.createBranchedSession(modelChangeId);
+			expect(SessionManager.exists(newId, tempDir)).toBe(false);
 
 			session.appendMessage(userMsg("new question"));
-			expect(existsSync(newFile!)).toBe(true);
+			expect(SessionManager.exists(newId, tempDir)).toBe(true);
 
 			session.appendCustomEntry("preset-state", { name: "plan" });
 			session.appendMessage(assistantMsg("new answer"));
 
-			expect(readSessionFileRoles(newFile!)).toEqual(["session", "model_change", "user", "custom", "assistant"]);
+			const entryIds = SessionManager.open(newId, tempDir)
+				.getEntries()
+				.map((entry) => entry.id);
+			expect(entryIds).toHaveLength(4);
+			expect(new Set(entryIds).size).toBe(4);
 		} finally {
 			rmSync(tempDir, { recursive: true, force: true });
 		}
 	});
 
-	it("preserves tool and summary usage across a file-backed reload", () => {
-		const tempDir = join(tmpdir(), `session-usage-roundtrip-${Date.now()}`);
-		mkdirSync(tempDir, { recursive: true });
+	it("preserves tool and summary usage across a stored reload", () => {
+		const tempDir = mkdtempSync(join(tmpdir(), "session-usage-roundtrip-"));
 
 		try {
 			const session = SessionManager.create(tempDir, tempDir);
@@ -517,9 +517,7 @@ describe("createBranchedSession", () => {
 			session.appendCompaction("summary", rootId, 100, undefined, false, usage);
 			session.branchWithSummary(rootId, "branch summary", undefined, false, usage);
 
-			const file = session.getSessionFile();
-			expect(file).toBeDefined();
-			const reopened = SessionManager.open(file!, tempDir);
+			const reopened = SessionManager.open(session.getSessionId(), tempDir);
 			expect(reopened.getEntries()).toEqual(
 				expect.arrayContaining([
 					expect.objectContaining({ type: "compaction", usage }),
@@ -535,20 +533,17 @@ describe("createBranchedSession", () => {
 		}
 	});
 
-	it("writes file immediately when forking at a user message", () => {
-		const tempDir = join(tmpdir(), `session-fork-with-user-${Date.now()}`);
-		mkdirSync(tempDir, { recursive: true });
+	it("saves immediately when forking at a user message", () => {
+		const tempDir = mkdtempSync(join(tmpdir(), "session-fork-with-user-"));
 
 		try {
 			const session = SessionManager.create(tempDir, tempDir);
 			const id1 = session.appendMessage(userMsg("first question"));
 			session.appendMessage(assistantMsg("first answer"));
 
-			const newFile = session.createBranchedSession(id1);
-			expect(existsSync(newFile!)).toBe(true);
+			const newId = session.createBranchedSession(id1);
 
-			session.appendMessage(assistantMsg("new answer"));
-			expect(readSessionFileRoles(newFile!)).toEqual(["session", "user", "assistant"]);
+			expect(SessionManager.open(newId, tempDir).getEntries()).toHaveLength(1);
 		} finally {
 			rmSync(tempDir, { recursive: true, force: true });
 		}

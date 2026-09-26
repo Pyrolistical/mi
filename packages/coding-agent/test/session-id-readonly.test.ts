@@ -1,14 +1,5 @@
 import { spawn } from "node:child_process";
-import {
-	existsSync,
-	mkdirSync,
-	mkdtempSync,
-	readdirSync,
-	readFileSync,
-	realpathSync,
-	renameSync,
-	rmSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "bun:test";
@@ -32,22 +23,6 @@ function createTempDir(): string {
 	const dir = realpathSync(mkdtempSync(join(tmpdir(), "pi-session-id-readonly-")));
 	tempDirs.push(dir);
 	return dir;
-}
-
-function hasSessionWithId(root: string, sessionId: string): boolean {
-	if (!existsSync(root)) return false;
-	for (const entry of readdirSync(root, { withFileTypes: true })) {
-		const path = join(root, entry.name);
-		if (entry.isDirectory() && hasSessionWithId(path, sessionId)) return true;
-		if (!entry.isFile() || !entry.name.endsWith(".jsonl")) continue;
-
-		try {
-			const firstLine = readFileSync(path, "utf8").split("\n", 1)[0];
-			const header = JSON.parse(firstLine) as { type?: string; id?: string };
-			if (header.type === "session" && header.id === sessionId) return true;
-		} catch {}
-	}
-	return false;
 }
 
 async function runCli(args: string[]): Promise<{ code: number | null; agentDir: string }> {
@@ -110,7 +85,7 @@ describe("--session-id", () => {
 		const result = await runCli(["--session-id", "read-only-help", "--help"]);
 
 		expect(result.code).toBe(0);
-		expect(hasSessionWithId(join(result.agentDir, "sessions"), "read-only-help")).toBe(false);
+		expect(SessionManager.exists("read-only-help", join(result.agentDir, "sessions"))).toBe(false);
 	});
 
 	it("creates missing IDs and reopens existing IDs in process", async () => {
@@ -128,7 +103,7 @@ describe("--session-id", () => {
 			settingsManager,
 		);
 		expect(readOnly.getSessionId()).toBe("read-only");
-		expect(readOnly.getSessionFile()).toBeUndefined();
+		expect(readOnly.isPersisted()).toBe(false);
 
 		const created = await createSessionManager(
 			args({ sessionId: "persisted-id" }),
@@ -146,7 +121,8 @@ describe("--session-id", () => {
 			sessionDir,
 			settingsManager,
 		);
-		expect(reopened.getSessionFile()).toBe(created.getSessionFile());
+		expect(reopened.isSaved()).toBe(true);
+		expect(reopened.getEntries()).toEqual(created.getEntries());
 		expect(consoleError).not.toHaveBeenCalled();
 	});
 
@@ -157,7 +133,9 @@ describe("--session-id", () => {
 		mkdirSync(projectDir, { recursive: true });
 		const unrelated = SessionManager.create(projectDir, sessionDir, { id: "unrelated-id" });
 		persistSession(unrelated, "large transcript contents must not be loaded");
-		const list = vi.spyOn(SessionManager, "list").mockRejectedValue(new Error("unexpected full listing"));
+		const list = vi.spyOn(SessionManager, "list").mockImplementation(() => {
+			throw new Error("unexpected full listing");
+		});
 		vi.spyOn(console, "error").mockImplementation(() => {});
 
 		const created = await createSessionManager(
@@ -169,40 +147,6 @@ describe("--session-id", () => {
 
 		expect(created.getSessionId()).toBe("fresh-id");
 		expect(list).not.toHaveBeenCalled();
-	});
-
-	it("reopens an exact ID from a renamed session file", async () => {
-		const tempRoot = createTempDir();
-		const projectDir = join(tempRoot, "project");
-		const sessionDir = join(tempRoot, "sessions");
-		mkdirSync(projectDir, { recursive: true });
-		const original = SessionManager.create(projectDir, sessionDir, { id: "renamed-id" });
-		persistSession(original, "persist me");
-		const renamedPath = join(sessionDir, "imported-session.jsonl");
-		renameSync(original.getSessionFile()!, renamedPath);
-
-		const reopened = await createSessionManager(
-			args({ sessionId: "renamed-id" }),
-			projectDir,
-			sessionDir,
-			SettingsManager.inMemory(),
-		);
-
-		expect(reopened.getSessionFile()).toBe(renamedPath);
-	});
-
-	it("filters exact IDs by cwd in a custom session directory", () => {
-		const tempRoot = createTempDir();
-		const projectA = join(tempRoot, "project-a");
-		const projectB = join(tempRoot, "project-b");
-		const sessionDir = join(tempRoot, "sessions");
-		mkdirSync(projectA, { recursive: true });
-		mkdirSync(projectB, { recursive: true });
-		const foreign = SessionManager.create(projectB, sessionDir, { id: "foreign-id" });
-		persistSession(foreign, "foreign session");
-
-		expect(SessionManager.findById(projectA, "foreign-id", sessionDir)).toBeUndefined();
-		expect(SessionManager.findById(projectB, "foreign-id", sessionDir)).toBe(foreign.getSessionFile());
 	});
 
 	it("rejects an existing fork target in process", async () => {

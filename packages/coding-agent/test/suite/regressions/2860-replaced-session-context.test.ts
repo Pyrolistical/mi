@@ -97,7 +97,7 @@ describe("regression #2860: replaced session callbacks", () => {
 		const runtime = await createAgentSessionRuntime(createRuntime, {
 			cwd: tempDir,
 			agentDir: tempDir,
-			sessionManager: SessionManager.create(tempDir),
+			sessionManager: SessionManager.create(tempDir, tempDir),
 		});
 
 		const rebindSession = async (): Promise<void> => {
@@ -147,10 +147,10 @@ describe("regression #2860: replaced session callbacks", () => {
 		const events: string[] = [];
 		let oldCtx: ExtensionCommandContext | undefined;
 		let oldPi: ExtensionAPI | undefined;
-		let oldSessionFile: string | undefined;
+		let oldSessionId: string | undefined;
 		let staleCtxThrows = false;
 		let stalePiThrows = false;
-		let replacementSessionFile: string | undefined;
+		let replacementSessionId: string | undefined;
 		let instanceId = 0;
 		const { runtime } = await createRuntimeForTest(
 			(pi) => {
@@ -166,14 +166,14 @@ describe("regression #2860: replaced session callbacks", () => {
 					handler: async (_args, ctx) => {
 						oldCtx = ctx;
 						oldPi = pi;
-						oldSessionFile = ctx.sessionManager.getSessionFile();
+						oldSessionId = ctx.sessionManager.getSessionId();
 						await ctx.newSession({
-							parentSession: oldSessionFile,
+							parentSession: oldSessionId,
 							withSession: async (replacedCtx) => {
 								events.push(`with:${currentInstance}`);
-								replacementSessionFile = replacedCtx.sessionManager.getSessionFile();
+								replacementSessionId = replacedCtx.sessionManager.getSessionId();
 								try {
-									oldCtx?.sessionManager.getSessionFile();
+									oldCtx?.sessionManager.getSessionId();
 								} catch {
 									staleCtxThrows = true;
 								}
@@ -196,8 +196,8 @@ describe("regression #2860: replaced session callbacks", () => {
 		await runtime.session.prompt("/repro");
 
 		expect(events).toEqual(["start:1", "shutdown:1", "start:2", "with:1"]);
-		expect(replacementSessionFile).toBeDefined();
-		expect(replacementSessionFile).not.toBe(oldSessionFile);
+		expect(replacementSessionId).toBeDefined();
+		expect(replacementSessionId).not.toBe(oldSessionId);
 		expect(staleCtxThrows).toBe(true);
 		expect(stalePiThrows).toBe(true);
 		expect(
@@ -240,13 +240,13 @@ describe("regression #2860: replaced session callbacks", () => {
 	});
 
 	it("supports withSession for switchSession", async () => {
-		let targetSessionPath = "";
+		let targetSessionId = "";
 		const { runtime } = await createRuntimeForTest(
 			(pi) => {
 				pi.registerCommand("switch-it", {
 					description: "switch-it",
 					handler: async (_args, ctx) => {
-						await ctx.switchSession(targetSessionPath, {
+						await ctx.switchSession(targetSessionId, {
 							withSession: async (replacedCtx) => {
 								await replacedCtx.sendUserMessage("switch callback message");
 							},
@@ -258,16 +258,16 @@ describe("regression #2860: replaced session callbacks", () => {
 		);
 
 		await runtime.session.prompt("root");
-		const originalSessionPath = runtime.session.sessionFile;
+		const originalSessionId = runtime.session.sessionId;
 		const newSessionResult = await runtime.newSession();
 		expect(newSessionResult.cancelled).toBe(false);
 		await runtime.session.prompt("target");
-		targetSessionPath = runtime.session.sessionFile!;
-		await runtime.switchSession(originalSessionPath!);
+		targetSessionId = runtime.session.sessionId;
+		await runtime.switchSession(originalSessionId);
 
 		await runtime.session.prompt("/switch-it");
 
-		expect(runtime.session.sessionFile).toBe(targetSessionPath);
+		expect(runtime.session.sessionId).toBe(targetSessionId);
 		expect(
 			runtime.session.messages
 				.filter((message) => message.role !== "system")

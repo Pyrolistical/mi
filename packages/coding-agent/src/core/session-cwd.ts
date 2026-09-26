@@ -1,22 +1,22 @@
 import { existsSync } from "node:fs";
 
 export interface SessionCwdIssue {
-	sessionFile?: string;
+	sessionId: string;
 	sessionCwd: string;
 	fallbackCwd: string;
 }
 
 interface SessionCwdSource {
 	getCwd(): string;
-	getSessionFile(): string | undefined;
+	getSessionId(): string;
+	isPersisted(): boolean;
 }
 
 export function getMissingSessionCwdIssue(
 	sessionManager: SessionCwdSource,
 	fallbackCwd: string,
 ): SessionCwdIssue | undefined {
-	const sessionFile = sessionManager.getSessionFile();
-	if (!sessionFile) {
+	if (!sessionManager.isPersisted()) {
 		return undefined;
 	}
 
@@ -26,19 +26,18 @@ export function getMissingSessionCwdIssue(
 	}
 
 	return {
-		sessionFile,
+		sessionId: sessionManager.getSessionId(),
 		sessionCwd,
 		fallbackCwd,
 	};
 }
 
 function formatMissingSessionCwdError(issue: SessionCwdIssue): string {
-	const sessionFile = issue.sessionFile ? `\nSession file: ${issue.sessionFile}` : "";
-	return `Stored session working directory does not exist: ${issue.sessionCwd}${sessionFile}\nCurrent working directory: ${issue.fallbackCwd}`;
+	return `Stored session working directory does not exist: ${issue.sessionCwd}\nSession: ${issue.sessionId}\nCurrent working directory: ${issue.fallbackCwd}`;
 }
 
 export function formatMissingSessionCwdPrompt(issue: SessionCwdIssue): string {
-	return `cwd from session file does not exist\n${issue.sessionCwd}\n\ncontinue in current cwd\n${issue.fallbackCwd}`;
+	return `cwd from session does not exist\n${issue.sessionCwd}\n\ncontinue in current cwd\n${issue.fallbackCwd}`;
 }
 
 export class MissingSessionCwdError extends Error {

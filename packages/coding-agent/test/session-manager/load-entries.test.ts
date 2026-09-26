@@ -118,7 +118,6 @@ describe("SessionManager.inMemory with preloaded entries", () => {
 		const session = SessionManager.inMemory("/project", undefined, entries);
 		session.appendMessage(userMessage("continued"));
 
-		expect(session.getSessionFile()).toBeUndefined();
 		expect(session.isPersisted()).toBe(false);
 	});
 

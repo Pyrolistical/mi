@@ -142,15 +142,12 @@ function resolveSpawnContext(
 ): BashSpawnContext {
 	const env = { ...getShellEnv() };
 	delete env.MI_SESSION_ID;
-	delete env.MI_SESSION_FILE;
 	delete env.MI_PROVIDER;
 	delete env.MI_MODEL;
 	delete env.MI_REASONING_LEVEL;
 	if (exposeSessionEnvironment && ctx) {
 		const model = ctx.model;
 		env.MI_SESSION_ID = ctx.sessionManager.getSessionId();
-		const sessionFile = ctx.sessionManager.getSessionFile();
-		if (sessionFile) env.MI_SESSION_FILE = sessionFile;
 		if (model) {
 			env.MI_PROVIDER = model.provider;
 			env.MI_MODEL = model.id;

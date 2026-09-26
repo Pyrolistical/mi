@@ -42,10 +42,10 @@ describe("session cwd handling", () => {
 		cleanupPaths.push(fallbackCwd, sessionDir);
 		writeSessionFile(sessionFile, missingCwd);
 
-		const sessionManager = SessionManager.open(sessionFile);
+		const sessionManager = SessionManager.open(SessionManager.importJsonl(sessionFile, sessionDir), sessionDir);
 		const issue = getMissingSessionCwdIssue(sessionManager, fallbackCwd);
 		expect(issue).toEqual({
-			sessionFile: sessionManager.getSessionFile(),
+			sessionId: "session-id",
 			sessionCwd: missingCwd,
 			fallbackCwd,
 		});
@@ -59,7 +59,11 @@ describe("session cwd handling", () => {
 		cleanupPaths.push(fallbackCwd, sessionDir);
 		writeSessionFile(sessionFile, missingCwd);
 
-		const sessionManager = SessionManager.open(sessionFile, undefined, fallbackCwd);
+		const sessionManager = SessionManager.open(
+			SessionManager.importJsonl(sessionFile, sessionDir),
+			sessionDir,
+			fallbackCwd,
+		);
 		expect(sessionManager.getCwd()).toBe(fallbackCwd);
 		expect(getMissingSessionCwdIssue(sessionManager, fallbackCwd)).toBeUndefined();
 	});
@@ -72,7 +76,7 @@ describe("session cwd handling", () => {
 		cleanupPaths.push(fallbackCwd, sessionDir);
 		writeSessionFile(sessionFile, missingCwd);
 
-		const sessionManager = SessionManager.open(sessionFile);
+		const sessionManager = SessionManager.open(SessionManager.importJsonl(sessionFile, sessionDir), sessionDir);
 		let createRuntimeCalled = false;
 		const createRuntime: CreateAgentSessionRuntimeFactory = async () => {
 			createRuntimeCalled = true;

@@ -1,6 +1,3 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { gray } from "../../../src/utils/colors.ts";
 import { afterEach, describe, expect, test, vi } from "bun:test";
 import { APP_NAME } from "../../../src/config.ts";
@@ -22,27 +19,18 @@ type InteractiveModePrototypeWithShutdown = {
 };
 
 const interactiveModePrototype = InteractiveMode.prototype as unknown;
-const tempDirs: string[] = [];
 const originalStdoutIsTTY = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
 
 class ProcessExitError extends Error {}
 
-function createSessionManager(options: { sessionFile?: string } = {}): SessionManager {
+function createSessionManager(options: { saved?: boolean } = {}): SessionManager {
 	return {
-		isPersisted: () => options.sessionFile !== undefined,
-		getSessionFile: () => options.sessionFile,
+		isPersisted: () => options.saved === true,
+		isSaved: () => options.saved === true,
 		getSessionId: () => "test-session",
 		getSessionDir: () => "/tmp/pi-sessions",
 		usesDefaultSessionDir: () => true,
 	} as unknown as SessionManager;
-}
-
-function createTempFile(): string {
-	const dir = mkdtempSync(join(tmpdir(), "pi-shutdown-resume-hint-"));
-	tempDirs.push(dir);
-	const file = join(dir, "session.jsonl");
-	writeFileSync(file, "\n");
-	return file;
 }
 
 function setStdoutIsTTY(value: boolean): void {
@@ -93,9 +81,6 @@ describe("InteractiveMode.shutdown ordering (#5080)", () => {
 	afterEach(() => {
 		vi.restoreAllMocks();
 		restoreStdoutIsTTY();
-		for (const dir of tempDirs.splice(0)) {
-			rmSync(dir, { recursive: true, force: true });
-		}
 	});
 
 	test("signal-triggered shutdown emits session_shutdown before terminal writes", async () => {
@@ -132,7 +117,7 @@ describe("InteractiveMode.shutdown ordering (#5080)", () => {
 			.mockImplementation((() => true) as typeof process.stdout.write);
 		setStdoutIsTTY(true);
 		const order: string[] = [];
-		const context = createContext(order, createSessionManager({ sessionFile: createTempFile() }));
+		const context = createContext(order, createSessionManager({ saved: true }));
 
 		await callShutdown(context);
 
@@ -151,7 +136,7 @@ describe("InteractiveMode.shutdown ordering (#5080)", () => {
 			.mockImplementation((() => true) as typeof process.stdout.write);
 		setStdoutIsTTY(true);
 		const order: string[] = [];
-		const context = createContext(order, createSessionManager({ sessionFile: createTempFile() }));
+		const context = createContext(order, createSessionManager({ saved: true }));
 
 		await callShutdown(context, { fromSignal: true });
 

@@ -212,7 +212,7 @@ export type NavigateTreeHandler = (
 ) => Promise<{ cancelled: boolean }>;
 
 export type SwitchSessionHandler = (
-	sessionPath: string,
+	sessionId: string,
 	options?: { withSession?: (ctx: ReplacedSessionContext) => Promise<void> },
 ) => Promise<{ cancelled: boolean }>;
 
@@ -813,9 +813,9 @@ export class ExtensionRunner {
 			this.assertActive();
 			return this.navigateTreeHandler(targetId, options);
 		};
-		context.switchSession = (sessionPath, options) => {
+		context.switchSession = (sessionId, options) => {
 			this.assertActive();
-			return this.switchSessionHandler(sessionPath, options);
+			return this.switchSessionHandler(sessionId, options);
 		};
 		context.reload = () => {
 			this.assertActive();

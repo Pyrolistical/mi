@@ -85,10 +85,6 @@ export function getBinDir(): string {
 	return join(getAgentDir(), "bin");
 }
 
-export function getSessionsDir(): string {
-	return join(getAgentDir(), "sessions");
-}
-
 export function getDebugLogPath(): string {
 	return join(getAgentDir(), `${APP_NAME}-debug.log`);
 }

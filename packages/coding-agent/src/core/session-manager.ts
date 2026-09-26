@@ -12,24 +12,9 @@ import {
 	uuidv7,
 } from "@earendil-works/pi-ai";
 import { randomUUID } from "crypto";
-import {
-	appendFileSync,
-	closeSync,
-	createReadStream,
-	existsSync,
-	mkdirSync,
-	openSync,
-	readdirSync,
-	readSync,
-	type Stats,
-	statSync,
-	writeFileSync,
-} from "fs";
-import { readdir, stat } from "fs/promises";
-import { basename, join, resolve } from "path";
-import { createInterface } from "readline";
-import { StringDecoder } from "string_decoder";
-import { APP_NAME, getAgentDir as getDefaultAgentDir, getSessionsDir } from "../config.ts";
+import { existsSync, readdirSync, readFileSync, renameSync, statSync } from "fs";
+import { join } from "path";
+import { APP_NAME, getAgentDir as getDefaultAgentDir } from "../config.ts";
 import { normalizePath, resolvePath } from "../utils/paths.ts";
 import {
 	type BashExecutionMessage,
@@ -38,6 +23,7 @@ import {
 	createCompactionSummaryMessage,
 	createCustomMessage,
 } from "./messages.ts";
+import { type SessionPrompts, SessionStore, type StoredPrompt } from "./session-store.ts";
 export const CURRENT_SESSION_VERSION = 3;
 
 export interface SessionHeader {
@@ -181,11 +167,10 @@ export interface SessionContext {
 }
 
 export interface SessionInfo {
-	path: string;
 	id: string;
 	cwd: string;
 	name?: string;
-	parentSessionPath?: string;
+	parentSessionId?: string;
 	created: Date;
 	modified: Date;
 	messageCount: number;
@@ -198,7 +183,6 @@ export type ReadonlySessionManager = Pick<
 	| "getCwd"
 	| "getSessionDir"
 	| "getSessionId"
-	| "getSessionFile"
 	| "getLeafId"
 	| "getLeafEntry"
 	| "getEntry"
@@ -493,450 +477,58 @@ export function buildSessionContext(
 	return { messages, thinkingLevel, model };
 }
 
-function getDefaultSessionDirPath(cwd: string, agentDir: string = getDefaultAgentDir()): string {
-	const resolvedCwd = resolvePath(cwd);
-	const resolvedAgentDir = resolvePath(agentDir);
-	const safePath = `--${resolvedCwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-")}--`;
-	return join(resolvedAgentDir, "sessions", safePath);
-}
-
-export function getDefaultSessionDir(cwd: string, agentDir: string = getDefaultAgentDir()): string {
-	const sessionDir = getDefaultSessionDirPath(cwd, agentDir);
-	if (!existsSync(sessionDir)) {
-		mkdirSync(sessionDir, { recursive: true });
-	}
-	return sessionDir;
-}
-
-const SESSION_READ_BUFFER_SIZE = 1024 * 1024;
-const SESSION_HEADER_READ_BUFFER_SIZE = 4096;
-const MAX_SESSION_HEADER_SCAN_BYTES = 1024 * 1024;
-
-class SessionHeaderScanLimitError extends Error {
-	constructor(filePath: string) {
-		super(`Session header exceeds ${MAX_SESSION_HEADER_SCAN_BYTES}-byte scan limit: ${filePath}`);
-		this.name = "SessionHeaderScanLimitError";
-	}
-}
-
-function parseSessionEntryLine(line: string): FileEntry | null {
-	if (!line.trim()) return null;
-	try {
-		return JSON.parse(line) as FileEntry;
-	} catch {
-		return null;
-	}
+export function getDefaultSessionDir(agentDir: string = getDefaultAgentDir()): string {
+	return join(resolvePath(agentDir), "sessions");
 }
 
 export function loadEntriesFromFile(filePath: string): FileEntry[] {
 	const resolvedFilePath = normalizePath(filePath);
 	if (!existsSync(resolvedFilePath)) return [];
-
-	const entries: FileEntry[] = [];
-	let pending = "";
-	const fd = openSync(resolvedFilePath, "r");
-	try {
-		const decoder = new StringDecoder("utf8");
-		const buffer = Buffer.allocUnsafe(SESSION_READ_BUFFER_SIZE);
-
-		while (true) {
-			const bytesRead = readSync(fd, buffer, 0, buffer.length, null);
-			if (bytesRead === 0) break;
-
-			pending += decoder.write(buffer.subarray(0, bytesRead));
-			let lineStart = 0;
-			let newlineIndex = pending.indexOf("\n", lineStart);
-			while (newlineIndex !== -1) {
-				const entry = parseSessionEntryLine(pending.slice(lineStart, newlineIndex));
-				if (entry) entries.push(entry);
-				lineStart = newlineIndex + 1;
-				newlineIndex = pending.indexOf("\n", lineStart);
-			}
-			pending = pending.slice(lineStart);
-		}
-
-		pending += decoder.end();
-		const finalEntry = parseSessionEntryLine(pending);
-		if (finalEntry) entries.push(finalEntry);
-	} finally {
-		closeSync(fd);
-	}
-
-	if (entries.length === 0) return entries;
+	const entries = parseSessionEntries(readFileSync(resolvedFilePath, "utf8"));
 	const header = entries[0];
-	if (header.type !== "session" || typeof (header as { id?: unknown }).id !== "string") {
+	if (!header || header.type !== "session" || typeof (header as { id?: unknown }).id !== "string") {
 		return [];
 	}
-
-	if (pending) appendFileSync(resolvedFilePath, "\n");
 	return entries;
 }
 
-function parseSessionHeaderCandidate(line: string): SessionHeader | null | undefined {
-	if (!line.trim()) return undefined;
-	const entry = parseSessionEntryLine(line);
-	if (!entry) return undefined;
-	if (entry.type !== "session" || typeof (entry as { id?: unknown }).id !== "string") return null;
-	return entry;
+export function isSessionFilePath(arg: string): boolean {
+	return arg.includes("/") || arg.includes("\\") || arg.endsWith(".jsonl");
 }
 
-function readSessionHeader(filePath: string): SessionHeader | null {
-	const fd = openSync(filePath, "r");
-	try {
-		const decoder = new StringDecoder("utf8");
-		const buffer = Buffer.allocUnsafe(SESSION_HEADER_READ_BUFFER_SIZE);
-		const lineChunks: string[] = [];
-		let scannedBytes = 0;
-
-		while (scannedBytes < MAX_SESSION_HEADER_SCAN_BYTES) {
-			const readLength = Math.min(buffer.length, MAX_SESSION_HEADER_SCAN_BYTES - scannedBytes);
-			const bytesRead = readSync(fd, buffer, 0, readLength, null);
-			if (bytesRead === 0) {
-				lineChunks.push(decoder.end());
-				return parseSessionHeaderCandidate(lineChunks.join("")) ?? null;
-			}
-			scannedBytes += bytesRead;
-
-			const chunk = decoder.write(buffer.subarray(0, bytesRead));
-			let lineStart = 0;
-			let newlineIndex = chunk.indexOf("\n", lineStart);
-			while (newlineIndex !== -1) {
-				lineChunks.push(chunk.slice(lineStart, newlineIndex));
-				const header = parseSessionHeaderCandidate(lineChunks.join(""));
-				if (header !== undefined) return header;
-				lineChunks.length = 0;
-				lineStart = newlineIndex + 1;
-				newlineIndex = chunk.indexOf("\n", lineStart);
-			}
-			lineChunks.push(chunk.slice(lineStart));
-		}
-
-		const probe = Buffer.allocUnsafe(1);
-		if (readSync(fd, probe, 0, probe.length, null) === 0) {
-			lineChunks.push(decoder.end());
-			return parseSessionHeaderCandidate(lineChunks.join("")) ?? null;
-		}
-		throw new SessionHeaderScanLimitError(filePath);
-	} finally {
-		closeSync(fd);
-	}
-}
-
-function readSessionHeaderForDiscovery(filePath: string): SessionHeader | null {
-	try {
-		return readSessionHeader(filePath);
-	} catch {
-		return null;
-	}
-}
-
-function getSessionHeaderCwd(header: SessionHeader): string | undefined {
-	const cwd = (header as { cwd?: unknown }).cwd;
-	return typeof cwd === "string" ? cwd : undefined;
-}
-
-function sessionCwdMatches(cwd: string | undefined, resolvedCwd: string): boolean {
-	return cwd !== undefined && cwd !== "" && resolvePath(cwd) === resolvedCwd;
-}
-
-export function findMostRecentSession(sessionDir: string, cwd?: string): string | null {
-	const resolvedSessionDir = normalizePath(sessionDir);
-	const resolvedCwd = cwd ? resolvePath(cwd) : undefined;
-	try {
-		const files = readdirSync(resolvedSessionDir)
-			.filter((file) => file.endsWith(".jsonl"))
-			.map((file) => join(resolvedSessionDir, file))
-			.map((path) => ({ path, mtime: statSync(path).mtimeMs }))
-			.sort((a, b) => b.mtime - a.mtime);
-
-		for (const { path } of files) {
-			const header = readSessionHeaderForDiscovery(path);
-			if (header && (!resolvedCwd || sessionCwdMatches(getSessionHeaderCwd(header), resolvedCwd))) return path;
-		}
-		return null;
-	} catch {
-		return null;
-	}
-}
-
-function isMessageWithContent(message: AgentMessage): message is Message {
-	return typeof (message as Message).role === "string" && "content" in message;
-}
-
-function extractTextContent(message: Message): string {
-	const content = message.content;
-	if (typeof content === "string") {
-		return content;
-	}
-	return content
-		.filter((block): block is TextContent => block.type === "text")
-		.map((block) => block.text)
-		.join(" ");
-}
-
-function getMessageActivityTime(entry: SessionMessageEntry): number | undefined {
-	const message = entry.message;
-	if (!isMessageWithContent(message)) return undefined;
-	if (message.role !== "user" && message.role !== "assistant") return undefined;
-
-	const msgTimestamp = (message as { timestamp?: number }).timestamp;
-	if (typeof msgTimestamp === "number") {
-		return msgTimestamp;
-	}
-
-	const t = new Date(entry.timestamp).getTime();
-	return Number.isNaN(t) ? undefined : t;
-}
-
-async function buildSessionInfo(
-	filePath: string,
-	signal?: AbortSignal,
-	fileStats?: Stats,
-): Promise<SessionInfo | null> {
-	try {
-		const stats = fileStats ?? (await stat(filePath));
-		let header: SessionHeader | null = null;
-		let messageCount = 0;
-		let firstMessage = "";
-		const allMessages: string[] = [];
-		let name: string | undefined;
-		let lastActivityTime: number | undefined;
-
-		const rl = createInterface({
-			input: createReadStream(filePath, { encoding: "utf8", signal }),
-			crlfDelay: Infinity,
-		});
-
-		for await (const line of rl) {
-			const entry = parseSessionEntryLine(line);
-			if (!entry) continue;
-
-			if (!header) {
-				if (entry.type !== "session") return null;
-				header = entry;
-				continue;
-			}
-
-			if (entry.type === "session_info") {
-				name = entry.name?.trim() || undefined;
-			}
-
-			if (entry.type !== "message") continue;
-			messageCount++;
-
-			const activityTime = getMessageActivityTime(entry);
-			if (typeof activityTime === "number") {
-				lastActivityTime = Math.max(lastActivityTime ?? 0, activityTime);
-			}
-
-			const message = entry.message;
-			if (!isMessageWithContent(message)) continue;
-			if (message.role !== "user" && message.role !== "assistant") continue;
-
-			const textContent = extractTextContent(message);
-			if (!textContent) continue;
-
-			allMessages.push(textContent);
-			if (!firstMessage && message.role === "user") {
-				firstMessage = textContent;
-			}
-		}
-
-		if (!header) return null;
-
-		const cwd = typeof header.cwd === "string" ? header.cwd : "";
-		const parentSessionPath = header.parentSession;
-		const headerTime = typeof header.timestamp === "string" ? new Date(header.timestamp).getTime() : NaN;
-		const modified =
-			typeof lastActivityTime === "number" && lastActivityTime > 0
-				? new Date(lastActivityTime)
-				: !Number.isNaN(headerTime)
-					? new Date(headerTime)
-					: stats.mtime;
-
-		return {
-			path: filePath,
-			id: header.id,
-			cwd,
-			name,
-			parentSessionPath,
-			created: new Date(header.timestamp),
-			modified,
-			messageCount,
-			firstMessage: firstMessage || "(no messages)",
-			allMessagesText: allMessages.join(" "),
-		};
-	} catch {
-		signal?.throwIfAborted();
-		return null;
-	}
-}
-
-export type SessionListProgress = (loaded: number, total: number, partialSessions?: readonly SessionInfo[]) => void;
-
-const MAX_CONCURRENT_SESSION_INFO_LOADS = 10;
-const MAX_CONCURRENT_SESSION_DISCOVERY_LOADS = 64;
-const CURRENT_SESSION_LIST_PUBLISH_INTERVAL = 10;
-const ALL_SESSION_LIST_PUBLISH_INTERVAL = 100;
-
-interface SessionFileCandidate {
-	path: string;
-	stats?: Stats;
-}
-
-async function mapWithConcurrency<T, R>(
-	items: T[],
-	limit: number,
-	map: (item: T, index: number) => Promise<R>,
-	signal?: AbortSignal,
-): Promise<R[]> {
-	const results = new Array<R>(items.length);
-	let nextIndex = 0;
-	const worker = async (): Promise<void> => {
-		while (nextIndex < items.length) {
-			signal?.throwIfAborted();
-			const index = nextIndex++;
-			results[index] = await map(items[index]!, index);
-		}
-	};
-	await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
-	return results;
-}
-
-function sortSessionInfos(sessions: SessionInfo[]): SessionInfo[] {
-	return sessions.sort((a, b) => b.modified.getTime() - a.modified.getTime());
-}
-
-function buildSessionInfosWithConcurrency(
-	files: SessionFileCandidate[],
-	onLoaded: (info: SessionInfo | null, index: number) => void,
-	signal?: AbortSignal,
-): Promise<(SessionInfo | null)[]> {
-	return mapWithConcurrency(
-		files,
-		MAX_CONCURRENT_SESSION_INFO_LOADS,
-		async (file, index) => {
-			const info = await buildSessionInfo(file.path, signal, file.stats);
-			onLoaded(info, index);
-			return info;
-		},
-		signal,
-	);
-}
-
-async function listSessionsFromDir(
-	dir: string,
-	onProgress?: SessionListProgress,
-	signal?: AbortSignal,
-): Promise<SessionInfo[]> {
-	signal?.throwIfAborted();
-	if (!existsSync(dir)) return [];
-
-	try {
-		const dirEntries = await readdir(dir);
-		const files = dirEntries
-			.filter((file) => file.endsWith(".jsonl"))
-			.sort((a, b) => b.localeCompare(a))
-			.map((file) => ({ path: join(dir, file) }));
-		const total = files.length;
-		const partialSessions: SessionInfo[] = [];
-		let loaded = 0;
-		const results = await buildSessionInfosWithConcurrency(
-			files,
-			(info) => {
-				loaded++;
-				if (info) partialSessions.push(info);
-				const publishPartial =
-					loaded === 1 || loaded % CURRENT_SESSION_LIST_PUBLISH_INTERVAL === 0 || loaded === files.length;
-				onProgress?.(loaded, total, publishPartial ? sortSessionInfos([...partialSessions]) : undefined);
-			},
-			signal,
-		);
-		return results.filter((info): info is SessionInfo => info !== null);
-	} catch {
-		signal?.throwIfAborted();
-		return [];
-	}
+function readJsonlSessionId(filePath: string): string | undefined {
+	const header = loadEntriesFromFile(filePath)[0];
+	return header?.type === "session" ? header.id : undefined;
 }
 
 export class SessionManager {
 	private sessionId: string = "";
-	private sessionFile: string | undefined;
-	private sessionDir: string;
-	private cwd: string;
-	private persist: boolean;
-	private flushed: boolean = false;
+	private saved: boolean = false;
 	private fileEntries: FileEntry[] = [];
 	private byId: Map<string, SessionEntry> = new Map();
 	private labelsById: Map<string, string> = new Map();
 	private labelTimestampsById: Map<string, string> = new Map();
 	private leafId: string | null = null;
+	private readonly cwd: string;
+	private readonly store: SessionStore | undefined;
+	private readonly sessionDir: string;
 
-	private constructor(
-		cwd: string,
-		sessionDir: string,
-		sessionFile: string | undefined,
-		persist: boolean,
-		newSessionOptions?: NewSessionOptions,
-		preloadedFileEntries?: FileEntry[],
-	) {
-		this.cwd = resolvePath(cwd);
-		this.sessionDir = normalizePath(sessionDir);
-		this.persist = persist;
-		if (persist && this.sessionDir && !existsSync(this.sessionDir)) {
-			mkdirSync(this.sessionDir, { recursive: true });
-		}
-
-		if (sessionFile) {
-			this._setSessionFile(sessionFile, preloadedFileEntries);
-		} else if (preloadedFileEntries?.length) {
-			this._loadEntries(preloadedFileEntries, newSessionOptions);
-		} else {
-			this.newSession(newSessionOptions);
-		}
+	private constructor(cwd: string, store: SessionStore | undefined, sessionDir: string) {
+		this.cwd = cwd;
+		this.store = store;
+		this.sessionDir = sessionDir;
 	}
 
-	setSessionFile(sessionFile: string): void {
-		this._setSessionFile(sessionFile);
-	}
-
-	private _setSessionFile(sessionFile: string, preloadedFileEntries?: FileEntry[]): void {
-		this.sessionFile = resolvePath(sessionFile);
-		if (existsSync(this.sessionFile)) {
-			const entries = preloadedFileEntries ?? loadEntriesFromFile(this.sessionFile);
-
-			if (entries.length === 0) {
-				const explicitPath = this.sessionFile;
-				if (statSync(explicitPath).size > 0) {
-					throw new Error(`Session file is not a valid ${APP_NAME} session: ${explicitPath}`);
-				}
-				this.newSession();
-				this.sessionFile = explicitPath;
-				this._rewriteFile();
-				this.flushed = true;
-				return;
-			}
-
-			this._loadEntries(entries);
-			this.flushed = true;
-		} else {
-			const explicitPath = this.sessionFile;
-			this.newSession();
-			this.sessionFile = explicitPath;
-		}
-	}
-
-	newSession(options?: NewSessionOptions): string | undefined {
+	newSession(options?: NewSessionOptions): string {
 		if (options?.id !== undefined) {
 			assertValidSessionId(options.id);
 		}
 		this.sessionId = options?.id ?? createSessionId();
-		const timestamp = new Date().toISOString();
 		const header: SessionHeader = {
 			type: "session",
 			version: CURRENT_SESSION_VERSION,
 			id: this.sessionId,
-			timestamp,
+			timestamp: new Date().toISOString(),
 			cwd: this.cwd,
 			parentSession: options?.parentSession,
 		};
@@ -945,13 +537,8 @@ export class SessionManager {
 		this.labelsById.clear();
 		this.labelTimestampsById.clear();
 		this.leafId = null;
-		this.flushed = false;
-
-		if (this.persist) {
-			const fileTimestamp = timestamp.replace(/[:.]/g, "-");
-			this.sessionFile = join(this.getSessionDir(), `${fileTimestamp}_${this.sessionId}.jsonl`);
-		}
-		return this.sessionFile;
+		this.saved = false;
+		return this.sessionId;
 	}
 
 	private _loadEntries(entries: FileEntry[], options?: NewSessionOptions): void {
@@ -960,10 +547,7 @@ export class SessionManager {
 		if (header) {
 			this.fileEntries = entries;
 			this.sessionId = header.id;
-
-			if (migrateToCurrentVersion(this.fileEntries)) {
-				this._rewriteFile();
-			}
+			migrateToCurrentVersion(this.fileEntries);
 		} else {
 			this.newSession(options);
 			this.fileEntries = this.fileEntries.concat(entries);
@@ -993,20 +577,18 @@ export class SessionManager {
 		}
 	}
 
-	private _rewriteFile(): void {
-		if (!this.persist || !this.sessionFile) return;
-		const fd = openSync(this.sessionFile, "w");
-		try {
-			for (const entry of this.fileEntries) {
-				writeFileSync(fd, `${JSON.stringify(entry)}\n`);
-			}
-		} finally {
-			closeSync(fd);
-		}
+	private _save(): void {
+		if (!this.store) return;
+		this.store.insert(this.getHeader()!, this.getEntries());
+		this.saved = true;
 	}
 
 	isPersisted(): boolean {
-		return this.persist;
+		return this.store !== undefined;
+	}
+
+	isSaved(): boolean {
+		return this.saved;
 	}
 
 	getCwd(): string {
@@ -1018,15 +600,11 @@ export class SessionManager {
 	}
 
 	usesDefaultSessionDir(): boolean {
-		return this.sessionDir === getDefaultSessionDirPath(this.cwd);
+		return this.sessionDir === getDefaultSessionDir();
 	}
 
 	getSessionId(): string {
 		return this.sessionId;
-	}
-
-	getSessionFile(): string | undefined {
-		return this.sessionFile;
 	}
 
 	private _hasConversation(): boolean {
@@ -1036,22 +614,12 @@ export class SessionManager {
 	}
 
 	_persist(entry: SessionEntry): void {
-		if (!this.persist || !this.sessionFile) return;
-
-		if (!this.flushed) {
-			if (!this._hasConversation()) return;
-			const fd = openSync(this.sessionFile, "wx");
-			try {
-				for (const e of this.fileEntries) {
-					writeFileSync(fd, `${JSON.stringify(e)}\n`);
-				}
-			} finally {
-				closeSync(fd);
-			}
-			this.flushed = true;
-		} else {
-			appendFileSync(this.sessionFile, `${JSON.stringify(entry)}\n`);
+		if (!this.store) return;
+		if (this.saved) {
+			this.store.append(this.sessionId, entry);
+			return;
 		}
+		if (this._hasConversation()) this._save();
 	}
 
 	private _appendEntry(entry: SessionEntry): void {
@@ -1395,8 +963,8 @@ export class SessionManager {
 		return entry.id;
 	}
 
-	createBranchedSession(leafId: string): string | undefined {
-		const previousSessionFile = this.sessionFile;
+	createBranchedSession(leafId: string): string {
+		const previousSessionId = this.sessionId;
 		const path = this.getBranch(leafId);
 		if (path.length === 0) {
 			throw new Error(`Entry ${leafId} not found`);
@@ -1431,295 +999,170 @@ export class SessionManager {
 		}
 
 		const newSessionId = createSessionId();
-		const timestamp = new Date().toISOString();
-		const fileTimestamp = timestamp.replace(/[:.]/g, "-");
-		const newSessionFile = join(this.getSessionDir(), `${fileTimestamp}_${newSessionId}.jsonl`);
-
 		const header: SessionHeader = {
 			type: "session",
 			version: CURRENT_SESSION_VERSION,
 			id: newSessionId,
-			timestamp,
+			timestamp: new Date().toISOString(),
 			cwd: this.cwd,
-			parentSession: this.persist ? previousSessionFile : undefined,
+			parentSession: this.store ? previousSessionId : undefined,
 		};
 
 		const pathEntryIds = new Set(pathWithoutLabels.map((e) => e.id));
-		const labelsToWrite: Array<{ targetId: string; label: string; timestamp: string }> = [];
-		for (const [targetId, label] of this.labelsById) {
-			if (pathEntryIds.has(targetId)) {
-				labelsToWrite.push({ targetId, label, timestamp: this.labelTimestampsById.get(targetId)! });
-			}
-		}
-
-		if (this.persist) {
-			const lastEntryId = pathWithoutLabels[pathWithoutLabels.length - 1]?.id || null;
-			let parentId = lastEntryId;
-			const labelEntries: LabelEntry[] = [];
-			for (const { targetId, label, timestamp: labelTimestamp } of labelsToWrite) {
-				const labelEntry: LabelEntry = {
-					type: "label",
-					id: generateId(new Set(pathEntryIds)),
-					parentId,
-					timestamp: labelTimestamp,
-					targetId,
-					label,
-				};
-				pathEntryIds.add(labelEntry.id);
-				labelEntries.push(labelEntry);
-				parentId = labelEntry.id;
-			}
-
-			this.fileEntries = [header, ...pathWithoutLabels, ...labelEntries];
-			this.sessionId = newSessionId;
-			this.sessionFile = newSessionFile;
-			this._buildIndex();
-
-			if (this._hasConversation()) {
-				this._rewriteFile();
-				this.flushed = true;
-			} else {
-				this.flushed = false;
-			}
-
-			return newSessionFile;
-		}
-
+		const usedIds = new Set(pathEntryIds);
 		const labelEntries: LabelEntry[] = [];
-		let parentId = pathWithoutLabels[pathWithoutLabels.length - 1]?.id || null;
-		for (const { targetId, label, timestamp: labelTimestamp } of labelsToWrite) {
+		let parentId = pathWithoutLabels[pathWithoutLabels.length - 1]?.id ?? null;
+		for (const [targetId, label] of this.labelsById) {
+			if (!pathEntryIds.has(targetId)) continue;
 			const labelEntry: LabelEntry = {
 				type: "label",
-				id: generateId(new Set([...pathEntryIds, ...labelEntries.map((e) => e.id)])),
+				id: generateId(usedIds),
 				parentId,
-				timestamp: labelTimestamp,
+				timestamp: this.labelTimestampsById.get(targetId)!,
 				targetId,
 				label,
 			};
+			usedIds.add(labelEntry.id);
 			labelEntries.push(labelEntry);
 			parentId = labelEntry.id;
 		}
+
 		this.fileEntries = [header, ...pathWithoutLabels, ...labelEntries];
 		this.sessionId = newSessionId;
+		this.saved = false;
 		this._buildIndex();
-		return undefined;
+
+		if (this._hasConversation()) {
+			this._save();
+		}
+		return newSessionId;
 	}
 
 	static create(cwd: string, sessionDir?: string, options?: NewSessionOptions): SessionManager {
-		const dir = sessionDir ? normalizePath(sessionDir) : getDefaultSessionDir(cwd);
-		return new SessionManager(cwd, dir, undefined, true, options);
+		const dir = resolveSessionDir(sessionDir);
+		const manager = new SessionManager(resolvePath(cwd), SessionStore.open(dir), dir);
+		manager.newSession(options);
+		return manager;
 	}
 
-	static open(path: string, sessionDir?: string, cwdOverride?: string): SessionManager {
-		const resolvedPath = resolvePath(path);
-		let header: SessionHeader | null = null;
-		let preloadedFileEntries: FileEntry[] | undefined;
-		if (cwdOverride === undefined && existsSync(resolvedPath)) {
-			try {
-				header = readSessionHeader(resolvedPath);
-			} catch (error) {
-				if (!(error instanceof SessionHeaderScanLimitError)) throw error;
-				preloadedFileEntries = loadEntriesFromFile(resolvedPath);
-				const firstEntry = preloadedFileEntries[0];
-				header = firstEntry?.type === "session" ? firstEntry : null;
-			}
+	static open(id: string, sessionDir?: string, cwdOverride?: string): SessionManager {
+		const dir = resolveSessionDir(sessionDir);
+		const store = SessionStore.open(dir);
+		const stored = store.load(id);
+		if (!stored) {
+			throw new Error(`Session not found: ${id}`);
 		}
-		const cwd = cwdOverride ?? (header ? getSessionHeaderCwd(header) : undefined) ?? process.cwd();
-		const dir = sessionDir ? normalizePath(sessionDir) : resolve(resolvedPath, "..");
-		return new SessionManager(cwd, dir, resolvedPath, true, undefined, preloadedFileEntries);
+		const manager = new SessionManager(resolvePath(cwdOverride ?? stored.header.cwd), store, dir);
+		manager._loadEntries([stored.header, ...stored.entries]);
+		manager.saved = true;
+		return manager;
 	}
 
 	static continueRecent(cwd: string, sessionDir?: string): SessionManager {
-		const dir = sessionDir ? normalizePath(sessionDir) : getDefaultSessionDir(cwd);
-		const filterCwd = sessionDir !== undefined && dir !== getDefaultSessionDirPath(cwd);
-		const mostRecent = findMostRecentSession(dir, filterCwd ? cwd : undefined);
-		if (mostRecent) {
-			return new SessionManager(cwd, dir, mostRecent, true);
-		}
-		return new SessionManager(cwd, dir, undefined, true);
+		const dir = resolveSessionDir(sessionDir);
+		const mostRecent = SessionStore.open(dir).mostRecent(resolvePath(cwd));
+		return mostRecent ? SessionManager.open(mostRecent, dir) : SessionManager.create(cwd, dir);
 	}
 
 	static inMemory(cwd: string = process.cwd(), options?: NewSessionOptions, entries?: FileEntry[]): SessionManager {
-		return new SessionManager(cwd, "", undefined, false, options, entries);
+		const manager = new SessionManager(resolvePath(cwd), undefined, getDefaultSessionDir());
+		if (entries?.length) {
+			manager._loadEntries(entries, options);
+		} else {
+			manager.newSession(options);
+		}
+		return manager;
 	}
 
 	static forkFrom(
-		sourcePath: string,
+		sourceId: string,
 		targetCwd: string,
 		sessionDir?: string,
 		options?: NewSessionOptions,
 	): SessionManager {
-		const resolvedSourcePath = resolvePath(sourcePath);
-		const resolvedTargetCwd = resolvePath(targetCwd);
-		const sourceEntries = loadEntriesFromFile(resolvedSourcePath);
-		if (sourceEntries.length === 0) {
-			throw new Error(`Cannot fork: source session file is empty or invalid: ${resolvedSourcePath}`);
+		const dir = resolveSessionDir(sessionDir);
+		const source = SessionStore.open(dir).load(sourceId);
+		if (!source) {
+			throw new Error(`Cannot fork: session not found: ${sourceId}`);
 		}
+		const manager = SessionManager.create(targetCwd, dir, { id: options?.id, parentSession: sourceId });
+		manager.fileEntries = [manager.fileEntries[0]!, ...source.entries];
+		manager._buildIndex();
+		manager._save();
+		return manager;
+	}
 
-		const sourceHeader = sourceEntries.find((e) => e.type === "session") as SessionHeader | undefined;
-		if (!sourceHeader) {
-			throw new Error(`Cannot fork: source session has no header: ${resolvedSourcePath}`);
+	static importJsonl(filePath: string, sessionDir?: string): string {
+		const resolvedPath = resolvePath(filePath);
+		const entries = loadEntriesFromFile(resolvedPath);
+		const header = entries[0];
+		if (!header || header.type !== "session") {
+			throw new Error(`Session file is not a valid ${APP_NAME} session: ${resolvedPath}`);
 		}
+		const store = SessionStore.open(resolveSessionDir(sessionDir));
+		if (store.has(header.id)) return header.id;
+		migrateToCurrentVersion(entries);
+		const parentSession = header.parentSession ? readJsonlSessionId(header.parentSession) : undefined;
+		store.insert(
+			{ ...header, cwd: typeof header.cwd === "string" ? header.cwd : "", parentSession },
+			entries.filter((e): e is SessionEntry => e.type !== "session"),
+		);
+		return header.id;
+	}
 
-		const dir = sessionDir ? normalizePath(sessionDir) : getDefaultSessionDir(resolvedTargetCwd);
-		if (!existsSync(dir)) {
-			mkdirSync(dir, { recursive: true });
-		}
+	static find(cwd: string, idOrPrefix: string, sessionDir?: string): { id: string; cwd: string } | undefined {
+		return SessionStore.open(resolveSessionDir(sessionDir)).find(idOrPrefix, resolvePath(cwd));
+	}
 
-		if (options?.id !== undefined) {
-			assertValidSessionId(options.id);
-		}
-		const newSessionId = options?.id ?? createSessionId();
-		const timestamp = new Date().toISOString();
-		const fileTimestamp = timestamp.replace(/[:.]/g, "-");
-		const newSessionFile = join(dir, `${fileTimestamp}_${newSessionId}.jsonl`);
+	static exists(id: string, sessionDir?: string): boolean {
+		return SessionStore.open(resolveSessionDir(sessionDir)).has(id);
+	}
 
-		const newHeader: SessionHeader = {
-			type: "session",
-			version: CURRENT_SESSION_VERSION,
-			id: newSessionId,
-			timestamp,
-			cwd: resolvedTargetCwd,
-			parentSession: resolvedSourcePath,
-		};
-		writeFileSync(newSessionFile, `${JSON.stringify(newHeader)}\n`, { flag: "wx" });
+	static delete(id: string, sessionDir?: string): void {
+		SessionStore.open(resolveSessionDir(sessionDir)).delete(id);
+	}
 
-		for (const entry of sourceEntries) {
-			if (entry.type !== "session") {
-				appendFileSync(newSessionFile, `${JSON.stringify(entry)}\n`);
+	static list(cwd: string, sessionDir?: string): SessionInfo[] {
+		return SessionStore.open(resolveSessionDir(sessionDir)).list(resolvePath(cwd));
+	}
+
+	static listAll(sessionDir?: string): SessionInfo[] {
+		return SessionStore.open(resolveSessionDir(sessionDir)).list();
+	}
+
+	static searchPrompts(query: string, limit: number, sessionDir?: string): StoredPrompt[] {
+		return SessionStore.open(resolveSessionDir(sessionDir)).searchPrompts(query, limit);
+	}
+
+	static sessionPrompts(sessionId: string, sessionDir?: string): SessionPrompts {
+		return SessionStore.open(resolveSessionDir(sessionDir)).sessionPrompts(sessionId);
+	}
+}
+
+function resolveSessionDir(sessionDir: string | undefined): string {
+	return sessionDir ? normalizePath(sessionDir) : getDefaultSessionDir();
+}
+
+export function importLegacyJsonlSessions(sessionDir: string): number {
+	const dir = normalizePath(sessionDir);
+	if (!existsSync(dir)) return 0;
+	const files: string[] = [];
+	for (const entry of readdirSync(dir, { withFileTypes: true })) {
+		const path = join(dir, entry.name);
+		if (entry.isFile() && entry.name.endsWith(".jsonl")) {
+			files.push(path);
+		} else if (entry.isDirectory() || entry.isSymbolicLink()) {
+			if (!existsSync(path) || !statSync(path).isDirectory()) continue;
+			for (const name of readdirSync(path)) {
+				if (name.endsWith(".jsonl")) files.push(join(path, name));
 			}
 		}
-
-		return new SessionManager(resolvedTargetCwd, dir, newSessionFile, true);
 	}
-
-	static findById(cwd: string, id: string, sessionDir?: string): string | undefined {
-		const dir = sessionDir ? normalizePath(sessionDir) : getDefaultSessionDir(cwd);
-		const filterCwd = sessionDir !== undefined && dir !== getDefaultSessionDirPath(cwd);
-		const resolvedCwd = resolvePath(cwd);
-
-		try {
-			for (const file of readdirSync(dir).sort()) {
-				if (!file.endsWith(".jsonl")) continue;
-				const path = join(dir, file);
-				const header = readSessionHeaderForDiscovery(path);
-				if (header?.id !== id) continue;
-				if (filterCwd && !sessionCwdMatches(getSessionHeaderCwd(header), resolvedCwd)) continue;
-				return path;
-			}
-		} catch {}
-		return undefined;
+	for (const file of files) {
+		SessionManager.importJsonl(file, dir);
 	}
-
-	static async list(
-		cwd: string,
-		sessionDir?: string,
-		onProgress?: SessionListProgress,
-		signal?: AbortSignal,
-	): Promise<SessionInfo[]> {
-		const dir = sessionDir ? normalizePath(sessionDir) : getDefaultSessionDir(cwd);
-		const filterCwd = sessionDir !== undefined && dir !== getDefaultSessionDirPath(cwd);
-		const resolvedCwd = resolvePath(cwd);
-		const includeSession = (session: SessionInfo) => !filterCwd || sessionCwdMatches(session.cwd, resolvedCwd);
-		const progress: SessionListProgress | undefined = onProgress
-			? (loaded, total, partialSessions) => onProgress(loaded, total, partialSessions?.filter(includeSession))
-			: undefined;
-		const sessions = (await listSessionsFromDir(dir, progress, signal)).filter(includeSession);
-		return sortSessionInfos(sessions);
+	for (const file of files) {
+		renameSync(file, `${file}.imported`);
 	}
-
-	static async listAll(onProgress?: SessionListProgress, signal?: AbortSignal): Promise<SessionInfo[]>;
-	static async listAll(
-		sessionDir?: string,
-		onProgress?: SessionListProgress,
-		signal?: AbortSignal,
-	): Promise<SessionInfo[]>;
-	static async listAll(
-		sessionDirOrOnProgress?: string | SessionListProgress,
-		onProgressOrSignal?: SessionListProgress | AbortSignal,
-		signal?: AbortSignal,
-	): Promise<SessionInfo[]> {
-		const customSessionDir =
-			typeof sessionDirOrOnProgress === "string" ? normalizePath(sessionDirOrOnProgress) : undefined;
-		const progress =
-			typeof sessionDirOrOnProgress === "function"
-				? sessionDirOrOnProgress
-				: typeof onProgressOrSignal === "function"
-					? onProgressOrSignal
-					: undefined;
-		const abortSignal =
-			typeof sessionDirOrOnProgress === "string" || typeof onProgressOrSignal === "function"
-				? signal
-				: (onProgressOrSignal ?? signal);
-		abortSignal?.throwIfAborted();
-		if (customSessionDir) {
-			return sortSessionInfos(await listSessionsFromDir(customSessionDir, progress, abortSignal));
-		}
-
-		const sessionsDir = getSessionsDir();
-
-		try {
-			if (!existsSync(sessionsDir)) return [];
-			const entries = (await readdir(sessionsDir, { withFileTypes: true })).sort((a, b) =>
-				a.name < b.name ? -1 : 1,
-			);
-			const dirs = entries
-				.filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
-				.map((entry) => join(sessionsDir, entry.name));
-
-			const dirFiles = await mapWithConcurrency(
-				dirs,
-				MAX_CONCURRENT_SESSION_DISCOVERY_LOADS,
-				async (dir) => {
-					try {
-						return (await readdir(dir)).filter((file) => file.endsWith(".jsonl")).map((file) => join(dir, file));
-					} catch {
-						return [];
-					}
-				},
-				abortSignal,
-			);
-			const allFiles = dirFiles.flat();
-			const candidates = await mapWithConcurrency(
-				allFiles,
-				MAX_CONCURRENT_SESSION_DISCOVERY_LOADS,
-				async (path): Promise<SessionFileCandidate> => {
-					try {
-						return { path, stats: await stat(path) };
-					} catch {
-						return { path };
-					}
-				},
-				abortSignal,
-			);
-			candidates.sort(
-				(a, b) =>
-					(b.stats?.mtimeMs ?? Number.NEGATIVE_INFINITY) - (a.stats?.mtimeMs ?? Number.NEGATIVE_INFINITY) ||
-					basename(b.path).localeCompare(basename(a.path)),
-			);
-
-			const totalFiles = candidates.length;
-			let loaded = 0;
-			let firstCandidateLoaded = false;
-			const partialSessions: SessionInfo[] = [];
-			const results = await buildSessionInfosWithConcurrency(
-				candidates,
-				(info, index) => {
-					loaded++;
-					if (index === 0) firstCandidateLoaded = true;
-					if (info) partialSessions.push(info);
-					const publishPartial =
-						firstCandidateLoaded &&
-						(index === 0 || loaded % ALL_SESSION_LIST_PUBLISH_INTERVAL === 0 || loaded === totalFiles);
-					progress?.(loaded, totalFiles, publishPartial ? sortSessionInfos([...partialSessions]) : undefined);
-				},
-				abortSignal,
-			);
-
-			return sortSessionInfos(results.filter((info): info is SessionInfo => info !== null));
-		} catch {
-			abortSignal?.throwIfAborted();
-			return [];
-		}
-	}
+	return files.length;
 }

@@ -9,7 +9,7 @@ export interface CrashRecord {
 	kind: "uncaught_exception" | "fatal_error";
 	message: string;
 	stack: string | null;
-	sessionFile: string | null;
+	sessionId: string | null;
 	cwd: string;
 	notified?: boolean;
 }
@@ -107,7 +107,7 @@ export function findExtensionStackMatches(
 }
 
 export function recordCrash(
-	crash: { kind: CrashRecord["kind"]; error: unknown; sessionFile?: string; cwd: string },
+	crash: { kind: CrashRecord["kind"]; error: unknown; sessionId?: string; cwd: string },
 	path = crashLogPath(),
 ): CrashRecord | undefined {
 	try {
@@ -118,7 +118,7 @@ export function recordCrash(
 			kind: crash.kind,
 			message: error instanceof Error ? error.message || error.name : String(error),
 			stack: error instanceof Error && error.stack ? error.stack : null,
-			sessionFile: crash.sessionFile ?? null,
+			sessionId: crash.sessionId ?? null,
 			cwd: crash.cwd,
 		};
 		writeCrashLog([...readCrashLog(path), record].slice(-MAX_CRASH_RECORDS), path);

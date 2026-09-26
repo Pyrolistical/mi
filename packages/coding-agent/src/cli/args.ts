@@ -213,10 +213,10 @@ Options:
   --append-system-prompt <text>  Append text or file contents to the system prompt (can be used multiple times)
   --continue, -c                 Continue previous session
   --resume, -r                   Select a session to resume
-  --session <path|id>            Use specific session file or partial UUID
-  --session-id <id>              Use exact project session ID, creating it if missing
-  --fork <path|id>               Fork specific session file or partial UUID into a new session
-  --session-dir <dir>            Directory for session storage and lookup
+  --session <path|id>            Use session by id prefix, or import a JSONL session file
+  --session-id <id>              Use exact session ID, creating it if missing
+  --fork <path|id>               Fork a session id prefix or JSONL session file into a new session
+  --session-dir <dir>            Directory holding the sessions database
   --no-session                   Don't save session (ephemeral)
   --name, -n <name>              Set session display name
   --models <patterns>            Comma-separated model patterns for Ctrl+P cycling

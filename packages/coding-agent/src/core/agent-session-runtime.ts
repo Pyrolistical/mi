@@ -1,4 +1,6 @@
 import { existsSync } from "node:fs";
+import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
+import type { Model } from "@earendil-works/pi-ai/compat";
 import type { AgentSession } from "./agent-session.ts";
 import type { AgentSessionRuntimeDiagnostic, AgentSessionServices } from "./agent-session-services.ts";
 import type { ReplacedSessionContext, SessionShutdownEvent, SessionStartEvent } from "./extensions/index.ts";
@@ -17,6 +19,8 @@ export type CreateAgentSessionRuntimeFactory = (options: {
 	agentDir: string;
 	sessionManager: SessionManager;
 	sessionStartEvent?: SessionStartEvent;
+	model?: Model<any>;
+	thinkingLevel?: ThinkingLevel;
 }) => Promise<CreateAgentSessionRuntimeResult>;
 
 function extractUserMessageText(content: string | Array<{ type: string; text?: string }>): string {
@@ -181,6 +185,7 @@ export class AgentSessionRuntime {
 		}
 
 		const previousSessionFile = this.session.sessionFile;
+		const { model, thinkingLevel } = this.session;
 		const sessionDir = this.session.sessionManager.getSessionDir();
 		const sessionManager = this.session.sessionManager.isPersisted()
 			? SessionManager.create(this.cwd, sessionDir)
@@ -196,6 +201,8 @@ export class AgentSessionRuntime {
 				agentDir: this.services.agentDir,
 				sessionManager,
 				sessionStartEvent: { type: "session_start", reason: "new", previousSessionFile },
+				model,
+				thinkingLevel,
 			}),
 		);
 		if (options?.setup) {

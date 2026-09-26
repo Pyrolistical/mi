@@ -83,7 +83,13 @@ describe("AgentSessionRuntime characterization", () => {
 				noPromptTemplates: true,
 			},
 		};
-		const createRuntime: CreateAgentSessionRuntimeFactory = async ({ cwd, sessionManager, sessionStartEvent }) => {
+		const createRuntime: CreateAgentSessionRuntimeFactory = async ({
+			cwd,
+			sessionManager,
+			sessionStartEvent,
+			model,
+			thinkingLevel,
+		}) => {
 			const services = await createAgentSessionServices({
 				...runtimeOptions,
 				cwd,
@@ -93,8 +99,8 @@ describe("AgentSessionRuntime characterization", () => {
 					services,
 					sessionManager,
 					sessionStartEvent,
-					model: runtimeOptions.model,
-					thinkingLevel: runtimeOptions.thinkingLevel,
+					model: model ?? runtimeOptions.model,
+					thinkingLevel: thinkingLevel ?? runtimeOptions.thinkingLevel,
 				})),
 				services,
 				diagnostics: services.diagnostics,
@@ -157,6 +163,24 @@ describe("AgentSessionRuntime characterization", () => {
 			throw new Error("missing persisted assistant message");
 		}
 		expect(persistedAssistant.usage.cost.total).toBe(0.123);
+	});
+
+	it("keeps the current model on /new", async () => {
+		const { runtime, faux } = await createRuntimeForTest(() => {});
+
+		await runtime.session.setModel(faux.getModel("faux-2")!);
+		await runtime.newSession();
+
+		expect(runtime.session.model?.id).toBe("faux-2");
+	});
+
+	it("keeps the current thinking level on /new", async () => {
+		const { runtime } = await createRuntimeForTest(() => {});
+
+		runtime.session.setThinkingLevel("high");
+		await runtime.newSession();
+
+		expect(runtime.session.thinkingLevel).toBe("high");
 	});
 
 	it("settles the active response before session replacement", async () => {

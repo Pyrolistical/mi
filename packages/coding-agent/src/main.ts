@@ -528,6 +528,8 @@ export async function main(args: string[], options?: MainOptions) {
 		agentDir,
 		sessionManager,
 		sessionStartEvent,
+		model,
+		thinkingLevel,
 	}) => {
 		const runtimeSettingsManager = SettingsManager.create(cwd, agentDir);
 		const services = await createAgentSessionServices({
@@ -596,8 +598,8 @@ export async function main(args: string[], options?: MainOptions) {
 			services,
 			sessionManager,
 			sessionStartEvent,
-			model: sessionOptions.model,
-			thinkingLevel: sessionOptions.thinkingLevel,
+			model: model ?? sessionOptions.model,
+			thinkingLevel: thinkingLevel ?? sessionOptions.thinkingLevel,
 			scopedModels: sessionOptions.scopedModels,
 			tools: sessionOptions.tools,
 			excludeTools: sessionOptions.excludeTools,

@@ -5,7 +5,7 @@ import * as path from "node:path";
 import type { AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core";
 import {
 	type AssistantMessage,
-	type ImageContent,
+	type MediaContent,
 	type Message,
 	type Model,
 	type Usage,
@@ -251,7 +251,7 @@ export interface InteractiveModeOptions {
 	startupDiagnostics?: AgentSessionRuntimeDiagnostic[];
 	modelFallbackMessage?: string;
 	initialMessage?: string;
-	initialImages?: ImageContent[];
+	initialImages?: MediaContent[];
 	initialMessages?: string[];
 	verbose?: boolean;
 	terminal?: Terminal;

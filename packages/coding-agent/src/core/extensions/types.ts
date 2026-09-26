@@ -10,7 +10,8 @@ import type {
 	AssistantMessageEvent,
 	AssistantMessageEventStream,
 	ConstrainedSamplingConfig,
-	ImageContent,
+	InputModality,
+	MediaContent,
 	Message,
 	Model,
 	Provider,
@@ -234,7 +235,7 @@ export interface ReplacedSessionContext extends ExtensionCommandContext {
 	): Promise<void>;
 
 	sendUserMessage(
-		content: string | (TextContent | ImageContent)[],
+		content: string | (TextContent | MediaContent)[],
 		options?: { deliverAs?: "steer" | "followUp"; expandPromptTemplates?: boolean },
 	): Promise<void>;
 }
@@ -438,7 +439,7 @@ export interface ProviderStreamEvent {
 export interface BeforeAgentStartEvent {
 	type: "before_agent_start";
 	prompt: string;
-	images?: ImageContent[];
+	images?: MediaContent[];
 	readonly systemPrompt: string;
 	systemPromptOptions: NormalizedBuildSystemPromptOptions;
 }
@@ -463,7 +464,7 @@ export interface CustomEntryDraft {
 export interface CustomMessageEntryDraft {
 	type: "custom_message";
 	customType: string;
-	content: string | (TextContent | ImageContent)[];
+	content: string | (TextContent | MediaContent)[];
 	display: boolean;
 	details?: unknown;
 }
@@ -610,13 +611,13 @@ export type InputSource = "interactive" | "extension";
 export interface InputEvent {
 	type: "input";
 	text: string;
-	images?: ImageContent[];
+	images?: MediaContent[];
 	source: InputSource;
 	streamingBehavior?: "steer" | "followUp";
 }
 
 export type InputEventResult =
-	{ action: "continue" } | { action: "transform"; text: string; images?: ImageContent[] } | { action: "handled" };
+	{ action: "continue" } | { action: "transform"; text: string; images?: MediaContent[] } | { action: "handled" };
 
 interface ToolCallEventBase {
 	type: "tool_call";
@@ -655,7 +656,7 @@ interface ToolResultEventBase {
 	type: "tool_result";
 	toolCallId: string;
 	input: Record<string, unknown>;
-	content: (TextContent | ImageContent)[];
+	content: (TextContent | MediaContent)[];
 	isError: boolean;
 	usage?: Usage;
 }
@@ -770,7 +771,7 @@ export type UserBashEventResult =
 	  };
 
 export interface ToolResultEventResult {
-	content?: (TextContent | ImageContent)[];
+	content?: (TextContent | MediaContent)[];
 	details?: unknown;
 	isError?: boolean;
 	usage?: Usage;
@@ -961,7 +962,7 @@ export interface ExtensionAPI {
 	): void;
 
 	sendUserMessage(
-		content: string | (TextContent | ImageContent)[],
+		content: string | (TextContent | MediaContent)[],
 		options?: { deliverAs?: "steer" | "followUp"; expandPromptTemplates?: boolean },
 	): void;
 
@@ -1018,7 +1019,7 @@ interface ProviderModelConfigBase {
 	name: string;
 	api?: string;
 	baseUrl?: string;
-	input: ("text" | "image")[];
+	input: InputModality[];
 	cost: Model<Api>["cost"];
 	headers?: Record<string, string>;
 }
@@ -1074,7 +1075,7 @@ type SendMessageHandler = <T = unknown>(
 ) => void;
 
 type SendUserMessageHandler = (
-	content: string | (TextContent | ImageContent)[],
+	content: string | (TextContent | MediaContent)[],
 	options?: { deliverAs?: "steer" | "followUp"; expandPromptTemplates?: boolean },
 ) => void;
 

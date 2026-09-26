@@ -181,6 +181,19 @@ describe("Coding Agent Tools", () => {
 			expect((imageBlock?.data ?? "").length).toBeGreaterThan(0);
 		});
 
+		it("should read video files unmodified as video attachments", async () => {
+			const mp4Buffer = Buffer.from("000000186674797069736f6d0000020069736f6d6d703432", "hex");
+			const testFile = join(testDir, "clip.bin");
+			writeFileSync(testFile, mp4Buffer);
+
+			const result = await readTool.execute("test-call-video-1", { path: testFile });
+
+			expect(result.content).toEqual([
+				{ type: "text", text: "Read video file [video/mp4]" },
+				{ type: "video", data: "AAAAGGZ0eXBpc29tAAACAGlzb21tcDQy", mimeType: "video/mp4" },
+			]);
+		});
+
 		it("should treat files with image extension but non-image content as text", async () => {
 			const testFile = join(testDir, "not-an-image.png");
 			writeFileSync(testFile, "definitely not a png");

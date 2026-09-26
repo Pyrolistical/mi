@@ -14,7 +14,7 @@ import { contentText, getCurrentSystemMessage, retryDelayMs } from "@earendil-wo
 import type {
 	AssistantMessage,
 	AuthResult,
-	ImageContent,
+	MediaContent,
 	Model,
 	ProviderHeaders,
 	SystemMessage,
@@ -220,7 +220,7 @@ export type PromptDisposition = QueuedInputDisposition | "started";
 
 export interface PromptOptions {
 	expandPromptTemplates?: boolean;
-	images?: ImageContent[];
+	images?: MediaContent[];
 	streamingBehavior?: "steer" | "followUp";
 	source?: InputSource;
 	preflightResult?: (disposition: PromptDisposition) => void;
@@ -1300,10 +1300,10 @@ export class AgentSession {
 
 	private async _runInputHandlers(
 		text: string,
-		images: ImageContent[] | undefined,
+		images: MediaContent[] | undefined,
 		source: InputSource,
 		streamingBehavior?: "steer" | "followUp",
-	): Promise<{ text: string; images: ImageContent[] | undefined } | undefined> {
+	): Promise<{ text: string; images: MediaContent[] | undefined } | undefined> {
 		if (!this._extensionRunner.hasHandlers("input")) {
 			return { text, images };
 		}
@@ -1386,7 +1386,7 @@ export class AgentSession {
 
 	private async _startAgentRun(
 		promptText: string,
-		promptImages: ImageContent[] | undefined,
+		promptImages: MediaContent[] | undefined,
 		leadingMessage: AgentMessage,
 		preflightResult?: (disposition: PromptDisposition) => void,
 	): Promise<void> {
@@ -1503,7 +1503,7 @@ export class AgentSession {
 
 	private async _queueUserInput(
 		text: string,
-		images: ImageContent[] | undefined,
+		images: MediaContent[] | undefined,
 		behavior: "steer" | "followUp",
 		source: InputSource,
 	): Promise<QueuedInputDisposition> {
@@ -1532,7 +1532,7 @@ export class AgentSession {
 
 	async steer(
 		text: string,
-		images?: ImageContent[],
+		images?: MediaContent[],
 		options?: { source?: InputSource },
 	): Promise<QueuedInputDisposition> {
 		return this._queueUserInput(text, images, "steer", options?.source ?? "interactive");
@@ -1540,16 +1540,16 @@ export class AgentSession {
 
 	async followUp(
 		text: string,
-		images?: ImageContent[],
+		images?: MediaContent[],
 		options?: { source?: InputSource },
 	): Promise<QueuedInputDisposition> {
 		return this._queueUserInput(text, images, "followUp", options?.source ?? "interactive");
 	}
 
-	private async _queueSteer(text: string, images?: ImageContent[]): Promise<void> {
+	private async _queueSteer(text: string, images?: MediaContent[]): Promise<void> {
 		this._steeringMessages.push(text);
 		this._emitQueueUpdate();
-		const content: (TextContent | ImageContent)[] = [{ type: "text", text }];
+		const content: (TextContent | MediaContent)[] = [{ type: "text", text }];
 		if (images) {
 			content.push(...images);
 		}
@@ -1560,10 +1560,10 @@ export class AgentSession {
 		});
 	}
 
-	private async _queueFollowUp(text: string, images?: ImageContent[]): Promise<void> {
+	private async _queueFollowUp(text: string, images?: MediaContent[]): Promise<void> {
 		this._followUpMessages.push(text);
 		this._emitQueueUpdate();
-		const content: (TextContent | ImageContent)[] = [{ type: "text", text }];
+		const content: (TextContent | MediaContent)[] = [{ type: "text", text }];
 		if (images) {
 			content.push(...images);
 		}
@@ -1649,11 +1649,11 @@ export class AgentSession {
 	}
 
 	async sendUserMessage(
-		content: string | (TextContent | ImageContent)[],
+		content: string | (TextContent | MediaContent)[],
 		options?: { deliverAs?: "steer" | "followUp"; expandPromptTemplates?: boolean },
 	): Promise<void> {
 		let text: string;
-		let images: ImageContent[] | undefined;
+		let images: MediaContent[] | undefined;
 
 		if (typeof content === "string") {
 			text = content;

@@ -1,4 +1,4 @@
-import type { AssistantMessage, ImageContent, Message, TextContent, TranscriptContext, Usage } from "../types.ts";
+import type { AssistantMessage, MediaContent, Message, TextContent, TranscriptContext, Usage } from "../types.ts";
 import { getSystemMessageText } from "./text.ts";
 
 const CHARS_PER_TOKEN = 4;
@@ -16,7 +16,7 @@ function safeJsonStringify(value: unknown): string {
 	}
 }
 
-function estimateTextAndImageContentChars(content: string | Array<TextContent | ImageContent>): number {
+function estimateTextAndImageContentChars(content: string | Array<TextContent | MediaContent>): number {
 	if (typeof content === "string") return content.length;
 
 	let chars = 0;
@@ -28,7 +28,7 @@ export function estimateTextTokens(text: string): number {
 	return Math.ceil(text.length / CHARS_PER_TOKEN);
 }
 
-export function estimateTextAndImageContentTokens(content: string | Array<TextContent | ImageContent>): number {
+export function estimateTextAndImageContentTokens(content: string | Array<TextContent | MediaContent>): number {
 	return Math.ceil(estimateTextAndImageContentChars(content) / CHARS_PER_TOKEN);
 }
 

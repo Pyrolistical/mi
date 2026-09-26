@@ -2,7 +2,8 @@ import { createProvider, type Provider } from "../models.ts";
 import type {
 	AssistantMessage,
 	AssistantMessageEventStream,
-	ImageContent,
+	InputModality,
+	MediaContent,
 	Message,
 	Model,
 	SimpleStreamOptions,
@@ -39,7 +40,7 @@ export interface FauxModelDefinition {
 	id: string;
 	name?: string;
 	reasoning?: boolean;
-	input?: ("text" | "image")[];
+	input?: InputModality[];
 	cost?: { input: number; output: number; cacheRead: number; cacheWrite: number };
 	contextWindow?: number;
 	maxTokens?: number;
@@ -150,7 +151,7 @@ function randomId(prefix: string): string {
 	return `${prefix}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
 }
 
-function contentToText(content: string | Array<TextContent | ImageContent>): string {
+function contentToText(content: string | Array<TextContent | MediaContent>): string {
 	if (typeof content === "string") {
 		return content;
 	}
@@ -159,7 +160,7 @@ function contentToText(content: string | Array<TextContent | ImageContent>): str
 			if (block.type === "text") {
 				return block.text;
 			}
-			return `[image:${block.mimeType}:${block.data.length}]`;
+			return `[${block.type}:${block.mimeType}:${block.data.length}]`;
 		})
 		.join("\n");
 }

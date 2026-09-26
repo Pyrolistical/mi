@@ -2,7 +2,7 @@ import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import {
 	type AssistantMessage,
 	getCurrentSystemMessage,
-	type ImageContent,
+	type MediaContent,
 	type Message,
 	type SystemMessage,
 	type TextContent,
@@ -126,7 +126,7 @@ export interface SessionInfoEntry extends SessionEntryBase {
 export interface CustomMessageEntry<T = unknown> extends SessionEntryBase {
 	type: "custom_message";
 	customType: string;
-	content: string | (TextContent | ImageContent)[];
+	content: string | (TextContent | MediaContent)[];
 	details?: T;
 	display: boolean;
 }
@@ -1181,7 +1181,7 @@ export class SessionManager {
 
 	appendCustomMessageEntry<T = unknown>(
 		customType: string,
-		content: string | (TextContent | ImageContent)[],
+		content: string | (TextContent | MediaContent)[],
 		display: boolean,
 		details?: T,
 	): string {

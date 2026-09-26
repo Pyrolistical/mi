@@ -121,6 +121,14 @@ export interface ImageContent {
 	mimeType: string;
 }
 
+export interface VideoContent {
+	type: "video";
+	data: string;
+	mimeType: string;
+}
+
+export type MediaContent = ImageContent | VideoContent;
+
 export interface ToolCall {
 	type: "toolCall";
 	id: string;
@@ -210,7 +218,7 @@ export interface SystemMessage {
 
 export interface UserMessage {
 	role: "user";
-	content: string | (TextContent | ImageContent)[];
+	content: string | (TextContent | ImageContent | VideoContent)[];
 	timestamp: number;
 }
 
@@ -237,7 +245,7 @@ export type ToolResultMessage<TDetails = JsonValue> =
 				role: "toolResult";
 				toolCallId: string;
 				toolName: string;
-				content: (TextContent | ImageContent)[];
+				content: (TextContent | ImageContent | VideoContent)[];
 				details?: JsonRepresentation<TDetails>;
 				usage?: Usage;
 				isError: boolean;
@@ -387,13 +395,15 @@ export interface ModelCost extends ModelCostRates {
 	tiers?: ModelCostTier[];
 }
 
+export type InputModality = "text" | "image" | "video";
+
 export interface BaseModel<TApi extends string> {
 	id: string;
 	name: string;
 	api: TApi;
 	provider: ProviderId;
 	baseUrl: string;
-	input: ("text" | "image")[];
+	input: InputModality[];
 	cost: ModelCost;
 	headers?: Record<string, string>;
 }

@@ -1,5 +1,5 @@
 import { basename, dirname } from "node:path";
-import type { ImageContent, TextContent } from "@earendil-works/pi-ai";
+import type { MediaContent, TextContent } from "@earendil-works/pi-ai";
 import { Text } from "@earendil-works/pi-tui";
 import { keyHint, keyText } from "../../../modes/interactive/components/keybinding-hints.ts";
 import type { Theme } from "../../../modes/interactive/theme/theme.ts";
@@ -76,7 +76,7 @@ function formatCompactReadCall(
 	);
 }
 function formatReadResult(
-	result: { content: (TextContent | ImageContent)[]; details?: ReadToolDetails },
+	result: { content: (TextContent | MediaContent)[]; details?: ReadToolDetails },
 	options: ToolRenderResultOptions,
 	theme: Theme,
 	showImages: boolean,

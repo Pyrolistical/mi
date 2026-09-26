@@ -1,19 +1,19 @@
 import { access, readFile, stat } from "node:fs/promises";
-import type { ImageContent } from "@earendil-works/pi-ai";
+import type { MediaContent } from "@earendil-works/pi-ai";
 import { resolve } from "path";
 import { resolveReadPath } from "../core/tools/path-utils.ts";
-import { detectSupportedImageMimeTypeFromFile } from "../utils/mime.ts";
+import { detectSupportedMediaMimeTypeFromFile, toMediaContent } from "../utils/mime.ts";
 import { stripBom } from "../utils/text.ts";
 import { red } from "../utils/colors.ts";
 
 export interface ProcessedFiles {
 	text: string;
-	images: ImageContent[];
+	images: MediaContent[];
 }
 
 export async function processFileArguments(fileArgs: string[]): Promise<ProcessedFiles> {
 	let text = "";
-	const images: ImageContent[] = [];
+	const images: MediaContent[] = [];
 
 	for (const fileArg of fileArgs) {
 		const absolutePath = resolve(resolveReadPath(fileArg, process.cwd()));
@@ -30,11 +30,11 @@ export async function processFileArguments(fileArgs: string[]): Promise<Processe
 			continue;
 		}
 
-		const mimeType = await detectSupportedImageMimeTypeFromFile(absolutePath);
+		const mimeType = await detectSupportedMediaMimeTypeFromFile(absolutePath);
 
 		if (mimeType) {
 			const content = await readFile(absolutePath);
-			images.push({ type: "image", mimeType, data: content.toString("base64") });
+			images.push(toMediaContent(content.toString("base64"), mimeType));
 			text += `<file name="${absolutePath}"></file>\n`;
 		} else {
 			try {

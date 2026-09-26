@@ -1,5 +1,5 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { ImageContent, Message, TextContent } from "@earendil-works/pi-ai";
+import type { MediaContent, Message, TextContent } from "@earendil-works/pi-ai";
 
 const COMPACTION_SUMMARY_PREFIX = `The conversation history before this point was compacted into the following summary:
 
@@ -31,7 +31,7 @@ export interface BashExecutionMessage {
 export interface CustomMessage<T = unknown> {
 	role: "custom";
 	customType: string;
-	content: string | (TextContent | ImageContent)[];
+	content: string | (TextContent | MediaContent)[];
 	display: boolean;
 	details?: T;
 	timestamp: number;
@@ -102,7 +102,7 @@ export function createCompactionSummaryMessage(
 
 export function createCustomMessage(
 	customType: string,
-	content: string | (TextContent | ImageContent)[],
+	content: string | (TextContent | MediaContent)[],
 	display: boolean,
 	details: unknown | undefined,
 	timestamp: string,

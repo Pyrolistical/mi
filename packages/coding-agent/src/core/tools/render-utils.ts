@@ -5,6 +5,7 @@ import type { Theme } from "../../modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../../utils/ansi.ts";
 import { resolvePath } from "../../utils/paths.ts";
 import { sanitizeBinaryOutput } from "../../utils/shell.ts";
+import { formatSize } from "./truncate.ts";
 
 function shortenPath(path: unknown): string {
 	if (typeof path !== "string") return "";
@@ -57,6 +58,17 @@ export function getTextOutput(
 			})
 			.join("\n");
 		output = output ? `${output}\n${imageIndicators}` : imageIndicators;
+	}
+
+	const videoIndicators = result.content
+		.filter((c) => c.type === "video")
+		.map((video) => {
+			const bytes = ((video.data?.length ?? 0) * 3) / 4;
+			return `[Video: [${video.mimeType ?? "video/unknown"}] ${formatSize(bytes)}]`;
+		})
+		.join("\n");
+	if (videoIndicators) {
+		output = output ? `${output}\n${videoIndicators}` : videoIndicators;
 	}
 
 	return output;

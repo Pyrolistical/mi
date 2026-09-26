@@ -1,6 +1,6 @@
-import type { ImageContent, SystemMessage, TextContent, ThinkingContent, ToolCall } from "../types.ts";
+import type { MediaContent, SystemMessage, TextContent, ThinkingContent, ToolCall } from "../types.ts";
 
-type Content = TextContent | ImageContent | ThinkingContent | ToolCall;
+type Content = TextContent | MediaContent | ThinkingContent | ToolCall;
 
 export function contentText(content: string | readonly Content[], separator = "\n"): string {
 	if (typeof content === "string") return content;

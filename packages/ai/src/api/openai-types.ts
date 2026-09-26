@@ -8,7 +8,13 @@ export interface ChatCompletionContentPartImage {
 	image_url: { url: string; detail?: "auto" | "low" | "high" };
 }
 
-export type ChatCompletionContentPart = ChatCompletionContentPartText | ChatCompletionContentPartImage;
+export interface ChatCompletionContentPartVideo {
+	type: "input_video";
+	input_video: { url: string };
+}
+
+export type ChatCompletionContentPart =
+	ChatCompletionContentPartText | ChatCompletionContentPartImage | ChatCompletionContentPartVideo;
 
 export interface ChatCompletionSystemMessageParam {
 	role: "system";

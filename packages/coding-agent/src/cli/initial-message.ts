@@ -1,15 +1,15 @@
-import type { ImageContent } from "@earendil-works/pi-ai";
+import type { MediaContent } from "@earendil-works/pi-ai";
 import type { Args } from "./args.ts";
 
 export interface InitialMessageInput {
 	parsed: Args;
 	fileText?: string;
-	fileImages?: ImageContent[];
+	fileImages?: MediaContent[];
 }
 
 export interface InitialMessageResult {
 	initialMessage?: string;
-	initialImages?: ImageContent[];
+	initialImages?: MediaContent[];
 }
 
 export function buildInitialMessage({ parsed, fileText, fileImages }: InitialMessageInput): InitialMessageResult {

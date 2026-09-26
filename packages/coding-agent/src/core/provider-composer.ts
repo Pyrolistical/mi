@@ -5,6 +5,7 @@ import {
 	type AuthContext,
 	type AuthResult,
 	type Credential,
+	type InputModality,
 	lazyStream,
 	type Model,
 	type ModelAuth,
@@ -16,6 +17,7 @@ import {
 	type TranscriptContext,
 } from "@earendil-works/pi-ai";
 import { getApiProvider } from "@earendil-works/pi-ai/compat";
+import { LLAMA_SERVER_API } from "./llama-server.ts";
 import type { ModelConfig, ModelsJsonModel, ModelsJsonModelOverride, ModelsJsonProvider } from "./model-config.ts";
 import {
 	getConfigValueEnvVarNames,
@@ -30,7 +32,7 @@ interface ProviderModelConfigBase {
 	name: string;
 	api?: string;
 	baseUrl?: string;
-	input: ("text" | "image")[];
+	input: InputModality[];
 	cost: Model<Api>["cost"];
 	headers?: Record<string, string>;
 }
@@ -100,7 +102,7 @@ function applyModelOverride(model: Model<Api>, override: ModelsJsonModelOverride
 		thinkingLevelMap: override.thinkingLevelMap
 			? { ...model.thinkingLevelMap, ...override.thinkingLevelMap }
 			: model.thinkingLevelMap,
-		input: (override.input as ("text" | "image")[] | undefined) ?? model.input,
+		input: override.input ?? model.input,
 		cost: override.cost
 			? {
 					input: override.cost.input ?? model.cost.input,
@@ -148,7 +150,7 @@ function modelFromJson(
 		baseUrl,
 		reasoning: definition.reasoning ?? false,
 		thinkingLevelMap: definition.thinkingLevelMap,
-		input: (definition.input ?? ["text"]) as ("text" | "image")[],
+		input: definition.input ?? ["text"],
 		cost: definition.cost ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 		promptCache: definition.promptCache,
 		contextWindow: definition.contextWindow ?? 128000,
@@ -212,7 +214,8 @@ function applyModelsJson(
 		baseUrl: config.baseUrl ?? model.baseUrl,
 		compat: mergeCompat(model.compat, config.compat),
 	}));
-	for (const definition of config.models ?? []) {
+	const definitions = config.api === LLAMA_SERVER_API ? [] : (config.models ?? []);
+	for (const definition of definitions) {
 		const existingIndex = models.findIndex((model) => model.id === definition.id);
 		const defaults = findModelDefaults(models, definition.id, definition.api ?? config.api);
 		const model = modelFromJson(providerId, definition, config, defaults);
@@ -377,8 +380,11 @@ export function composeModelProvider(
 			currentExtension(),
 		);
 		return models.map((model) => {
+			const definition =
+				config?.api === LLAMA_SERVER_API ? config.models?.find((entry) => entry.id === model.id) : undefined;
 			const override = config?.modelOverrides?.[model.id];
-			return override ? applyModelOverride(model, override) : model;
+			const defined = definition ? applyModelOverride(model, definition) : model;
+			return override ? applyModelOverride(defined, override) : defined;
 		});
 	};
 	getModels();

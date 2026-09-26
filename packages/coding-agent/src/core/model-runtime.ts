@@ -33,6 +33,7 @@ import {
 import { getAgentDir } from "../config.ts";
 import { operationSignal, raceWithAbortSignal } from "../utils/abort.ts";
 import { AuthStorage as DefaultAuthStorage } from "./auth-storage.ts";
+import { createLlamaServerProvider, LLAMA_SERVER_API } from "./llama-server.ts";
 import { ModelConfig } from "./model-config.ts";
 import { FileModelsStore, InMemoryCodingAgentModelsStore } from "./models-store.ts";
 import {
@@ -115,6 +116,7 @@ export class ModelRuntime implements Models {
 	private readonly nativeExtensionProviders = new Map<string, Provider>();
 	private readonly extensionProviders = new Map<string, ProviderConfigInput>();
 	private readonly compositionErrors = new Map<string, string>();
+	private readonly llamaServerProviders = new Map<string, { key: string; provider: Provider }>();
 	private readonly modelsPath: string | undefined;
 	private readonly modelNetworkEnabled: boolean;
 	private config: ModelConfig;
@@ -176,6 +178,12 @@ export class ModelRuntime implements Models {
 		try {
 			if (options.refreshOnCreate !== false) {
 				await runtime.refresh({ allowNetwork: refreshFromNetwork, signal });
+				const discovered = runtime.config
+					.getProviderIds()
+					.filter((providerId) => runtime.config.getProvider(providerId)?.api === LLAMA_SERVER_API);
+				if (runtime.modelNetworkEnabled && !refreshFromNetwork && discovered.length > 0) {
+					await runtime.refresh({ providers: discovered, allowNetwork: true, signal });
+				}
 			}
 		} finally {
 			if (timeout) clearTimeout(timeout);
@@ -205,13 +213,30 @@ export class ModelRuntime implements Models {
 			return;
 		}
 		try {
-			this.models.setProvider(composeModelProvider(providerId, base, this.config, extension));
+			const composedBase = base ?? this.llamaServerProvider(providerId);
+			this.models.setProvider(composeModelProvider(providerId, composedBase, this.config, extension));
 			this.compositionErrors.delete(providerId);
 		} catch (error) {
 			this.compositionErrors.set(providerId, error instanceof Error ? error.message : String(error));
 			if (base) this.models.setProvider(base);
 			else this.models.deleteProvider(providerId);
 		}
+	}
+
+	private llamaServerProvider(providerId: string): Provider | undefined {
+		const config = this.config.getProvider(providerId);
+		if (config?.api !== LLAMA_SERVER_API) {
+			this.llamaServerProviders.delete(providerId);
+			return undefined;
+		}
+		if (!config.baseUrl) throw new Error(`"baseUrl" is required for api "${LLAMA_SERVER_API}".`);
+		const modelIds = config.models?.map((model) => model.id);
+		const key = JSON.stringify([config.baseUrl, modelIds]);
+		const cached = this.llamaServerProviders.get(providerId);
+		if (cached?.key === key) return cached.provider;
+		const provider = createLlamaServerProvider(providerId, config.baseUrl, modelIds);
+		this.llamaServerProviders.set(providerId, { key, provider });
+		return provider;
 	}
 
 	private rebuildProviders(): void {

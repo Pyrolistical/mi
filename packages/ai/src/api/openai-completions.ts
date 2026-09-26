@@ -6,6 +6,7 @@ import type {
 	ChatCompletionContentPart,
 	ChatCompletionContentPartImage,
 	ChatCompletionContentPartText,
+	ChatCompletionContentPartVideo,
 	ChatCompletionCreateParamsStreaming,
 	ChatCompletionDeveloperMessageParam,
 	ChatCompletionMessageParam,
@@ -20,8 +21,8 @@ import type {
 	AssistantMessage,
 	CacheRetention,
 	ChatTemplateKwargValue,
-	ImageContent,
 	JsonValue,
+	MediaContent,
 	Message,
 	Model,
 	OpenAICompletionsCompat,
@@ -77,9 +78,20 @@ function hasHeader(headers: ProviderHeaders | undefined, name: string): boolean 
 	return false;
 }
 
+function removesHeader(headers: ProviderHeaders | undefined, name: string): boolean {
+	const expected = name.toLowerCase();
+	return Object.entries(headers ?? {}).some(([key, value]) => key.toLowerCase() === expected && value === null);
+}
+
 function getClientApiKey(provider: string, apiKey: string | undefined, headers: ProviderHeaders | undefined): string {
 	if (apiKey) return apiKey;
-	if (hasHeader(headers, "authorization") || hasHeader(headers, "cf-aig-authorization")) return "unused";
+	if (
+		hasHeader(headers, "authorization") ||
+		hasHeader(headers, "cf-aig-authorization") ||
+		removesHeader(headers, "authorization")
+	) {
+		return "unused";
+	}
 	throw new Error(`No API key for provider: ${provider}`);
 }
 
@@ -109,8 +121,21 @@ function isToolCallBlock(block: { type: string }): block is ToolCall {
 	return block.type === "toolCall";
 }
 
-function isImageContentBlock(block: { type: string }): block is ImageContent {
-	return block.type === "image";
+function isMediaContentBlock(block: { type: string }): block is MediaContent {
+	return block.type === "image" || block.type === "video";
+}
+
+function describeMedia(blocks: readonly MediaContent[], pluralSuffix = ""): string {
+	const [first] = blocks;
+	return first && blocks.every((block) => block.type === first.type) ? `${first.type}${pluralSuffix}` : "media";
+}
+
+function convertMediaContent(block: MediaContent): ChatCompletionContentPartImage | ChatCompletionContentPartVideo {
+	const url = `data:${block.mimeType};base64,${block.data}`;
+	if (block.type === "video") {
+		return { type: "input_video", input_video: { url } };
+	}
+	return { type: "image_url", image_url: { url } };
 }
 
 function isReasoningDetailObject(detail: unknown): detail is Record<string, unknown> {
@@ -1109,14 +1134,8 @@ export function convertMessages(
 								type: "text",
 								text: sanitizeSurrogates(item.text),
 							} satisfies ChatCompletionContentPartText;
-						} else {
-							return {
-								type: "image_url",
-								image_url: {
-									url: `data:${item.mimeType};base64,${item.data}`,
-								},
-							} satisfies ChatCompletionContentPartImage;
 						}
+						return convertMediaContent(item);
 					});
 				if (content.length === 0) continue;
 				params.push({
@@ -1212,7 +1231,7 @@ export function convertMessages(
 			}
 			params.push(assistantMsg);
 		} else if (msg.role === "toolResult") {
-			const imageBlocks: Array<{ type: "image_url"; image_url: { url: string } }> = [];
+			const toolMedia: MediaContent[] = [];
 			let j = i;
 
 			for (; j < transformedMessages.length && transformedMessages[j].role === "toolResult"; j++) {
@@ -1222,10 +1241,14 @@ export function convertMessages(
 					.filter(isTextContentBlock)
 					.map((block) => block.text)
 					.join("\n");
-				const hasImages = toolMsg.content.some((c) => c.type === "image");
+				const mediaBlocks = toolMsg.content.filter(isMediaContentBlock);
 
 				const hasText = textResult.length > 0;
-				const toolResultText = hasText ? textResult : hasImages ? "(see attached image)" : "(no tool output)";
+				const toolResultText = hasText
+					? textResult
+					: mediaBlocks.length > 0
+						? `(see attached ${describeMedia(mediaBlocks)})`
+						: "(no tool output)";
 				const toolResultMsg: ChatCompletionToolMessageParam = {
 					role: "tool",
 					content: sanitizeSurrogates(toolResultText),
@@ -1236,23 +1259,12 @@ export function convertMessages(
 				}
 				params.push(toolResultMsg);
 
-				if (hasImages && model.input.includes("image")) {
-					for (const block of toolMsg.content) {
-						if (isImageContentBlock(block)) {
-							imageBlocks.push({
-								type: "image_url",
-								image_url: {
-									url: `data:${block.mimeType};base64,${block.data}`,
-								},
-							});
-						}
-					}
-				}
+				toolMedia.push(...mediaBlocks);
 			}
 
 			i = j - 1;
 
-			if (imageBlocks.length > 0) {
+			if (toolMedia.length > 0) {
 				if (compat.requiresAssistantAfterToolResult) {
 					params.push({
 						role: "assistant",
@@ -1265,9 +1277,9 @@ export function convertMessages(
 					content: [
 						{
 							type: "text",
-							text: "Attached image(s) from tool result:",
+							text: `Attached ${describeMedia(toolMedia, "(s)")} from tool result:`,
 						},
-						...imageBlocks,
+						...toolMedia.map(convertMediaContent),
 					],
 				});
 				lastRole = "user";

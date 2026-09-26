@@ -3,8 +3,8 @@ import type {
 	AssistantMessage,
 	AssistantMessageEvent,
 	AssistantMessageEventStream,
-	ImageContent,
 	JsonValue,
+	MediaContent,
 	Message,
 	Model,
 	SimpleStreamOptions,
@@ -35,7 +35,7 @@ export interface BeforeToolCallResult {
 }
 
 export interface AfterToolCallResult {
-	content?: (TextContent | ImageContent)[];
+	content?: (TextContent | MediaContent)[];
 	details?: unknown;
 	isError?: boolean;
 	usage?: Usage;
@@ -143,7 +143,7 @@ export interface AgentState {
 }
 
 export interface AgentToolResult<T = JsonValue | undefined> {
-	content: (TextContent | ImageContent)[];
+	content: (TextContent | MediaContent)[];
 	details: T;
 	usage?: Usage;
 	terminate?: boolean;

@@ -1,5 +1,5 @@
 import { createInterface } from "node:readline";
-import { type ImageContent, modelsAreEqual } from "@earendil-works/pi-ai";
+import { type MediaContent, modelsAreEqual } from "@earendil-works/pi-ai";
 import { setCapabilityOverrides } from "@earendil-works/pi-tui";
 import { type Args, normalizeSessionName, parseArgs, printHelp } from "./cli/args.ts";
 import {
@@ -42,7 +42,6 @@ import { collectSettingsDiagnostics, deduplicateDiagnostics } from "./core/setti
 import { SettingsManager } from "./core/settings-manager.ts";
 import { printTimings, resetTimings, time } from "./core/timings.ts";
 import { UpdateChecker } from "./core/update-check.ts";
-import { builtInExtensions } from "./extensions/index.ts";
 import { InteractiveMode } from "./modes/index.ts";
 import { isLocalPath, normalizePath, resolvePath } from "./utils/paths.ts";
 import { gray, red, yellow } from "./utils/colors.ts";
@@ -140,7 +139,7 @@ async function runAuthCommand(args: string[]): Promise<boolean> {
 
 async function prepareInitialMessage(parsed: Args): Promise<{
 	initialMessage?: string;
-	initialImages?: ImageContent[];
+	initialImages?: MediaContent[];
 }> {
 	if (parsed.fileArgs.length === 0) {
 		return buildInitialMessage({ parsed });
@@ -460,7 +459,7 @@ export interface MainOptions {
 
 export async function main(args: string[], options?: MainOptions) {
 	resetTimings();
-	const extensionFactories = [...builtInExtensions, ...(options?.extensionFactories ?? [])];
+	const extensionFactories = options?.extensionFactories ?? [];
 	const offlineMode = args.includes("--offline") || isTruthyEnvFlag(process.env.MI_OFFLINE);
 	if (offlineMode) {
 		process.env.MI_OFFLINE = "1";

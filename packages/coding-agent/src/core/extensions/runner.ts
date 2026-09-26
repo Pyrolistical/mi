@@ -1,7 +1,7 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import {
 	getCurrentSystemMessage,
-	type ImageContent,
+	type MediaContent,
 	type Model,
 	type Provider,
 	type ProviderHeaders,
@@ -1177,7 +1177,7 @@ export class ExtensionRunner {
 
 	async emitBeforeAgentStart(
 		prompt: string,
-		images: ImageContent[] | undefined,
+		images: MediaContent[] | undefined,
 		systemPromptOptions: BuildSystemPromptOptions,
 	): Promise<BeforeAgentStartCombinedResult> {
 		const currentOptions = normalizeBuildSystemPromptOptions(systemPromptOptions);
@@ -1271,7 +1271,7 @@ export class ExtensionRunner {
 
 	async emitInput(
 		text: string,
-		images: ImageContent[] | undefined,
+		images: MediaContent[] | undefined,
 		source: InputSource,
 		streamingBehavior?: "steer" | "followUp",
 	): Promise<InputEventResult> {

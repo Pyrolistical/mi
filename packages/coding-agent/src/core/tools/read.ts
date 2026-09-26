@@ -1,9 +1,9 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import type { Api, ImageContent, Model, TextContent } from "@earendil-works/pi-ai";
+import type { Api, MediaContent, Model, TextContent } from "@earendil-works/pi-ai";
 import { constants } from "fs";
 import { access as fsAccess, readFile as fsReadFile } from "fs/promises";
 import { type Static, Type } from "typebox";
-import { detectSupportedImageMimeTypeFromFile } from "../../utils/mime.ts";
+import { detectSupportedMediaMimeTypeFromFile, toMediaContent } from "../../utils/mime.ts";
 import type { ExtensionContext, ToolDefinition } from "../extensions/types.ts";
 import { resolveReadPathAsync } from "./path-utils.ts";
 import { readRenderers } from "./renderers/read.ts";
@@ -25,24 +25,26 @@ export interface ReadToolDetails {
 export interface ReadOperations {
 	readFile: (absolutePath: string) => Promise<Buffer>;
 	access: (absolutePath: string) => Promise<void>;
-	detectImageMimeType?: (absolutePath: string) => Promise<string | null | undefined>;
+	detectMediaMimeType?: (absolutePath: string) => Promise<string | null | undefined>;
 }
 
 const defaultReadOperations: ReadOperations = {
 	readFile: (path) => fsReadFile(path),
 	access: (path) => fsAccess(path, constants.R_OK),
-	detectImageMimeType: detectSupportedImageMimeTypeFromFile,
+	detectMediaMimeType: detectSupportedMediaMimeTypeFromFile,
 };
 
 export interface ReadToolOptions {
 	operations?: ReadOperations;
 }
 
-function getNonVisionImageNote(model: Model<Api> | undefined): string | undefined {
-	if (!model || model.input.includes("image")) {
+function getUnsupportedMediaNote(model: Model<Api> | undefined, media: MediaContent): string | undefined {
+	if (!model || model.input.includes(media.type)) {
 		return undefined;
 	}
-	return "[Current model does not support images. The image will be omitted from this request.]";
+	return media.type === "video"
+		? "[Current model does not support video. The video will be omitted from this request.]"
+		: "[Current model does not support images. The image will be omitted from this request.]";
 }
 
 export function createReadToolDefinition(
@@ -53,7 +55,7 @@ export function createReadToolDefinition(
 	return {
 		name: "read",
 		label: "read",
-		description: `Read the contents of a file. Supports text files and images (jpg, png, gif, webp, bmp). Images are sent as attachments. For text files, output is truncated to ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). Use offset/limit for large files. When you need the full file, continue with offset until complete.`,
+		description: `Read the contents of a file. Supports text files, images (jpg, png, gif, webp, bmp) and videos (mp4, mov, webm, mkv, avi). Images and videos are sent as attachments. For text files, output is truncated to ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). Use offset/limit for large files. When you need the full file, continue with offset until complete.`,
 		parameters: readSchema,
 		constrainedSampling: { type: "json_schema", strict: "prefer" },
 		async execute(
@@ -63,7 +65,7 @@ export function createReadToolDefinition(
 			_onUpdate?,
 			ctx?: ExtensionContext,
 		) {
-			return new Promise<{ content: (TextContent | ImageContent)[]; details: ReadToolDetails | undefined }>(
+			return new Promise<{ content: (TextContent | MediaContent)[]; details: ReadToolDetails | undefined }>(
 				(resolve, reject) => {
 					if (signal?.aborted) {
 						reject(new Error("Operation aborted"));
@@ -82,18 +84,16 @@ export function createReadToolDefinition(
 							if (aborted) return;
 							await ops.access(absolutePath);
 							if (aborted) return;
-							const mimeType = ops.detectImageMimeType ? await ops.detectImageMimeType(absolutePath) : undefined;
-							let content: (TextContent | ImageContent)[];
+							const mimeType = ops.detectMediaMimeType ? await ops.detectMediaMimeType(absolutePath) : undefined;
+							let content: (TextContent | MediaContent)[];
 							let details: ReadToolDetails | undefined;
-							const nonVisionImageNote = getNonVisionImageNote(ctx?.model);
 							if (mimeType) {
 								const buffer = await ops.readFile(absolutePath);
-								let textNote = `Read image file [${mimeType}]`;
-								if (nonVisionImageNote) textNote += `\n${nonVisionImageNote}`;
-								content = [
-									{ type: "text", text: textNote },
-									{ type: "image", data: buffer.toString("base64"), mimeType },
-								];
+								const media = toMediaContent(buffer.toString("base64"), mimeType);
+								const unsupportedMediaNote = getUnsupportedMediaNote(ctx?.model, media);
+								let textNote = `Read ${media.type} file [${mimeType}]`;
+								if (unsupportedMediaNote) textNote += `\n${unsupportedMediaNote}`;
+								content = [{ type: "text", text: textNote }, media];
 							} else {
 								const buffer = await ops.readFile(absolutePath);
 								const textContent = buffer.toString("utf-8");

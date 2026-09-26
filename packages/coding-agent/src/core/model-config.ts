@@ -5,6 +5,7 @@ import type { TLocalizedValidationError } from "typebox/error";
 import { stripJsonComments } from "../utils/json.ts";
 import { normalizePath } from "../utils/paths.ts";
 import { stripBom } from "../utils/text.ts";
+import { LLAMA_SERVER_API } from "./llama-server.ts";
 
 const PercentileCutoffsSchema = Type.Object({
 	p50: Type.Optional(Type.Number()),
@@ -94,6 +95,10 @@ const OpenAICompletionsCompatSchema = Type.Object({
 	vllmPriority: Type.Optional(Type.Number()),
 });
 
+const InputModalitiesSchema = Type.Array(
+	Type.Union([Type.Literal("text"), Type.Literal("image"), Type.Literal("video")]),
+);
+
 const ModelCostRatesSchema = {
 	input: Type.Number(),
 	output: Type.Number(),
@@ -120,7 +125,7 @@ const ModelDefinitionSchema = Type.Object({
 	baseUrl: Type.Optional(Type.String({ minLength: 1 })),
 	reasoning: Type.Optional(Type.Boolean()),
 	thinkingLevelMap: Type.Optional(ThinkingLevelMapSchema),
-	input: Type.Optional(Type.Array(Type.Union([Type.Literal("text"), Type.Literal("image")]))),
+	input: Type.Optional(InputModalitiesSchema),
 	cost: Type.Optional(ModelCostSchema),
 	promptCache: Type.Optional(ModelPromptCacheSchema),
 	contextWindow: Type.Optional(Type.Number()),
@@ -134,7 +139,7 @@ const ModelOverrideSchema = Type.Object({
 	name: Type.Optional(Type.String({ minLength: 1 })),
 	reasoning: Type.Optional(Type.Boolean()),
 	thinkingLevelMap: Type.Optional(ThinkingLevelMapSchema),
-	input: Type.Optional(Type.Array(Type.Union([Type.Literal("text"), Type.Literal("image")]))),
+	input: Type.Optional(InputModalitiesSchema),
 	cost: Type.Optional(
 		Type.Object({
 			input: Type.Optional(Type.Number()),
@@ -238,7 +243,11 @@ export class ModelConfig {
 		const config = parsed as ModelsJson;
 		const providers = new Map<string, ModelsJsonProvider>();
 		for (const [providerId, provider] of Object.entries(config.providers)) {
-			providers.set(providerId, deepFreeze(structuredClone(provider)));
+			const isCustomServer = provider.api === undefined && provider.baseUrl !== undefined;
+			providers.set(
+				providerId,
+				deepFreeze(structuredClone(isCustomServer ? { ...provider, api: LLAMA_SERVER_API } : provider)),
+			);
 		}
 		return new ModelConfig(providers);
 	}

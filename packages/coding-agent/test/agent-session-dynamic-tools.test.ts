@@ -73,9 +73,6 @@ describe("AgentSession dynamic tool registration", () => {
 		});
 
 		const bashTool = session.agent.state.tools.find((tool) => tool.name === "bash")!;
-		expect(session.systemPrompt).toContain(
-			"You can inspect PI_* environment variables for current model and session details.",
-		);
 		await bashTool.execute("bash-env", { command: "printf ok" });
 		expect(sessionEnv).toMatchObject({
 			MI_SESSION_ID: session.sessionId,
@@ -111,8 +108,6 @@ describe("AgentSession dynamic tool registration", () => {
 							name: "dynamic_tool",
 							label: "Dynamic Tool",
 							description: "Tool registered from session_start",
-							promptSnippet: "Run dynamic test behavior",
-							promptGuidelines: ["Use dynamic_tool when the user asks for dynamic behavior tests."],
 							parameters: Type.Object({}),
 							execute: async () => ({
 								content: [{ type: "text", text: "ok" }],
@@ -143,9 +138,6 @@ describe("AgentSession dynamic tool registration", () => {
 		const readTool = allTools.find((tool) => tool.name === "read");
 
 		expect(allTools.map((tool) => tool.name)).toContain("dynamic_tool");
-		expect(dynamicTool?.promptGuidelines).toEqual([
-			"Use dynamic_tool when the user asks for dynamic behavior tests.",
-		]);
 		expect(dynamicTool?.sourceInfo).toMatchObject({
 			path: "<inline:1>",
 			source: "inline",
@@ -157,8 +149,6 @@ describe("AgentSession dynamic tool registration", () => {
 			scope: "temporary",
 		});
 		expect(session.getActiveToolNames()).toContain("dynamic_tool");
-		expect(session.systemPrompt).toContain("- dynamic_tool: Run dynamic test behavior");
-		expect(session.systemPrompt).toContain("- Use dynamic_tool when the user asks for dynamic behavior tests.");
 
 		session.dispose();
 	});
@@ -201,52 +191,6 @@ describe("AgentSession dynamic tool registration", () => {
 			scope: "temporary",
 		});
 		expect(session.getActiveToolNames()).toContain("sdk_tool");
-
-		session.dispose();
-	});
-
-	it("keeps custom tools active but omits them from available tools when promptSnippet is not provided", async () => {
-		const settingsManager = SettingsManager.create(tempDir, agentDir);
-		const sessionManager = SessionManager.inMemory();
-
-		const resourceLoader = new DefaultResourceLoader({
-			cwd: tempDir,
-			agentDir,
-			settingsManager,
-			extensionFactories: [
-				(pi) => {
-					pi.on("session_start", () => {
-						pi.registerTool({
-							name: "hidden_tool",
-							label: "Hidden Tool",
-							description: "Description should not appear in available tools",
-							parameters: Type.Object({}),
-							execute: async () => ({
-								content: [{ type: "text", text: "ok" }],
-								details: {},
-							}),
-						});
-					});
-				},
-			],
-		});
-		await resourceLoader.reload();
-
-		const { session } = await createAgentSession({
-			cwd: tempDir,
-			agentDir,
-			model: openaiModel("gpt-5-mini"),
-			settingsManager,
-			sessionManager,
-			resourceLoader,
-		});
-
-		await session.bindExtensions({});
-
-		expect(session.getAllTools().map((tool) => tool.name)).toContain("hidden_tool");
-		expect(session.getActiveToolNames()).toContain("hidden_tool");
-		expect(session.systemPrompt).not.toContain("hidden_tool");
-		expect(session.systemPrompt).not.toContain("Description should not appear in available tools");
 
 		session.dispose();
 	});

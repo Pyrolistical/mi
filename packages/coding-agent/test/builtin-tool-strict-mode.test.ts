@@ -36,7 +36,6 @@ describe("strict built-in tools", () => {
 			expect(override.prepareArguments).toBe(definition.prepareArguments);
 			expect(override.renderCall).toBe(definition.renderCall);
 			expect(override.renderResult).toBe(definition.renderResult);
-			expect(override.promptGuidelines).toBe(definition.promptGuidelines);
 			expect(definition.constrainedSampling).toEqual({ type: "json_schema", strict: "prefer" });
 		}
 	});

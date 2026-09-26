@@ -5,9 +5,6 @@ export interface BuildSystemPromptOptions {
 	customPrompt?: string;
 	forceSystemPrompt?: string;
 	selectedTools?: string[];
-	toolSnippets?: Record<string, string>;
-	toolGuidelines?: Record<string, string[]>;
-	promptGuidelines?: string[];
 	appendSystemPrompt?: string;
 	sections?: Record<string, string>;
 	cwd: string;
@@ -17,9 +14,6 @@ export interface BuildSystemPromptOptions {
 
 export type NormalizedBuildSystemPromptOptions = BuildSystemPromptOptions & {
 	selectedTools: string[];
-	toolSnippets: Record<string, string>;
-	toolGuidelines: Record<string, string[]>;
-	promptGuidelines: string[];
 	appendSystemPrompt: string;
 	sections: Record<string, string>;
 	contextFiles: Array<{ path: string; content: string }>;
@@ -34,11 +28,6 @@ export function normalizeBuildSystemPromptOptions(input: BuildSystemPromptOption
 		customPrompt: input.customPrompt,
 		forceSystemPrompt: input.forceSystemPrompt,
 		selectedTools: [...(input.selectedTools ?? ["read", "bash", "edit", "write"])],
-		toolSnippets: { ...(input.toolSnippets ?? {}) },
-		toolGuidelines: Object.fromEntries(
-			Object.entries(input.toolGuidelines ?? {}).map(([name, guidelines]) => [name, [...guidelines]]),
-		),
-		promptGuidelines: [...(input.promptGuidelines ?? [])],
 		appendSystemPrompt: input.appendSystemPrompt ?? "",
 		sections: { ...(input.sections ?? {}) },
 		cwd: input.cwd,
@@ -56,41 +45,11 @@ function renderProjectContext(contextFiles: Array<{ path: string; content: strin
 	].join("\n\n");
 }
 
-function buildRules(
-	selectedTools: string[],
-	toolGuidelines: Record<string, string[]>,
-	promptGuidelines: string[],
-): string {
-	const rules: string[] = [];
-	const seen = new Set<string>();
-	const addRule = (rule: string): void => {
-		const normalized = rule.trim();
-		if (!normalized || seen.has(normalized)) return;
-		seen.add(normalized);
-		rules.push(normalized);
-	};
-
-	if (selectedTools.includes("bash")) {
-		addRule("Use bash for file operations like ls, rg, find");
-	}
-
-	for (const name of selectedTools) {
-		for (const rule of toolGuidelines[name] ?? []) addRule(rule);
-	}
-	for (const rule of promptGuidelines) addRule(rule);
-	addRule("Be concise in your responses");
-	addRule("Show file paths clearly when working with files");
-	return rules.map((rule) => `- ${rule}`).join("\n");
-}
-
 export function buildSystemPromptSections(input: BuildSystemPromptOptions): SystemPromptSections {
 	const options = normalizeBuildSystemPromptOptions(input);
 	const {
 		customPrompt,
 		selectedTools,
-		toolSnippets,
-		toolGuidelines,
-		promptGuidelines,
 		appendSystemPrompt,
 		sections: customSections,
 		cwd,
@@ -104,19 +63,7 @@ export function buildSystemPromptSections(input: BuildSystemPromptOptions): Syst
 		}
 	}
 
-	const promptSections: Record<string, string> = {};
-	if (customPrompt) {
-		promptSections.preamble = customPrompt;
-	} else {
-		promptSections.preamble =
-			"You are an expert coding assistant operating inside mi, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.";
-		const visibleTools = selectedTools.filter((name) => !!toolSnippets[name]);
-		const tools =
-			visibleTools.length > 0 ? visibleTools.map((name) => `- ${name}: ${toolSnippets[name]}`).join("\n") : "(none)";
-		promptSections.tools = `${tools}\n\nIn addition to the tools above, you may have access to other custom tools depending on the project.`;
-		promptSections.rules = buildRules(selectedTools, toolGuidelines, promptGuidelines);
-	}
-
+	const promptSections: Record<string, string> = { preamble: customPrompt || "You are an expert coding agent." };
 	if (appendSystemPrompt) promptSections.addendum = appendSystemPrompt;
 	if (contextFiles.length > 0) promptSections.project_context = renderProjectContext(contextFiles);
 	const skillFileReadTool = (["read", "bash"] as const).find((tool) => selectedTools.includes(tool));

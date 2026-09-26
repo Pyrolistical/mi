@@ -263,8 +263,6 @@ export interface ToolDefinition<TParams extends TSchema = TSchema, TDetails = un
 	name: string;
 	label: string;
 	description: string;
-	promptSnippet?: string;
-	promptGuidelines?: string[];
 	parameters: TParams;
 	constrainedSampling?: false | ConstrainedSamplingConfig;
 	renderShell?: "default" | "self";
@@ -1088,7 +1086,7 @@ type GetSessionNameHandler = () => string | undefined;
 
 type GetActiveToolsHandler = () => string[];
 
-export type ToolInfo = Pick<ToolDefinition, "name" | "description" | "parameters" | "promptGuidelines"> & {
+export type ToolInfo = Pick<ToolDefinition, "name" | "description" | "parameters"> & {
 	sourceInfo: SourceInfo;
 };
 

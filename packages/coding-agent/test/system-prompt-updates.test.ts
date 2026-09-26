@@ -45,7 +45,7 @@ describe("system prompt updates", () => {
 			const head = harness.session.messages[0];
 			if (head?.role !== "system") throw new Error("expected system message");
 			expect(head.content).toBe("");
-			expect(Object.keys(head.sections ?? {})).toEqual(["preamble", "tools", "rules", "cwd"]);
+			expect(Object.keys(head.sections ?? {})).toEqual(["preamble", "cwd"]);
 			expect(head.toolsAdded?.map((tool) => tool.name)).toEqual(["read", "bash", "edit", "write"]);
 			expect(getSystemMessageText(head)).toBe(harness.session.systemPrompt);
 		} finally {
@@ -163,15 +163,13 @@ describe("system prompt updates", () => {
 		}
 	});
 
-	test("setActiveTools emits prompt sections and tool changes before the next request", async () => {
+	test("setActiveTools emits tool changes before the next request", async () => {
 		const extension: ExtensionFactory = (pi) => {
 			for (const name of ["first", "second"]) {
 				pi.registerTool({
 					name,
 					label: name,
 					description: `${name} description`,
-					promptSnippet: `${name} prompt snippet`,
-					promptGuidelines: [`Use ${name} carefully.`],
 					parameters: Type.Object({}),
 					execute: async () => ({ content: [{ type: "text", text: name }], details: {} }),
 				});
@@ -203,18 +201,14 @@ describe("system prompt updates", () => {
 			const initial = requests[0]?.messages[0];
 			if (initial?.role !== "system") throw new Error("expected initial system message");
 			expect(initial.toolsAdded?.map((value) => value.name)).toEqual(["first", "second"]);
-			expect(initial.sections?.tools).toContain("first prompt snippet");
 
 			const update = requests[1]?.messages.filter((message) => message.role === "system").at(-1);
 			expect(update).toEqual({
 				role: "system",
 				content: "",
-				sections: { tools: expect.stringContaining("second prompt snippet"), rules: expect.any(String) },
 				toolsRemoved: [{ name: "first" }],
 				timestamp: expect.any(Number),
 			});
-			expect(update?.sections?.tools).not.toContain("first prompt snippet");
-			expect(update?.sections?.rules).not.toContain("Use first carefully.");
 
 			const result = requests[2]?.messages.filter((message) => message.role === "toolResult").at(-1);
 			expect(result).toMatchObject({ role: "toolResult", toolName: "first", isError: true });

@@ -65,8 +65,6 @@ describe("defaultTools setting", () => {
 				.sort(),
 		).toEqual(["bash", "edit", "read", "write"]);
 		expect(session.getActiveToolNames()).toEqual(["write", "edit"]);
-		expect(session.systemPrompt).toContain("- write:");
-		expect(session.systemPrompt).not.toContain("- read:");
 		session.dispose();
 	});
 

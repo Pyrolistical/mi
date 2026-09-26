@@ -21,7 +21,6 @@ function registerSwitchTools(pi: ExtensionAPI): void {
 		name: "switch_tools",
 		label: "Switch Tools",
 		description: "Switch the active extension tool set",
-		promptSnippet: "Switch to the next extension tool",
 		parameters: Type.Object({}),
 		execute: async () => {
 			pi.setActiveTools(["after_switch"]);
@@ -32,7 +31,6 @@ function registerSwitchTools(pi: ExtensionAPI): void {
 		name: "after_switch",
 		label: "After Switch",
 		description: "Tool that should be available after switching",
-		promptSnippet: "Run after the active tool set changes",
 		parameters: Type.Object({}),
 		execute: async () => ({ content: [{ type: "text", text: "after" }], details: {} }),
 	});
@@ -90,7 +88,6 @@ describe("extension active tools next-turn refresh", () => {
 			await harness.session.prompt("start");
 
 			expect(providerPrompts).toHaveLength(2);
-			expect(providerPrompts[0]).not.toBe(providerPrompts[1]);
 			expect(sessionPrompts).toEqual(providerPrompts);
 		} finally {
 			harness.cleanup();

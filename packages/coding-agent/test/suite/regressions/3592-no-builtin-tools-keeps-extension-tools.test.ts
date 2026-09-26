@@ -43,7 +43,6 @@ describe("regression #3592: no-builtin-tools keeps extension tools enabled", () 
 							name: "dynamic_tool",
 							label: "Dynamic Tool",
 							description: "Tool registered from session_start",
-							promptSnippet: "Run dynamic test behavior",
 							parameters: Type.Object({}),
 							execute: async () => ({
 								content: [{ type: "text", text: "ok" }],
@@ -80,9 +79,6 @@ describe("regression #3592: no-builtin-tools keeps extension tools enabled", () 
 				.sort(),
 		).toEqual(["bash", "dynamic_tool", "edit", "read", "write"]);
 		expect(session.getActiveToolNames()).toEqual(["dynamic_tool"]);
-		expect(session.systemPrompt).toContain("- dynamic_tool: Run dynamic test behavior");
-		expect(session.systemPrompt).not.toContain("- read:");
-		expect(session.systemPrompt).not.toContain("- bash:");
 		session.dispose();
 	});
 
@@ -91,7 +87,6 @@ describe("regression #3592: no-builtin-tools keeps extension tools enabled", () 
 
 		expect(session.getAllTools()).toEqual([]);
 		expect(session.getActiveToolNames()).toEqual([]);
-		expect(session.systemPrompt).toContain("<tools>\n(none)\n");
 		session.dispose();
 	});
 
@@ -112,8 +107,6 @@ describe("regression #3592: no-builtin-tools keeps extension tools enabled", () 
 		});
 
 		expect(session.getActiveToolNames()).toEqual([]);
-		expect(session.systemPrompt).toContain("<tools>\n(none)\n");
-		expect(session.systemPrompt).not.toContain("- read:");
 		session.dispose();
 	});
 });

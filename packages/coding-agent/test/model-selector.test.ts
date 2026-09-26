@@ -2,7 +2,6 @@ import { setKeybindings, type TUI } from "@earendil-works/pi-tui";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { KeybindingsManager } from "../src/core/keybindings.ts";
 import { ModelSelectorComponent } from "../src/modes/interactive/components/model-selector.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 import { createHarness, type Harness } from "./suite/harness.ts";
 
@@ -13,9 +12,7 @@ function createFakeTui(): TUI {
 describe("model selector", () => {
 	let harness: Harness | undefined;
 
-	beforeAll(() => {
-		initTheme("dark");
-	});
+	beforeAll(() => {});
 
 	beforeEach(() => {
 		setKeybindings(new KeybindingsManager());

@@ -1,10 +1,6 @@
 import type { AssistantMessage, AssistantMessageEvent, TextContent, ThinkingContent, ToolCall } from "../types.ts";
 import { parseStreamingJson } from "./json-parse.ts";
 
-/**
- * Compact, replayable assistant-message progress. Terminal settlement is
- * intentionally excluded and must be persisted separately.
- */
 export type AssistantMessageFrame =
 	| { type: "start"; partial: AssistantMessage }
 	| { type: "text_start"; contentIndex: number; content: TextContent }
@@ -131,11 +127,6 @@ function isJsonPrefix(snapshot: unknown, current: unknown): boolean {
 	);
 }
 
-/**
- * Encodes one assistant stream. `partial` remains a shared live accumulator;
- * the encoder uses per-block offsets to avoid replaying deltas already visible
- * when an older queued event is consumed.
- */
 export class AssistantMessageFrameEncoder {
 	private started = false;
 	private terminal = false;
@@ -246,9 +237,6 @@ export class AssistantMessageFrameEncoder {
 				state.catchupJson += event.delta;
 				const argumentsValue = parseStreamingJson<ToolCall["arguments"]>(state.catchupJson);
 				if (serializedArguments(argumentsValue) !== state.snapshotArguments) {
-					// Legacy grammar calls include the initial input in toolcall_start, but their
-					// JSON delta stream still begins at an empty input. Its parsed arguments can
-					// therefore extend, rather than exactly reproduce, the start snapshot.
 					const snapshotArguments = parseStreamingJson<ToolCall["arguments"]>(state.snapshotArguments);
 					if (!isJsonPrefix(snapshotArguments, argumentsValue)) return undefined;
 				}
@@ -365,10 +353,6 @@ function activeBlock(
 	return { block, state };
 }
 
-/**
- * Replay compact frames without mutating them. Returns `undefined` when the
- * iterable contains no start frame.
- */
 export function reduceAssistantMessageFrames(frames: Iterable<AssistantMessageFrame>): AssistantMessage | undefined {
 	let message: AssistantMessage | undefined;
 	let frameBeforeStart: AssistantMessageFrame["type"] | undefined;

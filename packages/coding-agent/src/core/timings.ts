@@ -1,8 +1,3 @@
-/**
- * Central timing instrumentation for startup profiling.
- * Enable with PI_TIMING=1 environment variable.
- */
-
 const ENABLED = process.env.PI_TIMING === "1";
 interface TimingNamespace {
 	timings: Array<{ label: string; ms: number }>;

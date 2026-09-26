@@ -1,7 +1,7 @@
 import { Type } from "typebox";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
-import { getModel, normalizeContext } from "../src/compat.ts";
+import { normalizeContext } from "../src/compat.ts";
 import type { Message, Model } from "../src/types.ts";
 
 interface CacheControl {
@@ -154,13 +154,65 @@ describe("openai-completions cacheControlFormat", () => {
 	});
 
 	it("preserves Anthropic-style cache markers for OpenRouter Anthropic batch aliases", async () => {
-		const model = getModel("openrouter", "anthropic/claude-fable-5.1:batch");
+		const model = {
+			id: "anthropic/claude-fable-5.1:batch",
+			name: "Anthropic: Claude Fable 5.1 (batch)",
+			api: "openai-completions",
+			baseUrl: "https://openrouter.ai/api/v1",
+			provider: "openrouter",
+			reasoning: true,
+			thinkingLevelMap: {
+				off: null,
+				minimal: null,
+				low: "low",
+				medium: "medium",
+				high: "high",
+				xhigh: "xhigh",
+				max: "max",
+			},
+			input: ["text", "image"],
+			cost: { input: 5, output: 25, cacheRead: 0.125, cacheWrite: 6.25 },
+			contextWindow: 1000000,
+			maxTokens: 128000,
+			compat: {
+				thinkingFormat: "openrouter",
+				supportsStrictMode: true,
+				cacheControlFormat: "anthropic",
+				sendSessionAffinityHeaders: true,
+			},
+		} satisfies Model<"openai-completions">;
 		const params = await capturePayload(model);
 		expectAnthropicCacheMarkers(params);
 	});
 
 	it("moves the conversation cache marker to a tool result", async () => {
-		const model = getModel("openrouter", "anthropic/claude-fable-5.1:batch");
+		const model = {
+			id: "anthropic/claude-fable-5.1:batch",
+			name: "Anthropic: Claude Fable 5.1 (batch)",
+			api: "openai-completions",
+			baseUrl: "https://openrouter.ai/api/v1",
+			provider: "openrouter",
+			reasoning: true,
+			thinkingLevelMap: {
+				off: null,
+				minimal: null,
+				low: "low",
+				medium: "medium",
+				high: "high",
+				xhigh: "xhigh",
+				max: "max",
+			},
+			input: ["text", "image"],
+			cost: { input: 5, output: 25, cacheRead: 0.125, cacheWrite: 6.25 },
+			contextWindow: 1000000,
+			maxTokens: 128000,
+			compat: {
+				thinkingFormat: "openrouter",
+				supportsStrictMode: true,
+				cacheControlFormat: "anthropic",
+				sendSessionAffinityHeaders: true,
+			},
+		} satisfies Model<"openai-completions">;
 		const timestamp = Date.now();
 		const params = await capturePayload(model, undefined, [
 			{ role: "user", content: "Read the file", timestamp },

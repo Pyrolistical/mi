@@ -7,9 +7,6 @@ const OSC133_ZONE_START = "\x1b]133;A\x07";
 const OSC133_ZONE_END = "\x1b]133;B\x07";
 const OSC133_ZONE_FINAL = "\x1b]133;C\x07";
 
-/**
- * Component that renders a user message
- */
 export class UserMessageComponent extends Container {
 	private text: string;
 	private markdownTheme: MarkdownTheme;
@@ -37,7 +34,7 @@ export class UserMessageComponent extends Container {
 
 	private rebuild(): void {
 		this.clear();
-		const contentBox = new Box(this.outputPad, 1, (content: string) => theme.bg("userMessageBg", content));
+		const contentBox = new Box(this.outputPad, 1);
 		contentBox.addChild(
 			new Markdown(
 				this.text,
@@ -48,8 +45,6 @@ export class UserMessageComponent extends Container {
 					color: (content: string) => theme.fg("userMessageText", content),
 				},
 				{
-					preserveOrderedListMarkers: true,
-					preserveBackslashEscapes: true,
 					transform: createMarkdownTransform("user", false, this.markdownTransformers),
 				},
 			),

@@ -1,5 +1,5 @@
 import { type ExecFileException, execFile, spawnSync } from "child_process";
-import { existsSync, type FSWatcher, readFileSync, type Stats, statSync, unwatchFile, watchFile } from "fs";
+import { existsSync, type FSWatcher, readFileSync, statSync, unwatchFile, watchFile } from "fs";
 import { dirname, join, resolve } from "path";
 import { closeWatcher, FS_WATCH_RETRY_DELAY_MS, watchWithErrorHandler } from "../utils/fs-watch.ts";
 
@@ -9,10 +9,6 @@ export type GitPaths = {
 	headPath: string;
 };
 
-/**
- * Find git metadata paths by walking up from cwd.
- * Handles both regular git repos (.git is a directory) and worktrees (.git is a file).
- */
 export function findGitPaths(cwd: string): GitPaths | null {
 	let dir = cwd;
 	while (true) {
@@ -47,7 +43,6 @@ export function findGitPaths(cwd: string): GitPaths | null {
 	}
 }
 
-/** Ask git for the current branch. Returns null on detached HEAD or if git is unavailable. */
 function resolveBranchWithGitSync(repoDir: string): string | null {
 	const result = spawnSync("git", ["--no-optional-locks", "symbolic-ref", "--quiet", "--short", "HEAD"], {
 		cwd: repoDir,
@@ -58,7 +53,6 @@ function resolveBranchWithGitSync(repoDir: string): string | null {
 	return branch || null;
 }
 
-/** Ask git for the current branch asynchronously. Returns null on detached HEAD or if git is unavailable. */
 function resolveBranchWithGitAsync(repoDir: string): Promise<string | null> {
 	return new Promise((resolvePromise) => {
 		execFile(
@@ -80,22 +74,6 @@ function resolveBranchWithGitAsync(repoDir: string): Promise<string | null> {
 	});
 }
 
-function isWslEnvironment(): boolean {
-	return process.platform === "linux" && !!(process.env.WSL_DISTRO_NAME || process.env.WSL_INTEROP);
-}
-
-function isWindowsMountedRepoPath(repoDir: string): boolean {
-	return /^\/mnt\/[a-z](?:\/|$)/i.test(repoDir);
-}
-
-function shouldPollGitHead(repoDir: string): boolean {
-	return isWslEnvironment() && isWindowsMountedRepoPath(repoDir);
-}
-
-/**
- * Provides git branch and extension statuses - data not otherwise accessible to extensions.
- * Context usage on ctx.getContextUsage(), token stats on ctx.sessionManager.getEntries(), model info on ctx.model.
- */
 export class FooterDataProvider {
 	private cwd: string;
 	private static readonly WATCH_DEBOUNCE_MS = 500;
@@ -104,8 +82,6 @@ export class FooterDataProvider {
 	private cachedBranch: string | null | undefined = undefined;
 	private gitPaths: GitPaths | null | undefined = undefined;
 	private headWatcher: FSWatcher | null = null;
-	private headWatchFilePath: string | null = null;
-	private headWatchFileListener: ((current: Stats, previous: Stats) => void) | null = null;
 	private reftableWatcher: FSWatcher | null = null;
 	private reftableTablesListWatcher: FSWatcher | null = null;
 	private reftableTablesListPath: string | null = null;
@@ -123,7 +99,6 @@ export class FooterDataProvider {
 		this.setupGitWatcher();
 	}
 
-	/** Current git branch, null if not in repo, "detached" if detached HEAD */
 	getGitBranch(): string | null {
 		if (this.cachedBranch === undefined) {
 			this.cachedBranch = this.resolveGitBranchSync();
@@ -131,18 +106,15 @@ export class FooterDataProvider {
 		return this.cachedBranch;
 	}
 
-	/** Extension status texts set via ctx.ui.setStatus() */
 	getExtensionStatuses(): ReadonlyMap<string, string> {
 		return this.extensionStatuses;
 	}
 
-	/** Subscribe to git branch changes. Returns unsubscribe function. */
 	onBranchChange(callback: () => void): () => void {
 		this.branchChangeCallbacks.add(callback);
 		return () => this.branchChangeCallbacks.delete(callback);
 	}
 
-	/** Internal: set extension status */
 	setExtensionStatus(key: string, text: string | undefined): void {
 		if (text === undefined) {
 			this.extensionStatuses.delete(key);
@@ -151,17 +123,14 @@ export class FooterDataProvider {
 		}
 	}
 
-	/** Internal: clear extension statuses */
 	clearExtensionStatuses(): void {
 		this.extensionStatuses.clear();
 	}
 
-	/** Number of unique providers with available models (for footer display) */
 	getAvailableProviderCount(): number {
 		return this.availableProviderCount;
 	}
 
-	/** Internal: update available provider count */
 	setAvailableProviderCount(count: number): void {
 		this.availableProviderCount = count;
 	}
@@ -183,7 +152,6 @@ export class FooterDataProvider {
 		this.notifyBranchChange();
 	}
 
-	/** Internal: cleanup */
 	dispose(): void {
 		this.disposed = true;
 		if (this.refreshTimer) {
@@ -269,11 +237,6 @@ export class FooterDataProvider {
 	private clearGitWatchers(): void {
 		closeWatcher(this.headWatcher);
 		this.headWatcher = null;
-		if (this.headWatchFilePath && this.headWatchFileListener) {
-			unwatchFile(this.headWatchFilePath, this.headWatchFileListener);
-			this.headWatchFilePath = null;
-			this.headWatchFileListener = null;
-		}
 		closeWatcher(this.reftableWatcher);
 		this.reftableWatcher = null;
 		closeWatcher(this.reftableTablesListWatcher);
@@ -308,11 +271,6 @@ export class FooterDataProvider {
 		this.clearGitWatchers();
 		if (!this.gitPaths) return;
 
-		const pollGitHead = shouldPollGitHead(this.gitPaths.repoDir);
-
-		// Watch the directory containing HEAD, not HEAD itself.
-		// Git uses atomic writes (write temp, rename over HEAD), which changes the inode.
-		// fs.watch on a file stops working after the inode changes.
 		this.headWatcher = watchWithErrorHandler(
 			dirname(this.gitPaths.headPath),
 			(_eventType, filename) => {
@@ -322,25 +280,10 @@ export class FooterDataProvider {
 			},
 			() => this.handleGitWatcherError(),
 		);
-		if (pollGitHead) {
-			this.headWatchFilePath = this.gitPaths.headPath;
-			this.headWatchFileListener = (current, previous) => {
-				if (
-					current.mtimeMs !== previous.mtimeMs ||
-					current.ctimeMs !== previous.ctimeMs ||
-					current.size !== previous.size
-				) {
-					this.scheduleRefresh();
-				}
-			};
-			watchFile(this.headWatchFilePath, { interval: 1000 }, this.headWatchFileListener);
-		}
-		if (!this.headWatcher && !pollGitHead) {
+		if (!this.headWatcher) {
 			return;
 		}
 
-		// In reftable repos, branch switches update files in the reftable directory
-		// instead of HEAD. Watch it separately so the footer picks up those changes.
 		const reftableDir = join(this.gitPaths.commonGitDir, "reftable");
 		if (existsSync(reftableDir)) {
 			this.reftableWatcher = watchWithErrorHandler(
@@ -381,7 +324,6 @@ export class FooterDataProvider {
 	}
 }
 
-/** Read-only view for extensions - excludes setExtensionStatus, setAvailableProviderCount and dispose */
 export type ReadonlyFooterDataProvider = Pick<
 	FooterDataProvider,
 	"getGitBranch" | "getExtensionStatuses" | "getAvailableProviderCount" | "onBranchChange"

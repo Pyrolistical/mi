@@ -18,7 +18,6 @@ export interface ImageOptions {
 	maxWidthCells?: number;
 	maxHeightCells?: number;
 	filename?: string;
-	/** Kitty image ID. If provided, reuses this ID (for animations/updates). */
 	imageId?: number;
 }
 
@@ -48,7 +47,6 @@ export class Image implements Component {
 		this.imageId = options.imageId;
 	}
 
-	/** Get the Kitty image ID used by this image (if any). */
 	getImageId(): number | undefined {
 		return this.imageId;
 	}
@@ -83,25 +81,17 @@ export class Image implements Component {
 			});
 
 			if (result) {
-				// Store the image ID for later cleanup
 				if (result.imageId) {
 					this.imageId = result.imageId;
 				}
 
 				if (caps.images === "kitty") {
-					// For Kitty: C=1 prevents cursor movement.
-					// Don't need the cursor movement.
 					lines = [result.sequence];
 
-					// Return `rows` lines so TUI accounts for image height.
 					for (let i = 0; i < result.rows - 1; i++) {
 						lines.push("");
 					}
 				} else {
-					// Return `rows` lines so TUI accounts for image height.
-					// First (rows-1) lines are empty and cleared before the image is drawn.
-					// Last line: move cursor back up, draw the image, then move back down
-					// so TUI cursor accounting stays inside the scroll area.
 					lines = [];
 					for (let i = 0; i < result.rows - 1; i++) {
 						lines.push("");

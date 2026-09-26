@@ -26,8 +26,6 @@ describe("#8537 custom messages injected during tool execution", () => {
 			description: "Wait for a background task",
 			parameters: Type.Object({}),
 			execute: async () => {
-				// A background task (e.g. a subagent reply) notifies the session while the
-				// tool is still running.
 				await notify?.();
 				return { content: [{ type: "text", text: "tool done" }], details: {} };
 			},
@@ -93,7 +91,6 @@ describe("#8537 custom messages injected during tool execution", () => {
 			);
 		expect(entryKinds).toEqual(["system", "user", "assistant", "toolResult", "custom", "assistant"]);
 
-		// message events must never describe a message the session tree does not contain yet
 		const messageStarts = harness.events.flatMap((event) =>
 			event.type === "message_start" ? [event.message.role] : [],
 		);

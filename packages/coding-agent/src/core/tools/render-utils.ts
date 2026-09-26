@@ -1,13 +1,12 @@
 import * as os from "node:os";
 import { pathToFileURL } from "node:url";
-import type { ImageContent, TextContent } from "@earendil-works/pi-ai";
 import { getCapabilities, getImageDimensions, hyperlink, imageFallback } from "@earendil-works/pi-tui";
 import type { Theme } from "../../modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../../utils/ansi.ts";
 import { resolvePath } from "../../utils/paths.ts";
 import { sanitizeBinaryOutput } from "../../utils/shell.ts";
 
-export function shortenPath(path: unknown): string {
+function shortenPath(path: unknown): string {
 	if (typeof path !== "string") return "";
 	const home = os.homedir();
 	if (path.startsWith(home)) {
@@ -16,7 +15,7 @@ export function shortenPath(path: unknown): string {
 	return path;
 }
 
-export function linkPath(styledText: string, rawPath: string, cwd: string): string {
+function linkPath(styledText: string, rawPath: string, cwd: string): string {
 	if (!getCapabilities().hyperlinks) return styledText;
 	const absolutePath = resolvePath(rawPath, cwd);
 	return hyperlink(styledText, pathToFileURL(absolutePath).href);
@@ -63,10 +62,6 @@ export function getTextOutput(
 	return output;
 }
 
-export type ToolRenderResultLike<TDetails> = {
-	content: (TextContent | ImageContent)[];
-	details: TDetails;
-};
 
 export function invalidArgText(theme: Theme): string {
 	return theme.fg("error", "[invalid arg]");

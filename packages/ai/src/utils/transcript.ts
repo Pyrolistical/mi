@@ -3,10 +3,6 @@ import { contentText, getSystemMessageText } from "./text.ts";
 
 export type { TranscriptContext } from "../types.ts";
 
-/**
- * Build the leading system message for a prompt and tool set. Returns undefined when
- * both are empty, so an empty transcript stays empty.
- */
 export function createInitialSystemMessage(
 	systemPrompt: string | undefined,
 	tools: Tool[] | undefined,
@@ -22,39 +18,27 @@ export function createInitialSystemMessage(
 	};
 }
 
-/**
- * Fold `Context.systemPrompt` and `Context.tools` into a leading system message.
- * This is the only entry point that produces a {@link TranscriptContext}; every
- * provider-facing function expects the result.
- */
 export function normalizeContext(context: Context): TranscriptContext {
 	const initialMessage = createInitialSystemMessage(context.systemPrompt, context.tools);
 	const messages = initialMessage ? [initialMessage, ...context.messages] : context.messages;
 	return { messages } as TranscriptContext;
 }
 
-/**
- * Any message list. The replay helpers only read entries whose role is `"system"`, so
- * agent transcripts that carry custom message roles can be passed without filtering.
- */
 export type TranscriptMessages = readonly { role: string }[];
 
 function isSystemMessage(message: { role: string }): message is SystemMessage {
 	return message.role === "system";
 }
 
-/** Return the leading system message, if the transcript starts with one. */
 export function getInitialSystemMessage(messages: TranscriptMessages): SystemMessage | undefined {
 	const first = messages[0];
 	return first && isSystemMessage(first) ? first : undefined;
 }
 
-/** Drop the leading system message for APIs that carry the prompt outside the message list. */
 export function withoutInitialSystemMessage(messages: Message[]): Message[] {
 	return getInitialSystemMessage(messages) ? messages.slice(1) : messages;
 }
 
-/** Resolve the tools available after applying every transcript delta in order. */
 export function getCurrentTools(messages: TranscriptMessages): Tool[] {
 	const tools = new Map<string, Tool>();
 	for (const message of messages) {
@@ -65,11 +49,6 @@ export function getCurrentTools(messages: TranscriptMessages): Tool[] {
 	return [...tools.values()];
 }
 
-/**
- * Replay every system message into one leading system message holding the current
- * prompt and tools. Later `content` is appended to the base prompt, `sections` are
- * patched by name, and tools are resolved with {@link getCurrentTools}.
- */
 export function getCurrentSystemMessage(messages: TranscriptMessages): SystemMessage | undefined {
 	const content: string[] = [];
 	const sections = new Map<string, string>();
@@ -95,23 +74,17 @@ export function getCurrentSystemMessage(messages: TranscriptMessages): SystemMes
 	};
 }
 
-/** Render the current system prompt text after replaying every system message. */
 export function getCurrentSystemPrompt(messages: TranscriptMessages): string {
 	const message = getCurrentSystemMessage(messages);
 	return message ? getSystemMessageText(message) : "";
 }
 
-/**
- * Rebuild the transcript for APIs without mid-conversation system messages: the replayed
- * system message leads, and every later system message is dropped.
- */
 export function collapseSystemMessages(context: TranscriptContext): TranscriptContext {
 	const head = getCurrentSystemMessage(context.messages);
 	const messages = context.messages.filter((message) => message.role !== "system");
 	return { messages: head ? [head, ...messages] : messages } as TranscriptContext;
 }
 
-/** Keep later system messages in place when the model accepts them; otherwise collapse them. */
 export function resolveTranscript(
 	context: TranscriptContext,
 	supportsMidConvoSystemMessages: boolean | undefined,
@@ -119,7 +92,6 @@ export function resolveTranscript(
 	return supportsMidConvoSystemMessages ? context : collapseSystemMessages(context);
 }
 
-/** Strip executable and display-only fields from a tool before transcript comparison or persistence. */
 export function toToolDeclaration(tool: Tool): Tool {
 	return {
 		name: tool.name,
@@ -129,14 +101,6 @@ export function toToolDeclaration(tool: Tool): Tool {
 	};
 }
 
-/**
- * Whether two tools declare the same interface to the model.
- *
- * Both sides go through {@link toToolDeclaration} first: its JSON round-trip drops the
- * typebox symbol keys and `undefined` fields that a structural comparison would see, and
- * builds both objects with the same key order, so comparing the serialized declarations
- * is exact. This avoids a deep-equal dependency in a browser-safe package.
- */
 export function declarationsEqual(left: Tool, right: Tool): boolean {
 	return JSON.stringify(toToolDeclaration(left)) === JSON.stringify(toToolDeclaration(right));
 }
@@ -146,7 +110,6 @@ export interface ToolStateChanges {
 	toolsRemoved: ToolReference[];
 }
 
-/** Compare two complete tool states. A changed definition is a removal followed by an addition. */
 export function getToolStateChanges(previous: readonly Tool[], current: readonly Tool[]): ToolStateChanges {
 	const previousTools = new Map(previous.map((tool) => [tool.name, tool]));
 	const currentTools = new Map(current.map((tool) => [tool.name, tool]));
@@ -166,7 +129,6 @@ export function getToolStateChanges(previous: readonly Tool[], current: readonly
 	};
 }
 
-/** Every definition referenced by transcript tool state, in first-declaration order. */
 export function getDeclaredTools(messages: TranscriptMessages): Tool[] {
 	const definitions = new Map<string, Tool>();
 	for (const message of messages) {
@@ -176,10 +138,6 @@ export function getDeclaredTools(messages: TranscriptMessages): Tool[] {
 	return [...definitions.values()];
 }
 
-/**
- * Whether a tool name was declared twice with different definitions. Transports that
- * reference tools by name (Anthropic `tool_addition`/`tool_removal`) cannot express that.
- */
 export function hasToolRedefinitions(messages: TranscriptMessages): boolean {
 	const declared = new Map<string, Tool>();
 	for (const message of messages) {
@@ -193,7 +151,6 @@ export function hasToolRedefinitions(messages: TranscriptMessages): boolean {
 	return false;
 }
 
-/** Whether tool history contains a removal or same-name redeclaration that an addition-only transport cannot replay. */
 export function hasNonAdditiveToolChanges(messages: TranscriptMessages): boolean {
 	const declared = new Set<string>();
 	for (const message of messages) {
@@ -208,21 +165,10 @@ export function hasNonAdditiveToolChanges(messages: TranscriptMessages): boolean
 }
 
 export interface TranscriptTools {
-	/** Tools sent in the top-level request field. */
 	requestTools: Tool[];
-	/**
-	 * Whether later system messages carry their own `toolsAdded` as in-place additions.
-	 * When false, `requestTools` already holds the complete current tool set.
-	 */
 	anchorsAdditions: boolean;
 }
 
-/**
- * Split tool declarations between the top-level request field and in-place additions.
- * Transports that can anchor additions at a system message keep the initial tools at the
- * top and load later ones where they appear; that only works when no tool was removed or
- * redeclared, so everything else sends the current tool list.
- */
 export function resolveTranscriptTools(messages: TranscriptMessages, supportsToolAdditions: boolean): TranscriptTools {
 	const anchorsAdditions = supportsToolAdditions && !hasNonAdditiveToolChanges(messages);
 	return {

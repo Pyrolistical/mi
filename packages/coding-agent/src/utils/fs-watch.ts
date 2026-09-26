@@ -10,7 +10,6 @@ export function closeWatcher(watcher: FSWatcher | null | undefined): void {
 	try {
 		watcher.close();
 	} catch {
-		// Ignore watcher close errors
 	}
 }
 
@@ -20,7 +19,8 @@ export function watchWithErrorHandler(
 	onError: () => void,
 ): FSWatcher | null {
 	try {
-		const watcher = watch(path, listener);
+		const watcher = watch(path);
+		watcher.on("change", listener);
 		watcher.on("error", onError);
 		return watcher;
 	} catch {

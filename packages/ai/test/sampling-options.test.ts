@@ -83,18 +83,14 @@ describe("sampling params", () => {
 		expect(payload.top_p).toBeUndefined();
 	});
 
-	// Model defaults must apply to direct stream()/complete() calls, not only streamSimple() (#9506)
-	it.each(["openai-completions", "openai-responses", "azure-openai-responses"] as const)(
-		"applies model-level sampling params with request keys taking precedence for %s",
-		async (api) => {
-			const payload = await capturePayload(makeModel(api, { top_p: 0.95, min_p: 0.05 }), {
-				samplingParams: { top_p: 0.5 },
-			});
+	it("applies model-level sampling params with request keys taking precedence", async () => {
+		const payload = await capturePayload(makeModel("openai-completions", { top_p: 0.95, min_p: 0.05 }), {
+			samplingParams: { top_p: 0.5 },
+		});
 
-			expect(payload.top_p).toBe(0.5);
-			expect(payload.min_p).toBe(0.05);
-		},
-	);
+		expect(payload.top_p).toBe(0.5);
+		expect(payload.min_p).toBe(0.05);
+	});
 
 	it("passes request sampling params through streamSimple", async () => {
 		let payload: SamplingPayload | undefined;
@@ -116,14 +112,5 @@ describe("sampling params", () => {
 		});
 
 		expect(payload.temperature).toBe(1);
-	});
-
-	it("is ignored by non-OpenAI-compatible APIs", async () => {
-		const payload = await capturePayload(makeModel("anthropic-messages"), {
-			samplingParams: { top_p: 0.9, top_k: 40 },
-		});
-
-		expect(payload.top_p).toBeUndefined();
-		expect(payload.top_k).toBeUndefined();
 	});
 });

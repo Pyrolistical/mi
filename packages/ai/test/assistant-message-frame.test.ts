@@ -1,15 +1,11 @@
-import type { ResponseStreamEvent } from "openai/resources/responses/responses.js";
 import { describe, expect, it } from "vitest";
-import { processResponsesStream } from "../src/api/openai-responses-shared.ts";
 import {
 	type AssistantMessage,
 	type AssistantMessageEvent,
 	type AssistantMessageFrame,
 	AssistantMessageFrameEncoder,
-	type Model,
 	reduceAssistantMessageFrames,
 } from "../src/index.ts";
-import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
 
 function seed(): AssistantMessage {
 	return {
@@ -142,89 +138,6 @@ describe("assistant message frames", () => {
 			thoughtSignature: "thought",
 			namespace: "files",
 		});
-	});
-
-	it("round-trips OpenAI Responses content supplied only by authoritative end events", async () => {
-		const output = seed();
-		output.api = "openai-responses";
-		output.provider = "openai";
-		const model: Model<"openai-responses"> = {
-			id: output.model,
-			name: "Test",
-			api: "openai-responses",
-			provider: "openai",
-			baseUrl: "https://api.openai.com/v1",
-			reasoning: false,
-			input: ["text"],
-			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-			contextWindow: 1000,
-			maxTokens: 100,
-		};
-		const events: ResponseStreamEvent[] = [
-			{
-				type: "response.output_item.added",
-				sequence_number: 0,
-				output_index: 0,
-				item: { type: "message", id: "msg", role: "assistant", status: "in_progress", content: [] },
-			} as ResponseStreamEvent,
-			{
-				type: "response.output_item.done",
-				sequence_number: 1,
-				output_index: 0,
-				item: {
-					type: "message",
-					id: "msg",
-					role: "assistant",
-					status: "completed",
-					content: [{ type: "output_text", text: "final text", annotations: [] }],
-				},
-			} as ResponseStreamEvent,
-			{
-				type: "response.output_item.added",
-				sequence_number: 2,
-				output_index: 1,
-				item: {
-					type: "function_call",
-					id: "fc",
-					call_id: "call",
-					name: "lookup",
-					arguments: "",
-				},
-			} as ResponseStreamEvent,
-			{
-				type: "response.output_item.done",
-				sequence_number: 3,
-				output_index: 1,
-				item: {
-					type: "function_call",
-					id: "fc",
-					call_id: "call",
-					name: "lookup",
-					arguments: '{"query":"pi"}',
-				},
-			} as ResponseStreamEvent,
-			{
-				type: "response.completed",
-				sequence_number: 4,
-				response: { id: "response", status: "completed", output: [] },
-			} as unknown as ResponseStreamEvent,
-		];
-		async function* source(): AsyncGenerator<ResponseStreamEvent> {
-			for (const event of events) yield event;
-		}
-
-		const encoder = new AssistantMessageFrameEncoder();
-		const frames: AssistantMessageFrame[] = [frame(encoder, { type: "start", partial: output })];
-		const stream = new AssistantMessageEventStream();
-		const push = stream.push.bind(stream);
-		stream.push = (event) => {
-			const converted = encoder.encode(event);
-			if (converted) frames.push(converted);
-			push(event);
-		};
-		await processResponsesStream(source(), output, stream, model);
-
-		expect(reduceAssistantMessageFrames(frames)?.content).toEqual(output.content);
 	});
 
 	it("reconciles queued text events against one advanced live partial without duplicate content", () => {

@@ -1,7 +1,4 @@
 import { createInMemoryModelRegistry, createModelRegistry, getModelRuntime } from "../model-runtime-test-utils.ts";
-/**
- * Local test harness for the new coding-agent test suite.
- */
 
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -131,7 +128,6 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
 				api: registeredModel.api,
 				reasoning: registeredModel.reasoning,
 				input: registeredModel.input,
-				inputLimits: registeredModel.inputLimits,
 				cost: registeredModel.cost,
 				contextWindow: registeredModel.contextWindow,
 				maxTokens: registeredModel.maxTokens,

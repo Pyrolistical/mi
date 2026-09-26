@@ -3,7 +3,6 @@ import { Container } from "@earendil-works/pi-tui";
 import { describe, expect, test, vi } from "vitest";
 import type { SessionEntry } from "../src/core/session-manager.ts";
 import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 
 describe("InteractiveMode compaction events", () => {
@@ -25,7 +24,6 @@ describe("InteractiveMode compaction events", () => {
 			},
 		) => void;
 
-		initTheme("dark");
 		const enabled = {
 			chatContainer: new Container(),
 			settingsManager: { getShowCacheMissNotices: () => true },
@@ -228,7 +226,6 @@ describe("InteractiveMode compaction events", () => {
 		expect(fakeThis.ui.requestRender).toHaveBeenCalledTimes(2);
 	});
 
-	// Regression test for #9340.
 	test("routes interactive response aborts through AgentSession", () => {
 		const abort = vi.fn(async () => {});
 		const ui = {

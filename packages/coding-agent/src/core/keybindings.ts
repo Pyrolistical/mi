@@ -1,5 +1,4 @@
 import {
-	type Keybinding,
 	type KeybindingDefinitions,
 	type KeybindingsConfig,
 	type KeyId,
@@ -11,7 +10,7 @@ import { join } from "path";
 import { getAgentDir } from "../config.ts";
 import { stripBom } from "../utils/text.ts";
 
-export interface AppKeybindings {
+interface AppKeybindings {
 	"app.interrupt": true;
 	"app.clear": true;
 	"app.exit": true;
@@ -24,7 +23,6 @@ export interface AppKeybindings {
 	"app.tools.expand": true;
 	"app.thinking.toggle": true;
 	"app.session.toggleNamedFilter": true;
-	"app.editor.external": true;
 	"app.message.copy": true;
 	"app.message.followUp": true;
 	"app.message.dequeue": true;
@@ -59,42 +57,17 @@ export interface AppKeybindings {
 
 export type AppKeybinding = keyof AppKeybindings;
 
-export function useWindowsKeybindings(
-	platform: NodeJS.Platform = process.platform,
-	env: NodeJS.ProcessEnv = process.env,
-): boolean {
-	return platform === "win32" || (platform === "linux" && Boolean(env.WSL_DISTRO_NAME || env.WSL_INTEROP));
-}
-
 declare module "@earendil-works/pi-tui" {
 	interface Keybindings extends AppKeybindings {}
 }
 
-const windowsKeybindings = useWindowsKeybindings();
-
-export const KEYBINDINGS = {
+const KEYBINDINGS = {
 	...TUI_KEYBINDINGS,
-	"tui.editor.undo": {
-		...TUI_KEYBINDINGS["tui.editor.undo"],
-		defaultKeys: process.platform === "win32" ? "ctrl+z" : windowsKeybindings ? "alt+z" : "ctrl+-",
-	},
-	"tui.altScreen.previousPrompt": {
-		...TUI_KEYBINDINGS["tui.altScreen.previousPrompt"],
-		defaultKeys: windowsKeybindings ? "ctrl+up" : ["ctrl+shift+up", "ctrl+up"],
-	},
-	"tui.altScreen.nextPrompt": {
-		...TUI_KEYBINDINGS["tui.altScreen.nextPrompt"],
-		defaultKeys: windowsKeybindings ? "ctrl+down" : ["ctrl+shift+down", "ctrl+down"],
-	},
-	"tui.altScreen.search": {
-		...TUI_KEYBINDINGS["tui.altScreen.search"],
-		defaultKeys: windowsKeybindings ? "ctrl+f" : "ctrl+shift+f",
-	},
 	"app.interrupt": { defaultKeys: "escape", description: "Cancel or abort" },
 	"app.clear": { defaultKeys: "ctrl+c", description: "Clear editor" },
 	"app.exit": { defaultKeys: "ctrl+d", description: "Exit when editor is empty" },
 	"app.suspend": {
-		defaultKeys: process.platform === "win32" ? [] : "ctrl+z",
+		defaultKeys: "ctrl+z",
 		description: "Suspend to background",
 	},
 	"app.thinking.cycle": {
@@ -110,7 +83,7 @@ export const KEYBINDINGS = {
 		description: "Cycle to next model",
 	},
 	"app.model.cycleBackward": {
-		defaultKeys: windowsKeybindings ? "alt+p" : "shift+ctrl+p",
+		defaultKeys: "shift+ctrl+p",
 		description: "Cycle to previous model",
 	},
 	"app.model.select": { defaultKeys: "ctrl+l", description: "Open model selector" },
@@ -123,25 +96,21 @@ export const KEYBINDINGS = {
 		defaultKeys: "ctrl+n",
 		description: "Toggle named session filter",
 	},
-	"app.editor.external": {
-		defaultKeys: "ctrl+g",
-		description: "Open external editor",
-	},
 	"app.message.copy": {
 		defaultKeys: "ctrl+x",
 		description: "Copy selection or last assistant message",
 	},
 	"app.message.followUp": {
-		defaultKeys: windowsKeybindings ? "ctrl+q" : "alt+enter",
+		defaultKeys: "alt+enter",
 		description: "Queue follow-up message",
 	},
 	"app.message.dequeue": {
-		defaultKeys: windowsKeybindings ? "alt+q" : "alt+up",
+		defaultKeys: "alt+up",
 		description: "Restore queued messages",
 	},
 	"app.clipboard.pasteImage": {
-		defaultKeys: windowsKeybindings ? "alt+v" : "ctrl+v",
-		description: "Paste files on macOS, images, or text from clipboard",
+		defaultKeys: "ctrl+v",
+		description: "Paste image from clipboard (text fallback)",
 	},
 	"app.session.new": { defaultKeys: [], description: "Start a new session" },
 	"app.session.tree": { defaultKeys: [], description: "Open session tree" },
@@ -237,72 +206,6 @@ export const KEYBINDINGS = {
 	},
 } as const satisfies KeybindingDefinitions;
 
-const KEYBINDING_NAME_MIGRATIONS = {
-	cursorUp: "tui.editor.cursorUp",
-	cursorDown: "tui.editor.cursorDown",
-	cursorLeft: "tui.editor.cursorLeft",
-	cursorRight: "tui.editor.cursorRight",
-	cursorWordLeft: "tui.editor.cursorWordLeft",
-	cursorWordRight: "tui.editor.cursorWordRight",
-	cursorLineStart: "tui.editor.cursorLineStart",
-	cursorLineEnd: "tui.editor.cursorLineEnd",
-	jumpForward: "tui.editor.jumpForward",
-	jumpBackward: "tui.editor.jumpBackward",
-	pageUp: "tui.editor.pageUp",
-	pageDown: "tui.editor.pageDown",
-	deleteCharBackward: "tui.editor.deleteCharBackward",
-	deleteCharForward: "tui.editor.deleteCharForward",
-	deleteWordBackward: "tui.editor.deleteWordBackward",
-	deleteWordForward: "tui.editor.deleteWordForward",
-	deleteToLineStart: "tui.editor.deleteToLineStart",
-	deleteToLineEnd: "tui.editor.deleteToLineEnd",
-	yank: "tui.editor.yank",
-	yankPop: "tui.editor.yankPop",
-	undo: "tui.editor.undo",
-	newLine: "tui.input.newLine",
-	submit: "tui.input.submit",
-	tab: "tui.input.tab",
-	copy: "tui.input.copy",
-	selectUp: "tui.select.up",
-	selectDown: "tui.select.down",
-	selectPageUp: "tui.select.pageUp",
-	selectPageDown: "tui.select.pageDown",
-	selectConfirm: "tui.select.confirm",
-	selectCancel: "tui.select.cancel",
-	interrupt: "app.interrupt",
-	clear: "app.clear",
-	exit: "app.exit",
-	suspend: "app.suspend",
-	cycleThinkingLevel: "app.thinking.cycle",
-	cycleModelForward: "app.model.cycleForward",
-	cycleModelBackward: "app.model.cycleBackward",
-	selectModel: "app.model.select",
-	expandTools: "app.tools.expand",
-	toggleThinking: "app.thinking.toggle",
-	toggleSessionNamedFilter: "app.session.toggleNamedFilter",
-	externalEditor: "app.editor.external",
-	followUp: "app.message.followUp",
-	dequeue: "app.message.dequeue",
-	pasteImage: "app.clipboard.pasteImage",
-	newSession: "app.session.new",
-	tree: "app.session.tree",
-	fork: "app.session.fork",
-	resume: "app.session.resume",
-	treeFoldOrUp: "app.tree.foldOrUp",
-	treeUnfoldOrDown: "app.tree.unfoldOrDown",
-	treeEditLabel: "app.tree.editLabel",
-	treeToggleLabelTimestamp: "app.tree.toggleLabelTimestamp",
-	toggleSessionPath: "app.session.togglePath",
-	toggleSessionSort: "app.session.toggleSort",
-	renameSession: "app.session.rename",
-	deleteSession: "app.session.delete",
-	deleteSessionNoninvasive: "app.session.deleteNoninvasive",
-} as const satisfies Record<string, Keybinding>;
-
-function isLegacyKeybindingName(key: string): key is keyof typeof KEYBINDING_NAME_MIGRATIONS {
-	return key in KEYBINDING_NAME_MIGRATIONS;
-}
-
 function toKeybindingsConfig(value: Record<string, unknown>): KeybindingsConfig {
 	const config: KeybindingsConfig = {};
 	for (const [key, binding] of Object.entries(value)) {
@@ -315,46 +218,6 @@ function toKeybindingsConfig(value: Record<string, unknown>): KeybindingsConfig 
 		}
 	}
 	return config;
-}
-
-export function migrateKeybindingsConfig(rawConfig: Record<string, unknown>): {
-	config: Record<string, unknown>;
-	migrated: boolean;
-} {
-	const config: Record<string, unknown> = {};
-	let migrated = false;
-
-	for (const [key, value] of Object.entries(rawConfig)) {
-		const nextKey = isLegacyKeybindingName(key) ? KEYBINDING_NAME_MIGRATIONS[key] : key;
-		if (nextKey !== key) {
-			migrated = true;
-		}
-		if (key !== nextKey && Object.hasOwn(rawConfig, nextKey)) {
-			migrated = true;
-			continue;
-		}
-		config[nextKey] = value;
-	}
-
-	return { config: orderKeybindingsConfig(config), migrated };
-}
-
-function orderKeybindingsConfig(config: Record<string, unknown>): Record<string, unknown> {
-	const ordered: Record<string, unknown> = {};
-	for (const keybinding of Object.keys(KEYBINDINGS)) {
-		if (Object.hasOwn(config, keybinding)) {
-			ordered[keybinding] = config[keybinding];
-		}
-	}
-
-	const extras = Object.keys(config)
-		.filter((key) => !Object.hasOwn(ordered, key))
-		.sort();
-	for (const key of extras) {
-		ordered[key] = config[key];
-	}
-
-	return ordered;
 }
 
 function loadRawConfig(path: string): Record<string, unknown> | undefined {
@@ -394,8 +257,8 @@ export class KeybindingsManager extends TuiKeybindingsManager {
 	private static loadFromFile(path: string): KeybindingsConfig {
 		const rawConfig = loadRawConfig(path);
 		if (!rawConfig) return {};
-		return toKeybindingsConfig(migrateKeybindingsConfig(rawConfig).config);
+		return toKeybindingsConfig(rawConfig);
 	}
 }
 
-export type { Keybinding, KeyId, KeybindingsConfig };
+export type { KeyId, KeybindingsConfig };

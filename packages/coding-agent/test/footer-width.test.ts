@@ -2,8 +2,7 @@ import { visibleWidth } from "@earendil-works/pi-tui";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { AgentSession } from "../src/core/agent-session.ts";
 import type { ReadonlyFooterDataProvider } from "../src/core/footer-data-provider.ts";
-import { FooterComponent, formatCwdForFooter } from "../src/modes/interactive/components/footer.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
+import { FooterComponent } from "../src/modes/interactive/components/footer.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 
 type AssistantUsage = {
@@ -25,7 +24,6 @@ function createSession(options: {
 	compactionUsage?: AssistantUsage;
 	toolUsage?: AssistantUsage;
 	usingSubscription?: boolean;
-	routedModel?: { model: { id: string }; thinkingLevel?: string };
 }): AgentSession {
 	const usage = options.usage;
 	const entries: Array<Record<string, unknown>> = [];
@@ -80,7 +78,6 @@ function createSession(options: {
 			getCwd: () => "/tmp/project",
 		},
 		getContextUsage: () => ({ contextWindow: 200_000, percent: 12.3 }),
-		routedModel: options.routedModel,
 		modelRuntime: {
 			isUsingSubscription: () => options.usingSubscription ?? false,
 		},
@@ -103,31 +100,17 @@ function createFooterData(providerCount: number): ReadonlyFooterDataProvider {
 	return provider;
 }
 
-describe("formatCwdForFooter", () => {
-	it("does not abbreviate sibling paths that share the home prefix", () => {
-		expect(formatCwdForFooter("/home/user2", "/home/user")).toBe("/home/user2");
-	});
-
-	it("abbreviates the home directory and descendants", () => {
-		expect(formatCwdForFooter("/home/user", "/home/user")).toBe("~");
-		expect(formatCwdForFooter("/home/user/project", "/home/user")).toBe("~/project");
-	});
-});
-
 describe("FooterComponent width handling", () => {
-	beforeAll(() => {
-		initTheme(undefined, false);
-	});
+	beforeAll(() => {});
 
-	it("keeps all lines within width for wide session names", () => {
-		const width = 93;
-		const session = createSession({ sessionName: "한글".repeat(30) });
+	it("renders only the stats line", () => {
+		const session = createSession({ sessionName: "named session" });
 		const footer = new FooterComponent(session, createFooterData(1));
 
-		const lines = footer.render(width);
-		for (const line of lines) {
-			expect(visibleWidth(line)).toBeLessThanOrEqual(width);
-		}
+		const lines = footer.render(120).map(stripAnsi);
+
+		expect(lines).toHaveLength(1);
+		expect(lines[0]).not.toContain("named session");
 	});
 
 	it("keeps stats line within width for wide model and provider names", () => {
@@ -152,21 +135,6 @@ describe("FooterComponent width handling", () => {
 		for (const line of lines) {
 			expect(visibleWidth(line)).toBeLessThanOrEqual(width);
 		}
-	});
-
-	it("shows the physical model a virtual model routed to", () => {
-		const session = createSession({
-			sessionName: "",
-			modelId: "auto",
-			reasoning: true,
-			thinkingLevel: "high",
-			routedModel: { model: { id: "gpt-5.6-luna" }, thinkingLevel: "medium" },
-		});
-		const footer = new FooterComponent(session, createFooterData(1));
-
-		const statsLine = stripAnsi(footer.render(120)[1]);
-
-		expect(statsLine).toContain("auto \u2022 high \u2192 gpt-5.6-luna \u2022 medium");
 	});
 
 	it("includes summary and tool result usage in the total cost", () => {
@@ -203,7 +171,7 @@ describe("FooterComponent width handling", () => {
 		});
 		const footer = new FooterComponent(session, createFooterData(1));
 
-		const statsLine = stripAnsi(footer.render(120)[1]);
+		const statsLine = stripAnsi(footer.render(120)[0]);
 		expect(statsLine).toContain("$1.250");
 	});
 
@@ -220,33 +188,11 @@ describe("FooterComponent width handling", () => {
 		});
 		const footer = new FooterComponent(session, createFooterData(1));
 
-		const statsLine = stripAnsi(footer.render(120)[1]);
+		const statsLine = stripAnsi(footer.render(120)[0]);
 		expect(statsLine).toContain("CH25.0%");
 	});
 
-	it("marks Kimi Coding costs as subscription estimates", () => {
-		const session = createSession({
-			sessionName: "",
-			provider: "kimi-coding",
-			usage: {
-				input: 100,
-				output: 10,
-				cacheRead: 0,
-				cacheWrite: 0,
-				cost: { total: 1.234 },
-			},
-		});
-		const footer = new FooterComponent(session, createFooterData(1));
 
-		expect(stripAnsi(footer.render(120)[1])).toContain("$1.234 (sub)");
-	});
-
-	it("marks explicitly identified subscription auth", () => {
-		const session = createSession({ sessionName: "", provider: "anthropic", usingSubscription: true });
-		const footer = new FooterComponent(session, createFooterData(1));
-
-		expect(stripAnsi(footer.render(120)[1])).toContain("$0.000 (sub)");
-	});
 
 	it("does not mark generic OAuth sign-in as a subscription", () => {
 		const session = createSession({
@@ -261,7 +207,7 @@ describe("FooterComponent width handling", () => {
 			},
 		});
 		const footer = new FooterComponent(session, createFooterData(1));
-		const stats = stripAnsi(footer.render(120)[1]);
+		const stats = stripAnsi(footer.render(120)[0]);
 
 		expect(stats).toContain("$1.234");
 		expect(stats).not.toContain("(sub)");

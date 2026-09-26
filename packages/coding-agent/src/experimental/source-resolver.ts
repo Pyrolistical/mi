@@ -3,10 +3,6 @@ import { registerHooks } from "node:module";
 import { extname, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-// Node strips TypeScript natively, but it does not apply the workspace source
-// aliases from tsconfig.json. Internal source processes preload this resolver so
-// they cannot silently fall through to stale package dist files.
-
 interface TsConfig {
 	readonly compilerOptions?: {
 		readonly paths?: Readonly<Record<string, readonly string[]>>;

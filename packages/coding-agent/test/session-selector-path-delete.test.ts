@@ -6,7 +6,6 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { KeybindingsManager } from "../src/core/keybindings.ts";
 import type { SessionInfo } from "../src/core/session-manager.ts";
 import { SessionSelectorComponent } from "../src/modes/interactive/components/session-selector.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 
 type Deferred<T> = {
 	promise: Promise<T>;
@@ -97,13 +96,10 @@ describe("session selector path/delete interactions", () => {
 	});
 
 	beforeEach(() => {
-		// Ensure test isolation: keybindings are a global singleton
 		setKeybindings(new KeybindingsManager());
 	});
 
 	beforeAll(() => {
-		// session selector uses the global theme instance
-		initTheme("dark");
 	});
 	it("does not treat Ctrl+Backspace as delete when search query is non-empty", async () => {
 		const sessions = [makeSession({ id: "a" }), makeSession({ id: "b" })];
@@ -204,8 +200,8 @@ describe("session selector path/delete interactions", () => {
 		await flushPromises();
 
 		const list = selector.getSessionList();
-		list.handleInput("\t"); // current -> all (starts async load)
-		list.handleInput("\t"); // all -> current
+		list.handleInput("\t");
+		list.handleInput("\t");
 
 		allDeferred.resolve([makeSession({ id: "all" })]);
 		await flushPromises();
@@ -238,9 +234,9 @@ describe("session selector path/delete interactions", () => {
 		await flushPromises();
 
 		const list = selector.getSessionList();
-		list.handleInput("\t"); // current -> all (starts async load)
-		list.handleInput("\t"); // all -> current
-		list.handleInput("\t"); // current -> all again while load pending
+		list.handleInput("\t");
+		list.handleInput("\t");
+		list.handleInput("\t");
 
 		expect(allLoadCalls).toBe(1);
 		expect(selector.getSessionList().getSelectedSessionPath()).toBe(allSessions[0]!.path);

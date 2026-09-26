@@ -1,24 +1,17 @@
-import {
-	type AssistantMessage,
-	type AssistantMessageEvent,
-	EventStream,
-	getCurrentSystemMessage,
-	getModel,
-	toToolDeclaration,
-	type UserMessage,
-} from "@earendil-works/pi-ai/compat";
+import { type AssistantMessage, type AssistantMessageEvent, EventStream, getCurrentSystemMessage, toToolDeclaration, type UserMessage } from "@earendil-works/pi-ai/compat";
 import { Type } from "typebox";
 import { describe, expect, it } from "vitest";
 import {
 	Agent,
 	type AgentEvent,
+	type AgentMessage,
 	type AgentTool,
 	type AgentToolUpdateCallback,
 	type StreamFn,
 	setDefaultStreamFn,
 } from "../src/index.ts";
+import { openaiModel } from "../../ai/test/openai-models.ts";
 
-// Mock stream that mimics AssistantMessageEventStream
 class MockAssistantStream extends EventStream<AssistantMessageEvent, AssistantMessage> {
 	constructor() {
 		super(
@@ -40,7 +33,7 @@ function createAssistantMessage(text: string): AssistantMessage {
 	return {
 		role: "assistant",
 		content: [{ type: "text", text }],
-		api: "openai-responses",
+		api: "test-api",
 		provider: "openai",
 		model: "mock",
 		usage: {
@@ -72,7 +65,7 @@ function createAssistantToolUseMessage(content: ToolCallContent[]): AssistantMes
 	return {
 		role: "assistant",
 		content,
-		api: "openai-responses",
+		api: "test-api",
 		provider: "openai",
 		model: "mock",
 		usage: {
@@ -140,7 +133,7 @@ describe("Agent", () => {
 	});
 
 	it("should create an agent instance with custom initial state", () => {
-		const customModel = getModel("openai", "gpt-4o-mini");
+		const customModel = openaiModel("gpt-4o-mini");
 		const agent = new Agent({
 			streamFn: unusedStreamFunction,
 			initialState: {
@@ -270,8 +263,6 @@ describe("Agent", () => {
 			},
 		});
 
-		// The pending message claims to add `second` and remove `first`, but the executable
-		// set still has `first` and lacks `second`: the executable set wins.
 		await agent.prompt([
 			{
 				role: "system",
@@ -328,18 +319,15 @@ describe("Agent", () => {
 			eventCount++;
 		});
 
-		// No initial event on subscribe
 		expect(eventCount).toBe(0);
 
-		// State mutators don't emit events
 		agent.state.thinkingLevel = "low";
 		expect(eventCount).toBe(0);
 		expect(agent.state.thinkingLevel).toBe("low");
 
-		// Unsubscribe should work
 		unsubscribe();
 		agent.state.thinkingLevel = "high";
-		expect(eventCount).toBe(0); // Should not increase
+		expect(eventCount).toBe(0);
 	});
 
 	it("emits full lifecycle events for thrown run failures", async () => {
@@ -628,34 +616,28 @@ describe("Agent", () => {
 	it("should update state with mutators", () => {
 		const agent = new Agent({ streamFn: unusedStreamFunction });
 
-		// Test setModel
-		const newModel = getModel("google", "gemini-2.5-flash");
+		const newModel = openaiModel("gpt-5-mini");
 		agent.state.model = newModel;
 		expect(agent.state.model).toBe(newModel);
 
-		// Test setThinkingLevel
 		agent.state.thinkingLevel = "high";
 		expect(agent.state.thinkingLevel).toBe("high");
 
-		// Test setTools
 		const tools = [{ name: "test", description: "test tool" } as any];
 		agent.state.tools = tools;
 		expect(agent.state.tools).toEqual(tools);
-		expect(agent.state.tools).not.toBe(tools); // Should be a copy
+		expect(agent.state.tools).not.toBe(tools);
 
-		// Test replaceMessages
 		const messages = [{ role: "user" as const, content: "Hello", timestamp: Date.now() }];
 		agent.state.messages = messages;
 		expect(agent.state.messages).toEqual(messages);
-		expect(agent.state.messages).not.toBe(messages); // Should be a copy
+		expect(agent.state.messages).not.toBe(messages);
 
-		// Test appendMessage
 		const newMessage = { role: "assistant" as const, content: [{ type: "text" as const, text: "Hi" }] };
 		agent.state.messages.push(newMessage as any);
 		expect(agent.state.messages).toHaveLength(2);
 		expect(agent.state.messages[1]).toBe(newMessage);
 
-		// Test clearMessages
 		agent.state.messages = [];
 		expect(agent.state.messages).toEqual([]);
 	});
@@ -666,7 +648,6 @@ describe("Agent", () => {
 		const message = { role: "user" as const, content: "Steering message", timestamp: Date.now() };
 		agent.steer(message);
 
-		// The message is queued but not yet in state.messages
 		expect(agent.state.messages).not.toContainEqual(message);
 	});
 
@@ -676,14 +657,12 @@ describe("Agent", () => {
 		const message = { role: "user" as const, content: "Follow-up message", timestamp: Date.now() };
 		agent.followUp(message);
 
-		// The message is queued but not yet in state.messages
 		expect(agent.state.messages).not.toContainEqual(message);
 	});
 
 	it("should handle abort controller", () => {
 		const agent = new Agent({ streamFn: unusedStreamFunction });
 
-		// Should not throw even if nothing is running
 		expect(() => agent.abort()).not.toThrow();
 	});
 
@@ -724,13 +703,11 @@ describe("Agent", () => {
 	it("should throw when prompt() called while streaming", async () => {
 		let abortSignal: AbortSignal | undefined;
 		const agent = new Agent({
-			// Use a stream function that responds to abort
 			streamFn: (_model, _context, options) => {
 				abortSignal = options?.signal;
 				const stream = new MockAssistantStream();
 				queueMicrotask(() => {
 					stream.push({ type: "start", partial: createAssistantMessage("") });
-					// Check abort signal periodically
 					const checkAbort = () => {
 						if (abortSignal?.aborted) {
 							stream.push({ type: "error", reason: "aborted", error: createAssistantMessage("Aborted") });
@@ -744,21 +721,17 @@ describe("Agent", () => {
 			},
 		});
 
-		// Start first prompt (don't await, it will block until abort)
 		const firstPrompt = agent.prompt("First message");
 
-		// Wait a tick for isStreaming to be set
 		await new Promise((resolve) => setTimeout(resolve, 10));
 		expect(agent.state.isStreaming).toBe(true);
 
-		// Second prompt should reject
 		await expect(agent.prompt("Second message")).rejects.toThrow(
 			"Agent is already processing a prompt. Use steer() or followUp() to queue messages, or wait for completion.",
 		);
 
-		// Cleanup - abort to stop the stream
 		agent.abort();
-		await firstPrompt.catch(() => {}); // Ignore abort error
+		await firstPrompt.catch(() => {});
 	});
 
 	it("should throw when continue() called while streaming", async () => {
@@ -782,17 +755,14 @@ describe("Agent", () => {
 			},
 		});
 
-		// Start first prompt
 		const firstPrompt = agent.prompt("First message");
 		await new Promise((resolve) => setTimeout(resolve, 10));
 		expect(agent.state.isStreaming).toBe(true);
 
-		// continue() should reject
 		await expect(agent.continue()).rejects.toThrow(
 			"Agent is already processing. Wait for completion before continuing.",
 		);
 
-		// Cleanup
 		agent.abort();
 		await firstPrompt.catch(() => {});
 	});
@@ -956,7 +926,7 @@ describe("Agent", () => {
 		expect(callbackContextRoles).toEqual(["system", "user", "assistant", "toolResult"]);
 	});
 
-	it.each([
+	it.each<{ name: string; messages: AgentMessage[] }>([
 		{ name: "empty", messages: [] },
 		{ name: "system-only", messages: [{ role: "system" as const, content: "system only", timestamp: 1 }] },
 	])("rejects a queued continuation from $name context without draining queues", async ({ messages }) => {
@@ -972,7 +942,7 @@ describe("Agent", () => {
 		expect(agent.peekQueuedMessages()).toEqual([followUp]);
 	});
 
-	it.each([
+	it.each<{ name: string; messages: AgentMessage[] }>([
 		{
 			name: "user",
 			messages: [createUserMessage("existing user")],
@@ -1206,7 +1176,6 @@ describe("Agent", () => {
 		await agent.prompt("hello");
 		expect(receivedSessionId).toBe("session-abc");
 
-		// Test setter
 		agent.sessionId = "session-def";
 		expect(agent.sessionId).toBe("session-def");
 

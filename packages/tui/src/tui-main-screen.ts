@@ -8,13 +8,6 @@ import { visibleWidth } from "./utils.ts";
 const KITTY_SEQUENCE_PREFIX = "\x1b_G";
 const MAX_RENDER_WRITE_CHARS = 1024 * 1024;
 
-/**
- * Streams terminal output in 1 MiB chunks so a full render never forms one string large enough to exceed V8's limit.
- *
- * `append()` fills the current chunk and flushes it when full. Oversized input is split at chunk boundaries, preserving
- * surrogate pairs so each write remains valid UTF-16. Callers append synchronized-output begin/end sequences themselves;
- * the final `flush()` writes any remainder, including the end sequence.
- */
 class BoundedTerminalWriter {
 	private buffer = "";
 	private writtenChars = 0;
@@ -24,10 +17,6 @@ class BoundedTerminalWriter {
 		this.write = write;
 	}
 
-	/**
-	 * Append terminal data, flushing full chunks as needed. Callers must call `flush()` after the final append.
-	 * @param value Terminal data to write in order; oversized values are split without splitting surrogate pairs.
-	 */
 	append(value: string): void {
 		let offset = 0;
 		while (offset < value.length) {
@@ -60,7 +49,6 @@ class BoundedTerminalWriter {
 		}
 	}
 
-	/** Write the current chunk, if any, and retain only its character count for debug output. */
 	flush(): void {
 		if (!this.buffer) return;
 		this.write(this.buffer);
@@ -110,19 +98,7 @@ function isTermuxSession(): boolean {
 	return Boolean(process.env.TERMUX_VERSION);
 }
 
-export interface TuiMainScreenRenderState {
-	previousLines: string[];
-	previousWidth: number;
-	previousHeight: number;
-	cursorRow: number;
-	hardwareCursorRow: number;
-	maxLinesRendered: number;
-	previousViewportTop: number;
-}
-
-/** TUI implementation that renders into the terminal's main screen and scrollback. */
 export class TuiMainScreen extends TuiBase implements TUI {
-	readonly mode = "regular" as const;
 	private previousLines: string[] = [];
 	private previousKittyImageIds = new Set<number>();
 	private previousWidth = 0;
@@ -131,29 +107,6 @@ export class TuiMainScreen extends TuiBase implements TUI {
 	private hardwareCursorRow = 0;
 	private maxLinesRendered = 0;
 	private previousViewportTop = 0;
-
-	captureRenderState(): TuiMainScreenRenderState {
-		return {
-			previousLines: [...this.previousLines],
-			previousWidth: this.previousWidth,
-			previousHeight: this.previousHeight,
-			cursorRow: this.cursorRow,
-			hardwareCursorRow: this.hardwareCursorRow,
-			maxLinesRendered: this.maxLinesRendered,
-			previousViewportTop: this.previousViewportTop,
-		};
-	}
-
-	restoreRenderState(state: TuiMainScreenRenderState): void {
-		this.previousLines = state.previousLines.map((line) => (isImageLine(line) ? "" : line));
-		this.previousKittyImageIds = new Set();
-		this.previousWidth = state.previousWidth;
-		this.previousHeight = state.previousHeight;
-		this.cursorRow = state.cursorRow;
-		this.hardwareCursorRow = state.hardwareCursorRow;
-		this.maxLinesRendered = state.maxLinesRendered;
-		this.previousViewportTop = state.previousViewportTop;
-	}
 
 	protected override resetRenderState(): void {
 		this.previousLines = [];
@@ -260,27 +213,23 @@ export class TuiMainScreen extends TuiBase implements TUI {
 			return targetScreenRow - currentScreenRow;
 		};
 
-		// Render all components to get new lines
 		let newLines = this.render(width);
 
-		// Composite overlays into the rendered lines (before differential compare)
 		if (this.hasOverlayEntries) {
 			newLines = this.compositeOverlays(newLines, width, height);
 		}
 
-		// Extract cursor position before applying line resets (marker must be found first)
 		const cursorPos = this.extractCursorPosition(newLines, height);
 
 		newLines = this.applyLineResets(newLines);
 
-		// Helper to clear scrollback and viewport and render all new lines
 		const fullRender = (clear: boolean): void => {
 			this.fullRedrawCount += 1;
 			const output = new BoundedTerminalWriter((data) => this.terminal.write(data));
-			output.append("\x1b[?2026h"); // Begin synchronized output
+			output.append("\x1b[?2026h");
 			if (clear) {
 				output.append(this.deleteKittyImages(this.previousKittyImageIds));
-				output.append("\x1b[2J\x1b[H\x1b[3J"); // Clear screen, home, then clear scrollback
+				output.append("\x1b[2J\x1b[H\x1b[3J");
 			}
 			for (let i = 0; i < newLines.length; i++) {
 				if (i > 0) output.append("\r\n");
@@ -299,11 +248,10 @@ export class TuiMainScreen extends TuiBase implements TUI {
 				}
 				output.append(line);
 			}
-			output.append("\x1b[?2026l"); // End synchronized output
+			output.append("\x1b[?2026l");
 			output.flush();
 			this.cursorRow = Math.max(0, newLines.length - 1);
 			this.hardwareCursorRow = this.cursorRow;
-			// Reset max lines when clearing, otherwise track growth
 			if (clear) {
 				this.maxLinesRendered = newLines.length;
 			} else {
@@ -327,39 +275,30 @@ export class TuiMainScreen extends TuiBase implements TUI {
 			fs.appendFileSync(logPath, msg);
 		};
 
-		// First render - just output everything without clearing (assumes clean screen)
 		if (this.previousLines.length === 0 && !widthChanged && !heightChanged) {
 			logRedraw("first render");
 			fullRender(false);
 			return;
 		}
 
-		// Width changes always need a full re-render because wrapping changes.
 		if (widthChanged) {
 			logRedraw(`terminal width changed (${this.previousWidth} -> ${width})`);
 			fullRender(true);
 			return;
 		}
 
-		// Height changes normally need a full re-render to keep the visible viewport aligned,
-		// but Termux changes height when the software keyboard shows or hides.
-		// In that environment, a full redraw causes the entire history to replay on every toggle.
 		if (heightChanged && !isTermuxSession()) {
 			logRedraw(`terminal height changed (${this.previousHeight} -> ${height})`);
 			fullRender(true);
 			return;
 		}
 
-		// Content shrunk below the working area and no overlays - re-render to clear empty rows
-		// (overlays need the padding, so only do this when no overlays are active)
-		// Configurable via setClearOnShrink()
 		if (this.getClearOnShrink() && newLines.length < this.maxLinesRendered && !this.hasOverlayEntries) {
 			logRedraw(`clearOnShrink (maxLinesRendered=${this.maxLinesRendered})`);
 			fullRender(true);
 			return;
 		}
 
-		// Find first and last changed lines
 		let firstChanged = -1;
 		let lastChanged = -1;
 		const maxLines = Math.max(newLines.length, this.previousLines.length);
@@ -388,7 +327,6 @@ export class TuiMainScreen extends TuiBase implements TUI {
 		}
 		const appendStart = appendedLines && firstChanged === this.previousLines.length && firstChanged > 0;
 
-		// No changes - but still need to update hardware cursor position if it moved
 		if (firstChanged === -1) {
 			this.positionHardwareCursor(cursorPos, newLines.length);
 			this.previousViewportTop = prevViewportTop;
@@ -396,13 +334,11 @@ export class TuiMainScreen extends TuiBase implements TUI {
 			return;
 		}
 
-		// All changes are in deleted lines (nothing to render, just clear)
 		if (firstChanged >= newLines.length) {
 			if (this.previousLines.length > newLines.length) {
 				const output = new BoundedTerminalWriter((data) => this.terminal.write(data));
 				output.append("\x1b[?2026h");
 				output.append(this.deleteChangedKittyImages(firstChanged, lastChanged));
-				// Move to end of new content (clamp to 0 for empty content)
 				const targetRow = Math.max(0, newLines.length - 1);
 				if (targetRow < prevViewportTop) {
 					logRedraw(`deleted lines moved viewport up (${targetRow} < ${prevViewportTop})`);
@@ -413,7 +349,6 @@ export class TuiMainScreen extends TuiBase implements TUI {
 				if (lineDiff > 0) output.append(`\x1b[${lineDiff}B`);
 				else if (lineDiff < 0) output.append(`\x1b[${-lineDiff}A`);
 				output.append("\r");
-				// Clear extra lines without scrolling
 				const extraLines = this.previousLines.length - newLines.length;
 				if (extraLines > height) {
 					logRedraw(`extraLines > height (${extraLines} > ${height})`);
@@ -446,18 +381,14 @@ export class TuiMainScreen extends TuiBase implements TUI {
 			return;
 		}
 
-		// Differential rendering can only touch what was actually visible.
-		// If the first changed line is above the previous viewport, we need a full redraw.
 		if (firstChanged < prevViewportTop) {
 			logRedraw(`firstChanged < viewportTop (${firstChanged} < ${prevViewportTop})`);
 			fullRender(true);
 			return;
 		}
 
-		// Render from first changed line to end
-		// Keep updates wrapped in synchronized output while writing bounded chunks.
 		const output = new BoundedTerminalWriter((data) => this.terminal.write(data));
-		output.append("\x1b[?2026h"); // Begin synchronized output
+		output.append("\x1b[?2026h");
 		output.append(this.deleteChangedKittyImages(firstChanged, lastChanged));
 		const prevViewportBottom = prevViewportTop + height - 1;
 		const moveTargetRow = appendStart ? firstChanged - 1 : firstChanged;
@@ -474,18 +405,15 @@ export class TuiMainScreen extends TuiBase implements TUI {
 			hardwareCursorRow = moveTargetRow;
 		}
 
-		// Move cursor to first changed line (use hardwareCursorRow for actual position)
 		const lineDiff = computeLineDiff(moveTargetRow);
 		if (lineDiff > 0) {
-			output.append(`\x1b[${lineDiff}B`); // Move down
+			output.append(`\x1b[${lineDiff}B`);
 		} else if (lineDiff < 0) {
-			output.append(`\x1b[${-lineDiff}A`); // Move up
+			output.append(`\x1b[${-lineDiff}A`);
 		}
 
-		output.append(appendStart ? "\r\n" : "\r"); // Move to column 0
+		output.append(appendStart ? "\r\n" : "\r");
 
-		// Only render changed lines (firstChanged to lastChanged), not all lines to end
-		// This reduces flicker when only a single line changes (e.g., spinner animation)
 		const renderEnd = Math.min(lastChanged, newLines.length - 1);
 		for (let i = firstChanged; i <= renderEnd; i++) {
 			if (i > firstChanged) output.append("\r\n");
@@ -513,9 +441,8 @@ export class TuiMainScreen extends TuiBase implements TUI {
 				continue;
 			}
 
-			output.append("\x1b[2K"); // Clear current line
+			output.append("\x1b[2K");
 			if (!isImage && visibleWidth(line) > width) {
-				// Log all lines to crash file for debugging
 				const crashLogPath = path.join(this.logDirectory ?? os.tmpdir(), "pi-tui-crash.log");
 				const crashData = [
 					`Crash at ${new Date().toISOString()}`,
@@ -529,7 +456,6 @@ export class TuiMainScreen extends TuiBase implements TUI {
 				fs.mkdirSync(path.dirname(crashLogPath), { recursive: true });
 				fs.writeFileSync(crashLogPath, crashData);
 
-				// Clean up terminal state before throwing
 				this.stop();
 
 				const errorMsg = [
@@ -545,12 +471,9 @@ export class TuiMainScreen extends TuiBase implements TUI {
 			output.append(line);
 		}
 
-		// Track where cursor ended up after rendering
 		let finalCursorRow = renderEnd;
 
-		// If we had more lines before, clear them and move cursor back
 		if (this.previousLines.length > newLines.length) {
-			// Move to end of new content first if we stopped before it
 			if (renderEnd < newLines.length - 1) {
 				const moveDown = newLines.length - 1 - renderEnd;
 				output.append(`\x1b[${moveDown}B`);
@@ -560,11 +483,10 @@ export class TuiMainScreen extends TuiBase implements TUI {
 			for (let i = newLines.length; i < this.previousLines.length; i++) {
 				output.append("\r\n\x1b[2K");
 			}
-			// Move cursor back to end of new content
 			output.append(`\x1b[${extraLines}A`);
 		}
 
-		output.append("\x1b[?2026l"); // End synchronized output
+		output.append("\x1b[?2026l");
 
 		if (process.env.PI_TUI_DEBUG === "1") {
 			const debugDir = "/tmp/tui";
@@ -597,16 +519,11 @@ export class TuiMainScreen extends TuiBase implements TUI {
 
 		output.flush();
 
-		// Track cursor position for next render
-		// cursorRow tracks end of content (for viewport calculation)
-		// hardwareCursorRow tracks actual terminal cursor position (for movement)
 		this.cursorRow = Math.max(0, newLines.length - 1);
 		this.hardwareCursorRow = finalCursorRow;
-		// Track terminal's working area (grows but doesn't shrink unless cleared)
 		this.maxLinesRendered = Math.max(this.maxLinesRendered, newLines.length);
 		this.previousViewportTop = Math.max(prevViewportTop, finalCursorRow - height + 1);
 
-		// Position hardware cursor for IME
 		this.positionHardwareCursor(cursorPos, newLines.length);
 
 		this.previousLines = newLines;
@@ -615,30 +532,22 @@ export class TuiMainScreen extends TuiBase implements TUI {
 		this.previousHeight = height;
 	}
 
-	/**
-	 * Position the hardware cursor for IME candidate window.
-	 * @param cursorPos The cursor position extracted from rendered output, or null
-	 * @param totalLines Total number of rendered lines
-	 */
 	private positionHardwareCursor(cursorPos: { row: number; col: number } | null, totalLines: number): void {
 		if (!cursorPos || totalLines <= 0) {
 			this.terminal.hideCursor();
 			return;
 		}
 
-		// Clamp cursor position to valid range
 		const targetRow = Math.max(0, Math.min(cursorPos.row, totalLines - 1));
 		const targetCol = Math.max(0, cursorPos.col);
 
-		// Move cursor from current position to target
 		const rowDelta = targetRow - this.hardwareCursorRow;
 		let buffer = "";
 		if (rowDelta > 0) {
-			buffer += `\x1b[${rowDelta}B`; // Move down
+			buffer += `\x1b[${rowDelta}B`;
 		} else if (rowDelta < 0) {
-			buffer += `\x1b[${-rowDelta}A`; // Move up
+			buffer += `\x1b[${-rowDelta}A`;
 		}
-		// Move to absolute column (1-indexed)
 		buffer += `\x1b[${targetCol + 1}G`;
 
 		if (buffer) {

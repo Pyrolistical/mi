@@ -121,19 +121,15 @@ describe("AgentSession model and extension characterization", () => {
 		});
 		harnesses.push(harness);
 
-		// Set a per-model override for faux-2
 		harness.settingsManager.setModelThinkingLevel("faux", "faux-2", "low");
 
-		// Session starts on faux-1 with default thinking
 		harness.session.setThinkingLevel("high");
 		expect(harness.session.thinkingLevel).toBe("high");
 
-		// Switch to faux-2 → per-model override should apply
 		const model2 = harness.getModel("faux-2")!;
 		await harness.session.setModel(model2);
 		expect(harness.session.thinkingLevel).toBe("low");
 
-		// Switch back to faux-1 → no per-model override, uses global default
 		const model1 = harness.getModel("faux-1")!;
 		await harness.session.setModel(model1);
 		expect(harness.session.thinkingLevel).toBe("medium");
@@ -166,7 +162,6 @@ describe("AgentSession model and extension characterization", () => {
 		});
 		harnesses.push(harness);
 
-		// Start on a non-thinking model, then switch to faux-2
 		const model2 = harness.getModel("faux-2")!;
 		await harness.session.setModel(model2);
 		expect(harness.session.thinkingLevel).toBe("minimal");

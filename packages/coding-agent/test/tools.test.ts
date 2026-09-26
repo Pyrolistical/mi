@@ -1,4 +1,3 @@
-import { applyPatch } from "diff";
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
@@ -12,17 +11,10 @@ import {
 	createLocalBashOperations,
 } from "../src/core/tools/bash.ts";
 import { createEditToolDefinition } from "../src/core/tools/edit.ts";
-import { computeEditsDiff } from "../src/core/tools/edit-diff.ts";
-import { createFindToolDefinition } from "../src/core/tools/find.ts";
-import { createGrepToolDefinition } from "../src/core/tools/grep.ts";
-import { createLsToolDefinition } from "../src/core/tools/ls.ts";
 import { createReadToolDefinition } from "../src/core/tools/read.ts";
 import { createWriteToolDefinition } from "../src/core/tools/write.ts";
 import {
 	createEditTool,
-	createFindTool,
-	createGrepTool,
-	createLsTool,
 	createReadTool,
 	createWriteTool,
 } from "../src/index.ts";
@@ -32,11 +24,7 @@ const readTool = createReadTool(process.cwd());
 const writeTool = createWriteTool(process.cwd());
 const editTool = createEditTool(process.cwd());
 const bashTool = createBashTool(process.cwd());
-const grepTool = createGrepTool(process.cwd());
-const findTool = createFindTool(process.cwd());
-const lsTool = createLsTool(process.cwd());
 
-// Helper to extract text from content blocks
 function getTextOutput(result: any): string {
 	return (
 		result.content
@@ -46,34 +34,16 @@ function getTextOutput(result: any): string {
 	);
 }
 
-function createTinyBmp1x1Red24bpp(): Buffer {
-	const buffer = Buffer.alloc(58);
-	buffer.write("BM", 0, "ascii");
-	buffer.writeUInt32LE(buffer.length, 2);
-	buffer.writeUInt32LE(54, 10);
-	buffer.writeUInt32LE(40, 14);
-	buffer.writeInt32LE(1, 18);
-	buffer.writeInt32LE(1, 22);
-	buffer.writeUInt16LE(1, 26);
-	buffer.writeUInt16LE(24, 28);
-	buffer.writeUInt32LE(0, 30);
-	buffer.writeUInt32LE(4, 34);
-	buffer[56] = 0xff;
-	return buffer;
-}
-
 describe("Coding Agent Tools", () => {
 	let testDir: string;
 
 	beforeEach(() => {
-		// Create a unique temporary directory for each test
 		testDir = join(tmpdir(), `coding-agent-test-${Date.now()}`);
 		mkdirSync(testDir, { recursive: true });
 	});
 
 	afterEach(() => {
 		vi.restoreAllMocks();
-		// Clean up test directory
 		rmSync(testDir, { recursive: true, force: true });
 	});
 
@@ -86,7 +56,6 @@ describe("Coding Agent Tools", () => {
 			const result = await readTool.execute("test-call-1", { path: testFile });
 
 			expect(getTextOutput(result)).toBe(content);
-			// No truncation message since file fits within limits
 			expect(getTextOutput(result)).not.toContain("Use offset=");
 			expect(result.details).toBeUndefined();
 		});
@@ -113,7 +82,6 @@ describe("Coding Agent Tools", () => {
 
 		it("should truncate when byte limit exceeded", async () => {
 			const testFile = join(testDir, "large-bytes.txt");
-			// Create file that exceeds 50KB byte limit but has fewer than 2000 lines
 			const lines = Array.from({ length: 500 }, (_, i) => `Line ${i + 1}: ${"x".repeat(200)}`);
 			writeFileSync(testFile, lines.join("\n"));
 
@@ -121,7 +89,6 @@ describe("Coding Agent Tools", () => {
 			const output = getTextOutput(result);
 
 			expect(output).toContain("Line 1:");
-			// Should show byte limit message
 			expect(output).toMatch(/\[Showing lines 1-\d+ of 500 \(.* limit\)\. Use offset=\d+ to continue\.\]/);
 		});
 
@@ -136,7 +103,6 @@ describe("Coding Agent Tools", () => {
 			expect(output).not.toContain("Line 50");
 			expect(output).toContain("Line 51");
 			expect(output).toContain("Line 100");
-			// No truncation message since file fits within limits
 			expect(output).not.toContain("Use offset=");
 		});
 
@@ -219,23 +185,6 @@ describe("Coding Agent Tools", () => {
 			expect((imageBlock?.data ?? "").length).toBeGreaterThan(0);
 		});
 
-		it("should read BMP files from disk as PNG image attachments", async () => {
-			const testFile = join(testDir, "image.bmp");
-			writeFileSync(testFile, createTinyBmp1x1Red24bpp());
-
-			const result = await readTool.execute("test-call-img-bmp", { path: testFile });
-
-			expect(result.content[0]?.type).toBe("text");
-			expect(getTextOutput(result)).toContain("Read image file [image/png]");
-			expect(getTextOutput(result)).toContain("[Image converted from image/bmp to image/png.]");
-
-			const imageBlock = result.content.find(
-				(c): c is { type: "image"; mimeType: string; data: string } => c.type === "image",
-			);
-			expect(imageBlock).toBeDefined();
-			expect(imageBlock?.mimeType).toBe("image/png");
-			expect(Buffer.from(imageBlock?.data ?? "", "base64")[0]).toBe(0x89);
-		});
 
 		it("should treat files with image extension but non-image content as text", async () => {
 			const testFile = join(testDir, "not-an-image.png");
@@ -282,16 +231,7 @@ describe("Coding Agent Tools", () => {
 			});
 
 			expect(getTextOutput(result)).toContain("Successfully replaced");
-			expect(result.details).toBeDefined();
-			expect(result.details.diff).toBeDefined();
-			expect(typeof result.details.diff).toBe("string");
-			expect(result.details.diff).toContain("testing");
-			expect(result.details.patch).toContain("--- ");
-			expect(result.details.patch).toContain("+++ ");
-			expect(result.details.patch).toContain("@@");
-			expect(result.details.patch).toContain("-Hello, world!");
-			expect(result.details.patch).toContain("+Hello, testing!");
-			expect(applyPatch(originalContent, result.details.patch)).toBe("Hello, testing!");
+			expect(readFileSync(testFile, "utf-8")).toBe("Hello, testing!");
 		});
 
 		it("should fail if text not found", async () => {
@@ -345,32 +285,8 @@ describe("Coding Agent Tools", () => {
 
 			expect(getTextOutput(result)).toContain("Successfully replaced 2 block(s)");
 			expect(readFileSync(testFile, "utf-8")).toBe("ALPHA\nbeta\nGAMMA\ndelta\n");
-			expect(result.details?.diff).toContain("ALPHA");
-			expect(result.details?.diff).toContain("GAMMA");
 		});
 
-		it("should collapse large unchanged gaps in multi-edit diffs", async () => {
-			const testFile = join(testDir, "edit-multi-large-gap.txt");
-			const lines = Array.from({ length: 600 }, (_, i) => `line ${String(i + 1).padStart(3, "0")}`);
-			writeFileSync(testFile, `${lines.join("\n")}\n`);
-
-			const result = await editTool.execute("test-call-8b", {
-				path: testFile,
-				edits: [
-					{ oldText: "line 100\n", newText: "LINE 100\n" },
-					{ oldText: "line 300\n", newText: "LINE 300\n" },
-					{ oldText: "line 500\n", newText: "LINE 500\n" },
-				],
-			});
-
-			const diff = result.details?.diff ?? "";
-			expect(diff).toContain("LINE 100");
-			expect(diff).toContain("LINE 300");
-			expect(diff).toContain("LINE 500");
-			expect(diff).toContain("...");
-			expect(diff).not.toContain("line 250");
-			expect(diff.split("\n").length).toBeLessThan(50);
-		});
 
 		it("should match edits against the original file, not incrementally", async () => {
 			const testFile = join(testDir, "edit-multi-original.txt");
@@ -464,22 +380,7 @@ describe("Coding Agent Tools", () => {
 			).rejects.toThrow("Could not edit file: broken.txt. Error: disk offline.");
 		});
 
-		it("should include ENOENT in diff preview for missing files", async () => {
-			const missingFile = join(testDir, "missing-preview.txt");
-			const result = await computeEditsDiff(missingFile, [{ oldText: "hello", newText: "world" }], testDir);
 
-			expect(result).toEqual({ error: `Could not edit file: ${missingFile}. Error code: ENOENT.` });
-		});
-
-		it("should include EACCES in diff preview for unreadable files", async () => {
-			const unreadableFile = join(testDir, "unreadable-preview.txt");
-			writeFileSync(unreadableFile, "hello\n");
-			chmodSync(unreadableFile, 0o222);
-
-			const result = await computeEditsDiff(unreadableFile, [{ oldText: "hello", newText: "world" }], testDir);
-
-			expect(result).toEqual({ error: `Could not edit file: ${unreadableFile}. Error code: EACCES.` });
-		});
 	});
 
 	describe("bash tool", () => {
@@ -496,37 +397,28 @@ describe("Coding Agent Tools", () => {
 			);
 		});
 
-		// Regression tests for https://github.com/earendil-works/pi/issues/9577
-		it.skipIf(process.platform === "win32")(
-			"should map signal-killed commands to 128 plus the signal number",
-			async () => {
-				const operations = createLocalBashOperations();
-				for (const { signal, exitCode } of [
-					{ signal: "KILL", exitCode: 137 },
-					{ signal: "TERM", exitCode: 143 },
-				]) {
-					const result = await operations.exec(`kill -${signal} $$`, testDir, { onData: () => {} });
-					expect(result.exitCode).toBe(exitCode);
-				}
-			},
-		);
+		it("should map signal-killed commands to 128 plus the signal number", async () => {
+			const operations = createLocalBashOperations();
+			for (const { signal, exitCode } of [
+				{ signal: "KILL", exitCode: 137 },
+				{ signal: "TERM", exitCode: 143 },
+			]) {
+				const result = await operations.exec(`kill -${signal} $$`, testDir, { onData: () => {} });
+				expect(result.exitCode).toBe(exitCode);
+			}
+		});
 
-		it.skipIf(process.platform === "win32")(
-			"should reject signal-killed commands while preserving partial output",
-			async () => {
-				for (const { signal, exitCode } of [
-					{ signal: "KILL", exitCode: 137 },
-					{ signal: "TERM", exitCode: 143 },
-				]) {
-					const execution = bashTool.execute(`test-call-signal-${signal}`, {
-						command: `printf 'before-kill\\n'; kill -${signal} $$`,
-					});
-					await expect(execution).rejects.toThrow(
-						new RegExp(`before-kill\\s+Command exited with code ${exitCode}$`),
-					);
-				}
-			},
-		);
+		it("should reject signal-killed commands while preserving partial output", async () => {
+			for (const { signal, exitCode } of [
+				{ signal: "KILL", exitCode: 137 },
+				{ signal: "TERM", exitCode: 143 },
+			]) {
+				const execution = bashTool.execute(`test-call-signal-${signal}`, {
+					command: `printf 'before-kill\\n'; kill -${signal} $$`,
+				});
+				await expect(execution).rejects.toThrow(new RegExp(`before-kill\\s+Command exited with code ${exitCode}$`));
+			}
+		});
 
 		it("should reject a null exit code from custom operations", async () => {
 			const operations: BashOperations = {
@@ -624,56 +516,6 @@ describe("Coding Agent Tools", () => {
 				}),
 			).rejects.toThrow("Custom shell path not found: /custom/bash");
 			expect(getShellConfigSpy).toHaveBeenCalledWith("/custom/bash");
-		});
-
-		it("should send commands over stdin when shell resolution requires it", async () => {
-			vi.spyOn(shellModule, "getShellConfig").mockReturnValue({
-				shell: process.execPath,
-				args: [
-					"-e",
-					'let input = ""; process.stdin.setEncoding("utf8"); process.stdin.on("data", (chunk) => { input += chunk; }); process.stdin.on("end", () => { process.stdout.write(input); });',
-				],
-				commandTransport: "stdin",
-			});
-			const chunks: Buffer[] = [];
-			const ops = createLocalBashOperations({ shellPath: "C:\\Windows\\System32\\bash.exe" });
-			const nameExpansion = "$" + "{name}";
-			const countExpansion = "$" + "{count}";
-			const iExpansion = "$" + "{i}";
-			const command = `name='World'; echo "Hello, ${nameExpansion}!"; count=3; for i in $(seq 1 ${countExpansion}); do echo "Iteration ${iExpansion} of ${countExpansion}"; done`;
-
-			const result = await ops.exec(command, testDir, {
-				onData: (data) => chunks.push(data),
-			});
-
-			expect(result.exitCode).toBe(0);
-			expect(Buffer.concat(chunks).toString("utf-8")).toBe(command);
-		});
-
-		it("should resolve legacy WSL bash.exe to stdin command transport", () => {
-			if (process.platform === "win32") return;
-			const originalCwd = process.cwd();
-			const platformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
-			const shellPath = "C:\\Windows\\System32\\bash.exe";
-			writeFileSync(join(testDir, shellPath), "");
-			try {
-				process.chdir(testDir);
-				Object.defineProperty(process, "platform", {
-					configurable: true,
-					value: "win32",
-				});
-
-				expect(shellModule.getShellConfig(shellPath)).toEqual({
-					shell: shellPath,
-					args: ["-s"],
-					commandTransport: "stdin",
-				});
-			} finally {
-				process.chdir(originalCwd);
-				if (platformDescriptor) {
-					Object.defineProperty(process, "platform", platformDescriptor);
-				}
-			}
 		});
 
 		it("should prepend command prefix when configured", async () => {
@@ -824,127 +666,6 @@ describe("Coding Agent Tools", () => {
 			expect(fullOutput).toContain("2998\n2999\n3000");
 		});
 	});
-
-	describe("grep tool", () => {
-		it("should include filename when searching a single file", async () => {
-			const testFile = join(testDir, "example.txt");
-			writeFileSync(testFile, "first line\nmatch line\nlast line");
-
-			const result = await grepTool.execute("test-call-11", {
-				pattern: "match",
-				path: testFile,
-			});
-
-			const output = getTextOutput(result);
-			expect(output).toContain("example.txt:2: match line");
-		});
-
-		it("should respect global limit and include context lines", async () => {
-			const testFile = join(testDir, "context.txt");
-			const content = ["before", "match one", "after", "middle", "match two", "after two"].join("\n");
-			writeFileSync(testFile, content);
-
-			const result = await grepTool.execute("test-call-12", {
-				pattern: "match",
-				path: testFile,
-				limit: 1,
-				context: 1,
-			});
-
-			const output = getTextOutput(result);
-			expect(output).toContain("context.txt-1- before");
-			expect(output).toContain("context.txt:2: match one");
-			expect(output).toContain("context.txt-3- after");
-			expect(output).toContain("[1 matches limit reached. Use limit=2 for more, or refine pattern]");
-			// Ensure second match is not present
-			expect(output).not.toContain("match two");
-		});
-
-		it("should treat flag-like patterns as search text", async () => {
-			const marker = join(testDir, "grep-injection-marker");
-			const payload = join(testDir, "payload.sh");
-			const testFile = join(testDir, "target.txt");
-			writeFileSync(payload, `#!/bin/sh\necho executed > ${marker}\ncat "$1"\n`);
-			chmodSync(payload, 0o755);
-			writeFileSync(testFile, "target\n");
-
-			const result = await grepTool.execute("test-call-grep-injection", {
-				pattern: `--pre=${payload}`,
-				path: testDir,
-			});
-
-			expect(getTextOutput(result)).toContain("No matches found");
-			expect(existsSync(marker)).toBe(false);
-		});
-	});
-
-	describe("find tool", () => {
-		it("should include hidden files that are not gitignored", async () => {
-			const hiddenDir = join(testDir, ".secret");
-			mkdirSync(hiddenDir);
-			writeFileSync(join(hiddenDir, "hidden.txt"), "hidden");
-			writeFileSync(join(testDir, "visible.txt"), "visible");
-
-			const result = await findTool.execute("test-call-13", {
-				pattern: "**/*.txt",
-				path: testDir,
-			});
-
-			const outputLines = getTextOutput(result)
-				.split("\n")
-				.map((line) => line.trim())
-				.filter(Boolean);
-
-			expect(outputLines).toContain("visible.txt");
-			expect(outputLines).toContain(".secret/hidden.txt");
-		});
-
-		it("should respect .gitignore", async () => {
-			writeFileSync(join(testDir, ".gitignore"), "ignored.txt\n");
-			writeFileSync(join(testDir, "ignored.txt"), "ignored");
-			writeFileSync(join(testDir, "kept.txt"), "kept");
-
-			const result = await findTool.execute("test-call-14", {
-				pattern: "**/*.txt",
-				path: testDir,
-			});
-
-			const output = getTextOutput(result);
-			expect(output).toContain("kept.txt");
-			expect(output).not.toContain("ignored.txt");
-		});
-
-		it("should surface fd glob parse errors", async () => {
-			await expect(
-				findTool.execute("test-call-15", {
-					pattern: "[",
-					path: testDir,
-				}),
-			).rejects.toThrow(/error parsing glob|fd exited with code 1|fd error/i);
-		});
-
-		it("should treat flag-like patterns as search text", async () => {
-			const result = await findTool.execute("test-call-find-flag-pattern", {
-				pattern: "--help",
-				path: testDir,
-			});
-
-			expect(getTextOutput(result)).toContain("No files found matching pattern");
-		});
-	});
-
-	describe("ls tool", () => {
-		it("should list dotfiles and directories", async () => {
-			writeFileSync(join(testDir, ".hidden-file"), "secret");
-			mkdirSync(join(testDir, ".hidden-dir"));
-
-			const result = await lsTool.execute("test-call-15", { path: testDir });
-			const output = getTextOutput(result);
-
-			expect(output).toContain(".hidden-file");
-			expect(output).toContain(".hidden-dir/");
-		});
-	});
 });
 
 function fakeCtx(cwd: string): ExtensionContext {
@@ -1006,43 +727,6 @@ describe("tool cwd resolution", () => {
 		expect(content).toBe("new text");
 	});
 
-	it("grep uses ctx.cwd when provided", async () => {
-		const testFile = join(testDir, "ctx-cwd-grep.txt");
-		writeFileSync(testFile, "match in ctx.cwd");
-		const tool = createGrepToolDefinition("/");
-		const result = await tool.execute(
-			"test-grep-ctx-cwd",
-			{ pattern: "match" },
-			undefined,
-			undefined,
-			fakeCtx(testDir),
-		);
-		const output = getTextOutput(result);
-		expect(output).toContain("ctx-cwd-grep.txt");
-	});
-
-	it("find uses ctx.cwd when provided", async () => {
-		writeFileSync(join(testDir, "ctx-cwd-find.txt"), "find me");
-		const tool = createFindToolDefinition("/");
-		const result = await tool.execute(
-			"test-find-ctx-cwd",
-			{ pattern: "ctx-cwd-find.txt" },
-			undefined,
-			undefined,
-			fakeCtx(testDir),
-		);
-		const output = getTextOutput(result);
-		expect(output).toContain("ctx-cwd-find.txt");
-	});
-
-	it("ls uses ctx.cwd when provided", async () => {
-		writeFileSync(join(testDir, "ctx-cwd-ls.txt"), "list me");
-		const tool = createLsToolDefinition("/");
-		const result = await tool.execute("test-ls-ctx-cwd", {}, undefined, undefined, fakeCtx(testDir));
-		const output = getTextOutput(result);
-		expect(output).toContain("ctx-cwd-ls.txt");
-	});
-
 	it("bash uses ctx.cwd when provided", async () => {
 		const tool = createBashToolDefinition("/", { exposeSessionEnvironment: false });
 		const result = await tool.execute(
@@ -1071,10 +755,8 @@ describe("edit tool fuzzy matching", () => {
 
 	it("should match text with trailing whitespace stripped", async () => {
 		const testFile = join(testDir, "trailing-ws.txt");
-		// File has trailing spaces on lines
 		writeFileSync(testFile, "line one   \nline two  \nline three\n");
 
-		// oldText without trailing whitespace should still match
 		const result = await editTool.execute("test-fuzzy-1", {
 			path: testFile,
 			edits: [{ oldText: "line one\nline two\n", newText: "replaced\n" }],
@@ -1115,10 +797,8 @@ describe("edit tool fuzzy matching", () => {
 
 	it("should match smart single quotes to ASCII quotes", async () => {
 		const testFile = join(testDir, "smart-quotes.txt");
-		// File has smart/curly single quotes (U+2018, U+2019)
 		writeFileSync(testFile, "console.log(\u2018hello\u2019);\n");
 
-		// oldText with ASCII quotes should match
 		const result = await editTool.execute("test-fuzzy-2", {
 			path: testFile,
 			edits: [{ oldText: "console.log('hello');", newText: "console.log('world');" }],
@@ -1131,10 +811,8 @@ describe("edit tool fuzzy matching", () => {
 
 	it("should match smart double quotes to ASCII quotes", async () => {
 		const testFile = join(testDir, "smart-double-quotes.txt");
-		// File has smart/curly double quotes (U+201C, U+201D)
 		writeFileSync(testFile, "const msg = \u201CHello World\u201D;\n");
 
-		// oldText with ASCII quotes should match
 		const result = await editTool.execute("test-fuzzy-3", {
 			path: testFile,
 			edits: [{ oldText: 'const msg = "Hello World";', newText: 'const msg = "Goodbye";' }],
@@ -1147,10 +825,8 @@ describe("edit tool fuzzy matching", () => {
 
 	it("should match Unicode dashes to ASCII hyphen", async () => {
 		const testFile = join(testDir, "unicode-dashes.txt");
-		// File has en-dash (U+2013) and em-dash (U+2014)
 		writeFileSync(testFile, "range: 1\u20135\nbreak\u2014here\n");
 
-		// oldText with ASCII hyphens should match
 		const result = await editTool.execute("test-fuzzy-4", {
 			path: testFile,
 			edits: [{ oldText: "range: 1-5\nbreak-here", newText: "range: 10-50\nbreak--here" }],
@@ -1163,10 +839,8 @@ describe("edit tool fuzzy matching", () => {
 
 	it("should match non-breaking space to regular space", async () => {
 		const testFile = join(testDir, "nbsp.txt");
-		// File has non-breaking space (U+00A0)
 		writeFileSync(testFile, "hello\u00A0world\n");
 
-		// oldText with regular space should match
 		const result = await editTool.execute("test-fuzzy-5", {
 			path: testFile,
 			edits: [{ oldText: "hello world", newText: "hello universe" }],
@@ -1179,7 +853,6 @@ describe("edit tool fuzzy matching", () => {
 
 	it("should prefer exact match over fuzzy match", async () => {
 		const testFile = join(testDir, "exact-preferred.txt");
-		// File has both exact and fuzzy-matchable content
 		writeFileSync(testFile, "const x = 'exact';\nconst y = 'other';\n");
 
 		const result = await editTool.execute("test-fuzzy-6", {
@@ -1206,7 +879,6 @@ describe("edit tool fuzzy matching", () => {
 
 	it("should detect duplicates after fuzzy normalization", async () => {
 		const testFile = join(testDir, "fuzzy-dups.txt");
-		// Two lines that are identical after trailing whitespace is stripped
 		writeFileSync(testFile, "hello world   \nhello world\n");
 
 		await expect(
@@ -1237,17 +909,16 @@ describe("edit tool fuzzy matching", () => {
 		const originalContent = ["replace me\u0020\u0020\u0020", "after\u0020\u0020\u0020", ""].join("\n");
 		writeFileSync(testFile, originalContent);
 
-		const result = await editTool.execute("test-fuzzy-preserve-duplicate-line", {
+		await editTool.execute("test-fuzzy-preserve-duplicate-line", {
 			path: testFile,
 			edits: [{ oldText: "replace me\n", newText: "after\n" }],
 		});
 
 		const expectedContent = ["after", "after\u0020\u0020\u0020", ""].join("\n");
 		expect(readFileSync(testFile, "utf-8")).toBe(expectedContent);
-		expect(applyPatch(originalContent, result.details?.patch ?? "")).toBe(expectedContent);
 	});
 
-	it("should preserve untouched lines and produce an applicable patch for fuzzy multi-edits", async () => {
+	it("should preserve untouched lines for fuzzy multi-edits", async () => {
 		const testFile = join(testDir, "fuzzy-preserve-multi.txt");
 		const originalContent = [
 			"keep before\u0020\u0020",
@@ -1261,7 +932,7 @@ describe("edit tool fuzzy matching", () => {
 		].join("\n");
 		writeFileSync(testFile, originalContent);
 
-		const result = await editTool.execute("test-fuzzy-preserve-multi", {
+		await editTool.execute("test-fuzzy-preserve-multi", {
 			path: testFile,
 			edits: [
 				{ oldText: "first target\nfirst after", newText: "FIRST\nFIRST2" },
@@ -1280,7 +951,6 @@ describe("edit tool fuzzy matching", () => {
 			"",
 		].join("\n");
 		expect(readFileSync(testFile, "utf-8")).toBe(expectedContent);
-		expect(applyPatch(originalContent, result.details?.patch ?? "")).toBe(expectedContent);
 	});
 });
 

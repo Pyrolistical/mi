@@ -113,7 +113,6 @@ export class BranchSummaryStatusIndicator extends StatusIndicator {
 
 export class IdleStatus implements Component {
 	invalidate(): void {
-		// No cached state to invalidate.
 	}
 
 	render(width: number): string[] {

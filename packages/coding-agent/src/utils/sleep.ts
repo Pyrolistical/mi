@@ -1,6 +1,3 @@
-/**
- * Sleep helper that respects abort signal.
- */
 export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 	return new Promise((resolve, reject) => {
 		if (signal?.aborted) {

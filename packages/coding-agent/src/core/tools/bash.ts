@@ -9,13 +9,12 @@ import {
 	getShellConfig,
 	getShellEnv,
 	killProcessTree,
-	type ShellConfig,
 	trackDetachedChildPid,
 	untrackDetachedChildPid,
 } from "../../utils/shell.ts";
 import type { ExtensionContext, ToolDefinition } from "../extensions/types.ts";
 import { OutputAccumulator } from "./output-accumulator.ts";
-import { BASH_UPDATE_THROTTLE_MS, createShellRenderers } from "./renderers/bash.ts";
+import { BASH_UPDATE_THROTTLE_MS, bashRenderers } from "./renderers/bash.ts";
 import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, type TruncationResult } from "./truncate.ts";
 
@@ -52,19 +51,7 @@ export interface BashToolDetails {
 	fullOutputPath?: string;
 }
 
-/**
- * Pluggable operations for the bash tool.
- * Override these to delegate command execution to remote systems (for example SSH).
- */
 export interface BashOperations {
-	/**
-	 * Execute a command and stream output.
-	 * @param command The command to execute
-	 * @param cwd Working directory
-	 * @param options Execution options
-	 * @returns Promise resolving to the exit code. Report signal terminations as 128 + signal number;
-	 * a null exit code is treated as a failed command.
-	 */
 	exec: (
 		command: string,
 		cwd: string,
@@ -77,33 +64,26 @@ export interface BashOperations {
 	) => Promise<{ exitCode: number | null }>;
 }
 
-/** Shared process execution used by the built-in shell tools. */
-export function createLocalShellOperations(shellName: string, resolveShellConfig: () => ShellConfig): BashOperations {
+export function createLocalBashOperations(options?: { shellPath?: string }): BashOperations {
 	return {
 		exec: async (command, cwd, { onData, signal, timeout, env }) => {
 			const timeoutMs = resolveTimeoutMs(timeout);
 			if (signal?.aborted) {
 				throw new Error("aborted");
 			}
-			const shellConfig = resolveShellConfig();
+			const shellConfig = getShellConfig(options?.shellPath);
 			try {
 				await fsAccess(cwd, constants.F_OK);
 			} catch {
-				throw new Error(`Working directory does not exist: ${cwd}\nCannot execute ${shellName} commands.`);
+				throw new Error(`Working directory does not exist: ${cwd}\nCannot execute bash commands.`);
 			}
 
-			const commandFromStdin = shellConfig.commandTransport === "stdin";
-			const child = spawn(shellConfig.shell, commandFromStdin ? shellConfig.args : [...shellConfig.args, command], {
+			const child = spawn(shellConfig.shell, [...shellConfig.args, command], {
 				cwd,
-				detached: process.platform !== "win32",
+				detached: true,
 				env: env ?? getShellEnv(),
-				stdio: [commandFromStdin ? "pipe" : "ignore", "pipe", "pipe"],
-				windowsHide: true,
+				stdio: ["ignore", "pipe", "pipe"],
 			});
-			if (commandFromStdin) {
-				child.stdin?.on("error", () => {});
-				child.stdin?.end(command);
-			}
 			if (child.pid) trackDetachedChildPid(child.pid);
 			let timedOut = false;
 			let timeoutHandle: NodeJS.Timeout | undefined;
@@ -112,23 +92,18 @@ export function createLocalShellOperations(shellName: string, resolveShellConfig
 			};
 
 			try {
-				// Set timeout if provided.
 				if (timeoutMs !== undefined) {
 					timeoutHandle = setTimeout(() => {
 						timedOut = true;
 						if (child.pid) killProcessTree(child.pid);
 					}, timeoutMs);
 				}
-				// Stream stdout and stderr.
 				child.stdout?.on("data", onData);
 				child.stderr?.on("data", onData);
-				// Handle abort signal by killing the entire process tree.
 				if (signal) {
 					if (signal.aborted) onAbort();
 					else signal.addEventListener("abort", onAbort, { once: true });
 				}
-				// Handle shell spawn errors and wait for the process to terminate without hanging
-				// on inherited stdio handles held by detached descendants.
 				const exitCode = await waitForChildProcess(child);
 				if (signal?.aborted) {
 					throw new Error("aborted");
@@ -136,8 +111,6 @@ export function createLocalShellOperations(shellName: string, resolveShellConfig
 				if (timedOut) {
 					throw new Error(`timeout:${timeout}`);
 				}
-				// A signal-killed shell has no exit code. Use the standard shell convention so
-				// callers do not mistake the termination for a successful command.
 				const signalCode = child.signalCode;
 				return { exitCode: exitCode ?? (signalCode ? 128 + (osConstants.signals[signalCode] ?? 0) : 1) };
 			} finally {
@@ -147,16 +120,6 @@ export function createLocalShellOperations(shellName: string, resolveShellConfig
 			}
 		},
 	};
-}
-
-/**
- * Create bash operations using pi's built-in local shell execution backend.
- *
- * This is useful for extensions that intercept user_bash and still want pi's
- * standard local shell behavior while wrapping or rewriting commands.
- */
-export function createLocalBashOperations(options?: { shellPath?: string }): BashOperations {
-	return createLocalShellOperations("bash", () => getShellConfig(options?.shellPath));
 }
 
 export interface BashSpawnContext {
@@ -196,15 +159,10 @@ function resolveSpawnContext(
 }
 
 export interface BashToolOptions {
-	/** Custom operations for command execution. Default: local shell */
 	operations?: BashOperations;
-	/** Command prefix prepended to every command (for example shell setup commands) */
 	commandPrefix?: string;
-	/** Optional explicit shell path from settings */
 	shellPath?: string;
-	/** Expose current Pi session metadata as PI_* environment variables. Default: true */
 	exposeSessionEnvironment?: boolean;
-	/** Hook to adjust command, cwd, or env before execution */
 	spawnHook?: BashSpawnHook;
 }
 
@@ -214,19 +172,8 @@ export type BashRenderState = {
 	interval: NodeJS.Timeout | undefined;
 };
 
-export interface ShellToolConfig {
-	name: string;
-	label: string;
-	shellName: string;
-	prompt: string;
-	promptSnippet: string;
-	promptGuidelines?: readonly string[];
-	tempFilePrefix: string;
-}
-
-export function createShellToolDefinition(
+export function createBashToolDefinition(
 	cwd: string,
-	config: ShellToolConfig,
 	options?: BashToolOptions,
 ): ToolDefinition<typeof bashSchema, BashToolDetails | undefined, BashRenderState> {
 	const ops = options?.operations ?? createLocalBashOperations({ shellPath: options?.shellPath });
@@ -234,11 +181,11 @@ export function createShellToolDefinition(
 	const exposeSessionEnvironment = options?.exposeSessionEnvironment ?? true;
 	const spawnHook = options?.spawnHook;
 	return {
-		name: config.name,
-		label: config.label,
-		description: `Execute a ${config.shellName} command in the current working directory. Returns stdout and stderr. Output is truncated to last ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). If truncated, full output is saved to a temp file. Optionally provide a timeout in seconds.`,
-		promptSnippet: config.promptSnippet,
-		promptGuidelines: exposeSessionEnvironment && config.promptGuidelines ? [...config.promptGuidelines] : undefined,
+		name: "bash",
+		label: "bash",
+		description: `Execute a bash command in the current working directory. Returns stdout and stderr. Output is truncated to last ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). If truncated, full output is saved to a temp file. Optionally provide a timeout in seconds.`,
+		promptSnippet: bashToolSystemPromptContribution.snippet,
+		promptGuidelines: exposeSessionEnvironment ? [...bashToolSystemPromptContribution.guidelines] : undefined,
 		parameters: bashSchema,
 		constrainedSampling: { type: "json_schema", strict: "prefer" },
 		async execute(
@@ -256,7 +203,7 @@ export function createShellToolDefinition(
 				exposeSessionEnvironment,
 				ctx,
 			);
-			const output = new OutputAccumulator({ tempFilePrefix: config.tempFilePrefix });
+			const output = new OutputAccumulator({ tempFilePrefix: "pi-bash" });
 			let acceptingOutput = true;
 			let updateTimer: NodeJS.Timeout | undefined;
 			let updateDirty = false;
@@ -376,25 +323,8 @@ export function createShellToolDefinition(
 				clearUpdateTimer();
 			}
 		},
-		...createShellRenderers(config.prompt),
+		...bashRenderers,
 	};
-}
-
-const bashToolConfig: ShellToolConfig = {
-	name: "bash",
-	label: "bash",
-	shellName: "bash",
-	prompt: "$",
-	promptSnippet: bashToolSystemPromptContribution.snippet,
-	promptGuidelines: bashToolSystemPromptContribution.guidelines,
-	tempFilePrefix: "pi-bash",
-};
-
-export function createBashToolDefinition(
-	cwd: string,
-	options?: BashToolOptions,
-): ToolDefinition<typeof bashSchema, BashToolDetails | undefined, BashRenderState> {
-	return createShellToolDefinition(cwd, bashToolConfig, options);
 }
 
 export function createBashTool(cwd: string, options?: BashToolOptions): AgentTool<typeof bashSchema> {

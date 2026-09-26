@@ -37,7 +37,6 @@ describe("CombinedAutocompleteProvider slash-command filter", () => {
 		assert.ok(items.includes("skill:to-sidecar"));
 	});
 
-	// Regression test for #9944.
 	it("lists skills while typing the skill prefix", async () => {
 		const items = await suggestionsFor("skill");
 		assert.deepStrictEqual(

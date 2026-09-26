@@ -25,10 +25,6 @@ async function getMutationQueueKey(filePath: string): Promise<string> {
 	}
 }
 
-/**
- * Serialize file mutation operations targeting the same file.
- * Operations for different files still run in parallel.
- */
 export async function withFileMutationQueue<T>(filePath: string, fn: () => Promise<T>): Promise<T> {
 	const registration = registrationQueue.then(async () => {
 		const key = await getMutationQueueKey(filePath);

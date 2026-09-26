@@ -8,7 +8,6 @@ interface NodeOsModule {
 	homedir(): string;
 }
 
-// Variable specifier so browser bundlers do not try to resolve node builtins.
 const importNodeModule = (specifier: string): Promise<unknown> => import(specifier);
 
 function getProcessEnv(): Record<string, string | undefined> | undefined {
@@ -16,10 +15,6 @@ function getProcessEnv(): Record<string, string | undefined> | undefined {
 	return proc?.env;
 }
 
-/**
- * Default auth context: env vars from `process.env` (undefined in browsers),
- * file existence via node:fs (always false in browsers).
- */
 export function defaultProviderAuthContext(): AuthContext {
 	return {
 		async env(name: string): Promise<string | undefined> {

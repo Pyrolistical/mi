@@ -24,10 +24,8 @@ describe("migrateSessionEntries", () => {
 
 		migrateSessionEntries(entries);
 
-		// Header should have version set (v3 is current after hookMessage->custom migration)
 		expect((entries[0] as any).version).toBe(3);
 
-		// Entries should have id/parentId
 		const msg1 = entries[1] as any;
 		const msg2 = entries[2] as any;
 
@@ -70,7 +68,6 @@ describe("migrateSessionEntries", () => {
 
 		migrateSessionEntries(entries);
 
-		// IDs should be unchanged
 		expect((entries[1] as any).id).toBe("abc12345");
 		expect((entries[2] as any).id).toBe("def67890");
 		expect((entries[2] as any).parentId).toBe("abc12345");

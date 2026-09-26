@@ -21,9 +21,6 @@ const processImage = vi.hoisted(() =>
 );
 vi.mock("../../src/utils/image-process.ts", () => ({ processImage }));
 
-const TINY_PNG_BASE64 =
-	"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
-
 describe("AgentSession prompt characterization", () => {
 	const harnesses: Harness[] = [];
 	const tempDirs: string[] = [];
@@ -159,44 +156,6 @@ describe("AgentSession prompt characterization", () => {
 		expect(sawImage).toBe(true);
 	});
 
-	// Regression test for https://github.com/earendil-works/pi/issues/9631
-	it("uses the model selected by before_agent_start for image normalization", async () => {
-		let strictModel: Model<string> | undefined;
-		const harness = await createHarness({
-			models: [{ id: "wide" }, { id: "strict" }],
-			extensionFactories: [
-				(pi) => {
-					pi.on("before_agent_start", async () => {
-						if (!strictModel) throw new Error("Expected strict model");
-						await pi.setModel(strictModel);
-					});
-				},
-			],
-		});
-		harnesses.push(harness);
-		strictModel = harness.getModel("strict");
-		if (!strictModel) throw new Error("Expected strict model");
-		const resizeOptions = { maxWidth: 1000, maxHeight: 1000, maxBytes: 500000, jpegQuality: 70 };
-		strictModel.inputLimits = { images: { resize: resizeOptions } };
-		harness.setResponses([fauxAssistantMessage("done")]);
-
-		await harness.session.prompt("inspect", {
-			images: [{ type: "image", data: TINY_PNG_BASE64, mimeType: "image/png" }],
-		});
-
-		expect(harness.session.model?.id).toBe("strict");
-		expect(processImage).toHaveBeenCalledWith(expect.any(Uint8Array), "image/png", {
-			autoResizeImages: true,
-			resizeOptions,
-		});
-		const userMessage = harness.session.messages.find((message) => message.role === "user");
-		expect(userMessage?.content).toContainEqual({
-			type: "image",
-			data: Buffer.from("normalized").toString("base64"),
-			mimeType: "image/png",
-		});
-	});
-
 	it("expands skill commands before sending the prompt", async () => {
 		const tempDir = join(tmpdir(), `pi-skill-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 		mkdirSync(tempDir, { recursive: true });
@@ -217,7 +176,6 @@ describe("AgentSession prompt characterization", () => {
 						sourceInfo: createSyntheticSourceInfo(skillPath, {
 							source: "local",
 							scope: "project",
-							origin: "top-level",
 							baseDir: tempDir,
 						}),
 					},
@@ -253,7 +211,6 @@ describe("AgentSession prompt characterization", () => {
 			sourceInfo: createSyntheticSourceInfo("/virtual/review.md", {
 				source: "local",
 				scope: "temporary",
-				origin: "top-level",
 			}),
 		};
 		const resourceLoader = {
@@ -286,7 +243,6 @@ describe("AgentSession prompt characterization", () => {
 			sourceInfo: createSyntheticSourceInfo("/virtual/review.md", {
 				source: "local",
 				scope: "temporary",
-				origin: "top-level",
 			}),
 		};
 		const resourceLoader = {

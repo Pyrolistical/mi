@@ -1,7 +1,3 @@
-/**
- * Extension runner - executes extensions and manages their lifecycle.
- */
-
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import {
 	getCurrentSystemMessage,
@@ -11,8 +7,7 @@ import {
 	type ProviderHeaders,
 } from "@earendil-works/pi-ai";
 import type { KeyId } from "@earendil-works/pi-tui";
-import { type Theme, theme } from "../../modes/interactive/theme/theme.ts";
-import type { CacheWarmingAction } from "../cache-warmer.ts";
+import { theme } from "../../modes/interactive/theme/theme.ts";
 import type { ResourceDiagnostic } from "../diagnostics.ts";
 import type { KeybindingsConfig } from "../keybindings.ts";
 import type { ModelRegistry } from "../model-registry.ts";
@@ -24,7 +19,6 @@ import {
 	type NormalizedBuildSystemPromptOptions,
 	normalizeBuildSystemPromptOptions,
 } from "../system-prompt.ts";
-import type { VirtualModelDefinition } from "../virtual-models.ts";
 import type {
 	AgentBeforeSettleEvent,
 	BeforeAgentStartEvent,
@@ -33,8 +27,6 @@ import type {
 	BeforeProviderRequestEvent,
 	BoundaryContextPreview,
 	BoundaryResult,
-	CacheWarmingDecisionEvent,
-	CacheWarmingDecisionEventResult,
 	CompactOptions,
 	ContextEvent,
 	ContextEventResult,
@@ -50,21 +42,16 @@ import type {
 	ExtensionError,
 	ExtensionEvent,
 	ExtensionFlag,
-	ExtensionMode,
 	ExtensionRuntime,
 	ExtensionShortcut,
 	ExtensionUIContext,
 	InputEvent,
 	InputEventResult,
 	InputSource,
-	LoadExtensionsResult,
 	MarkdownTransformer,
 	MessageEndEvent,
 	MessageEndEventResult,
 	MessageRenderer,
-	ProjectTrustContext,
-	ProjectTrustEvent,
-	ProjectTrustEventResult,
 	ProviderConfig,
 	RegisteredCommand,
 	RegisteredTool,
@@ -88,8 +75,6 @@ import type {
 	UserBashEventResult,
 } from "./types.ts";
 
-// Extension shortcuts compete with canonical keybinding ids from keybindings.json.
-// Only editor-global shortcuts are reserved here. Picker-specific bindings are not.
 const RESERVED_KEYBINDINGS_FOR_EXTENSION_CONFLICTS = [
 	"app.interrupt",
 	"app.clear",
@@ -101,7 +86,6 @@ const RESERVED_KEYBINDINGS_FOR_EXTENSION_CONFLICTS = [
 	"app.model.select",
 	"app.tools.expand",
 	"app.thinking.toggle",
-	"app.editor.external",
 	"app.message.copy",
 	"app.message.followUp",
 	"tui.input.submit",
@@ -121,8 +105,6 @@ const buildBuiltinKeybindings = (resolvedKeybindings: KeybindingsConfig): BuiltI
 		const restrictOverride = (RESERVED_KEYBINDINGS_FOR_EXTENSION_CONFLICTS as readonly string[]).includes(keybinding);
 		for (const key of keyList) {
 			const normalizedKey = key.toLowerCase() as KeyId;
-			// If multiple actions bind the same key, the reserved action wins so extensions
-			// remain blocked by reserved shortcuts regardless of iteration order.
 			const existing = builtinKeybindings[normalizedKey];
 			if (existing?.restrictOverride && !restrictOverride) continue;
 			builtinKeybindings[normalizedKey] = {
@@ -160,25 +142,18 @@ function isUserBashEventResult(value: unknown): value is UserBashEventResult {
 	);
 }
 
-/** Combined result from all before_agent_start handlers. */
 interface BeforeAgentStartCombinedResult {
 	messages: NonNullable<BeforeAgentStartEventResult["message"]>[];
 	systemPromptOptions: NormalizedBuildSystemPromptOptions;
 }
 
-/**
- * Events handled by the generic emit() method.
- * Events with dedicated emitXxx() methods are excluded for stronger type safety.
- */
 type RunnerEmitEvent = Exclude<
 	ExtensionEvent,
 	| ToolCallEvent
-	| ProjectTrustEvent
 	| ToolResultEvent
 	| UserBashEvent
 	| ContextEvent
 	| ContextWithSystemEvent
-	| CacheWarmingDecisionEvent
 	| BeforeProviderRequestEvent
 	| BeforeProviderHeadersEvent
 	| BeforeAgentStartEvent
@@ -248,10 +223,6 @@ export type ReloadHandler = () => Promise<void>;
 
 export type ShutdownHandler = () => void;
 
-/**
- * Helper function to emit session_shutdown event to extensions.
- * Returns true if the event was emitted, false if there were no handlers.
- */
 export async function emitSessionShutdownEvent(
 	extensionRunner: ExtensionRunner,
 	event: SessionShutdownEvent,
@@ -271,14 +242,6 @@ function sameMessages(left: AgentMessage[], right: AgentMessage[]): boolean {
 	return left.length === right.length && left.every((message, index) => message === right[index]);
 }
 
-/**
- * Re-attach the prompt and tool state after a `context` handler. Handlers only see the
- * conversation; the system messages belong to Pi. An unchanged conversation keeps every
- * system message in place, so models with mid-conversation support keep their cached
- * prefix. A changed one gets the replayed prompt sections and tool declarations as one
- * leading system message, so pruning, windowing, or slicing from a compaction summary
- * cannot drop them.
- */
 function restoreSystemMessages(
 	current: AgentMessage[],
 	visible: AgentMessage[],
@@ -287,35 +250,6 @@ function restoreSystemMessages(
 	if (sameMessages(returned, visible)) return current;
 	const head = getCurrentSystemMessage(current);
 	return head ? [head, ...returned] : returned;
-}
-
-export async function emitProjectTrustEvent(
-	extensionsResult: LoadExtensionsResult,
-	event: ProjectTrustEvent,
-	ctx: ProjectTrustContext,
-): Promise<{ result?: ProjectTrustEventResult; errors: ExtensionError[] }> {
-	const errors: ExtensionError[] = [];
-	for (const { ext, handlers } of snapshotEventHandlers(extensionsResult.extensions, "project_trust")) {
-		// A single extension may register multiple handlers for the same event.
-		// The first project_trust handler that returns yes/no wins; undecided falls through.
-		for (const handler of handlers) {
-			try {
-				const handlerResult = (await handler(event, ctx)) as ProjectTrustEventResult;
-				if (handlerResult.trusted === "undecided") {
-					continue;
-				}
-				return { result: handlerResult, errors };
-			} catch (error) {
-				errors.push({
-					extensionPath: ext.path,
-					event: event.type,
-					error: error instanceof Error ? error.message : String(error),
-					stack: error instanceof Error ? error.stack : undefined,
-				});
-			}
-		}
-	}
-	return { errors };
 }
 
 const noOpUIContext: ExtensionUIContext = {
@@ -344,9 +278,6 @@ const noOpUIContext: ExtensionUIContext = {
 	get theme() {
 		return theme;
 	},
-	getAllThemes: () => [],
-	getTheme: () => undefined,
-	setTheme: (_theme: string | Theme) => ({ success: false, error: "UI not available" }),
 	getToolsExpanded: () => false,
 	setToolsExpanded: () => {},
 };
@@ -355,7 +286,6 @@ export class ExtensionRunner {
 	private extensions: Extension[];
 	private runtime: ExtensionRuntime;
 	private uiContext: ExtensionUIContext;
-	private mode: ExtensionMode = "print";
 	private cwd: string;
 	private sessionManager: SessionManager;
 	private modelRegistry: ModelRegistry;
@@ -363,7 +293,6 @@ export class ExtensionRunner {
 	private getModel: () => Model<any> | undefined = () => undefined;
 	private getScopedModels: () => readonly ScopedModel[] = () => [];
 	private isIdleFn: () => boolean = () => true;
-	private isProjectTrustedFn: () => boolean = () => true;
 	private getSignalFn: () => AbortSignal | undefined = () => undefined;
 	private waitForIdleFn: () => Promise<void> = async () => {};
 	private abortFn: () => void = () => {};
@@ -407,11 +336,8 @@ export class ExtensionRunner {
 			registerProvider?: (name: string, config: ProviderConfig) => void;
 			registerNativeProvider?: (provider: Provider) => void;
 			unregisterProvider?: (name: string) => void;
-			registerVirtualModel?: (definition: VirtualModelDefinition) => void;
-			unregisterVirtualModel?: (provider: string, id: string) => void;
 		},
 	): void {
-		// Copy actions into the shared runtime (all extension APIs reference this)
 		this.runtime.sendMessage = actions.sendMessage;
 		this.runtime.sendUserMessage = actions.sendUserMessage;
 		this.runtime.appendEntry = actions.appendEntry;
@@ -426,13 +352,10 @@ export class ExtensionRunner {
 		this.runtime.setModel = actions.setModel;
 		this.runtime.getThinkingLevel = actions.getThinkingLevel;
 		this.runtime.setThinkingLevel = actions.setThinkingLevel;
-		this.runtime.createContext = () => this.createContext();
 
-		// Context actions (required)
 		this.getModel = contextActions.getModel;
 		this.getScopedModels = contextActions.getScopedModels;
 		this.isIdleFn = contextActions.isIdle;
-		this.isProjectTrustedFn = contextActions.isProjectTrusted;
 		this.getSignalFn = contextActions.getSignal;
 		this.abortFn = contextActions.abort;
 		this.hasPendingMessagesFn = contextActions.hasPendingMessages;
@@ -443,7 +366,6 @@ export class ExtensionRunner {
 		this.getSystemPromptOptionsFn =
 			contextActions.getSystemPromptOptions ?? (() => normalizeBuildSystemPromptOptions({ cwd: this.cwd }));
 
-		// Flush provider registrations queued during extension loading
 		for (const { name, config, extensionPath } of this.runtime.pendingProviderRegistrations) {
 			try {
 				if (providerActions?.registerProvider) {
@@ -478,26 +400,7 @@ export class ExtensionRunner {
 			}
 		}
 		this.runtime.pendingNativeProviderRegistrations = [];
-		const registerVirtualModel = (definition: VirtualModelDefinition) => {
-			if (providerActions?.registerVirtualModel) providerActions.registerVirtualModel(definition);
-			else this.modelRegistry.registerVirtualModel(definition);
-		};
-		for (const { definition, extensionPath } of this.runtime.pendingVirtualModelRegistrations) {
-			try {
-				registerVirtualModel(definition);
-			} catch (err) {
-				this.emitError({
-					extensionPath,
-					event: "register_virtual_model",
-					error: err instanceof Error ? err.message : String(err),
-					stack: err instanceof Error ? err.stack : undefined,
-				});
-			}
-		}
-		this.runtime.pendingVirtualModelRegistrations = [];
 
-		// From this point on, provider registration/unregistration takes effect immediately
-		// without requiring a /reload.
 		this.runtime.registerProvider = (name, config) => {
 			if (providerActions?.registerProvider) {
 				providerActions.registerProvider(name, config);
@@ -518,11 +421,6 @@ export class ExtensionRunner {
 				return;
 			}
 			this.modelRegistry.unregisterProvider(name);
-		};
-		this.runtime.registerVirtualModel = registerVirtualModel;
-		this.runtime.unregisterVirtualModel = (provider, id) => {
-			if (providerActions?.unregisterVirtualModel) providerActions.unregisterVirtualModel(provider, id);
-			else this.modelRegistry.unregisterVirtualModel(provider, id);
 		};
 	}
 
@@ -545,9 +443,8 @@ export class ExtensionRunner {
 		this.reloadHandler = async () => {};
 	}
 
-	setUIContext(uiContext?: ExtensionUIContext, mode: ExtensionMode = "print"): void {
+	setUIContext(uiContext?: ExtensionUIContext): void {
 		this.uiContext = uiContext ? this.wrapUIPromptContext(uiContext) : noOpUIContext;
-		this.mode = mode;
 	}
 
 	private wrapUIPromptContext(ui: ExtensionUIContext): ExtensionUIContext {
@@ -609,7 +506,6 @@ export class ExtensionRunner {
 		return this.extensions.map((e) => e.path);
 	}
 
-	/** Get all registered tools from all extensions (first registration per name wins). */
 	getAllRegisteredTools(): RegisteredTool[] {
 		const toolsByName = new Map<string, RegisteredTool>();
 		for (const ext of this.extensions) {
@@ -622,7 +518,6 @@ export class ExtensionRunner {
 		return Array.from(toolsByName.values());
 	}
 
-	/** Get a tool definition by name. Returns undefined if not found. */
 	getToolDefinition(toolName: string): RegisteredTool["definition"] | undefined {
 		for (const ext of this.extensions) {
 			const tool = ext.tools.get(toolName);
@@ -815,10 +710,6 @@ export class ExtensionRunner {
 		return this.resolveRegisteredCommands().find((command) => command.invocationName === name);
 	}
 
-	/**
-	 * Request a graceful shutdown. Called by extension tools and event handlers.
-	 * The actual shutdown behavior is provided by the mode via bindExtensions().
-	 */
 	shutdown(): void {
 		this.shutdownHandler();
 	}
@@ -828,10 +719,6 @@ export class ExtensionRunner {
 		return this.runtime.getActiveTools();
 	}
 
-	/**
-	 * Create an ExtensionContext for use in event handlers and tool execution.
-	 * Context values are resolved at call time, so changes via bindCore/bindUI are reflected.
-	 */
 	createContext(): ExtensionContext {
 		const runner = this;
 		const getModel = this.getModel;
@@ -840,10 +727,6 @@ export class ExtensionRunner {
 			get ui() {
 				runner.assertActive();
 				return runner.uiContext;
-			},
-			get mode() {
-				runner.assertActive();
-				return runner.mode;
 			},
 			get hasUI() {
 				runner.assertActive();
@@ -877,10 +760,6 @@ export class ExtensionRunner {
 				runner.assertActive();
 				return runner.isIdleFn();
 			},
-			isProjectTrusted: () => {
-				runner.assertActive();
-				return runner.isProjectTrustedFn();
-			},
 			get signal() {
 				runner.assertActive();
 				return runner.getSignalFn();
@@ -913,9 +792,6 @@ export class ExtensionRunner {
 	}
 
 	createCommandContext(): ExtensionCommandContext {
-		// Use property descriptors instead of object spread so the guarded getters from
-		// createContext() stay lazy. A spread would eagerly read them once and freeze the
-		// old values into the returned object, bypassing stale-instance checks.
 		const context = Object.defineProperties(
 			{},
 			Object.getOwnPropertyDescriptors(this.createContext()),
@@ -1040,30 +916,6 @@ export class ExtensionRunner {
 		}
 
 		return result as RunnerEmitResult<TEvent>;
-	}
-
-	/** Returns the event's own action unless a handler overrides it; the last override wins. */
-	async emitCacheWarmingDecision(event: CacheWarmingDecisionEvent): Promise<CacheWarmingAction> {
-		const ctx = this.createContext();
-		let action = event.action;
-
-		for (const { ext, handlers } of snapshotEventHandlers(this.extensions, event.type)) {
-			for (const handler of handlers) {
-				try {
-					const result = (await handler(event, ctx)) as CacheWarmingDecisionEventResult | undefined;
-					if (result?.action !== undefined) action = result.action;
-				} catch (err) {
-					this.emitError({
-						extensionPath: ext.path,
-						event: event.type,
-						error: err instanceof Error ? err.message : String(err),
-						stack: err instanceof Error ? err.stack : undefined,
-					});
-				}
-			}
-		}
-
-		return action;
 	}
 
 	async emitMessageEnd(event: MessageEndEvent): Promise<AgentMessage | undefined> {
@@ -1208,11 +1060,6 @@ export class ExtensionRunner {
 		return undefined;
 	}
 
-	/**
-	 * Run the request-time transforms in two phases. `context` handlers see the conversation
-	 * only and Pi restores the prompt and tool state after each; `context_with_system`
-	 * handlers then see the full transcript and their output is used as returned.
-	 */
 	async emitContext(messages: AgentMessage[]): Promise<AgentMessage[]> {
 		const ctx = this.createContext();
 		let currentMessages = structuredClone(messages);
@@ -1225,7 +1072,6 @@ export class ExtensionRunner {
 					const event: ContextEvent = { type: "context", messages: visibleMessages };
 					const handlerResult = (await handler(event, ctx)) as ContextEventResult | undefined;
 
-					// Handlers may return a new list or edit event.messages in place.
 					const returned =
 						handlerResult?.messages ??
 						(sameMessages(visibleMessages, visibleSnapshot) ? undefined : visibleMessages);
@@ -1251,8 +1097,6 @@ export class ExtensionRunner {
 					const event: ContextWithSystemEvent = { type: "context_with_system", messages: currentMessages };
 					const handlerResult = (await handler(event, ctx)) as ContextEventResult | undefined;
 					currentMessages = handlerResult?.messages ?? currentMessages;
-					// Providers read the prompt and initial tools from the leading system message.
-					// Losing it is never intended; report it but honor the handler's output.
 					if (hadLeadingSystemMessage && currentMessages[0]?.role !== "system") {
 						this.emitError({
 							extensionPath: ext.path,
@@ -1313,7 +1157,6 @@ export class ExtensionRunner {
 		for (const { ext, handlers } of snapshotEventHandlers(this.extensions, "before_provider_headers")) {
 			for (const handler of handlers) {
 				try {
-					// Handlers mutate `headers` in place; the return value is ignored.
 					const event: BeforeProviderHeadersEvent = {
 						type: "before_provider_headers",
 						headers,
@@ -1395,12 +1238,10 @@ export class ExtensionRunner {
 	): Promise<{
 		skillPaths: Array<{ path: string; extensionPath: string }>;
 		promptPaths: Array<{ path: string; extensionPath: string }>;
-		themePaths: Array<{ path: string; extensionPath: string }>;
 	}> {
 		const ctx = this.createContext();
 		const skillPaths: Array<{ path: string; extensionPath: string }> = [];
 		const promptPaths: Array<{ path: string; extensionPath: string }> = [];
-		const themePaths: Array<{ path: string; extensionPath: string }> = [];
 
 		for (const { ext, handlers } of snapshotEventHandlers(this.extensions, "resources_discover")) {
 			for (const handler of handlers) {
@@ -1415,9 +1256,6 @@ export class ExtensionRunner {
 					if (result?.promptPaths?.length) {
 						promptPaths.push(...result.promptPaths.map((path) => ({ path, extensionPath: ext.path })));
 					}
-					if (result?.themePaths?.length) {
-						themePaths.push(...result.themePaths.map((path) => ({ path, extensionPath: ext.path })));
-					}
 				} catch (err) {
 					const message = err instanceof Error ? err.message : String(err);
 					const stack = err instanceof Error ? err.stack : undefined;
@@ -1431,10 +1269,9 @@ export class ExtensionRunner {
 			}
 		}
 
-		return { skillPaths, promptPaths, themePaths };
+		return { skillPaths, promptPaths };
 	}
 
-	/** Emit input event. Transforms chain, "handled" short-circuits. */
 	async emitInput(
 		text: string,
 		images: ImageContent[] | undefined,

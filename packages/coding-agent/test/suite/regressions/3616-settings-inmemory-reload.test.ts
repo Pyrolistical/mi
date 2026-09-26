@@ -24,18 +24,18 @@ describe("regression #3616: in-memory settings survive reload", () => {
 	it("preserves initial settings after direct reload", async () => {
 		const settingsManager = SettingsManager.inMemory({
 			defaultThinkingLevel: "high",
-			images: { autoResize: false },
+			images: { blockImages: true },
 			compaction: { enabled: false },
 		});
 
 		await settingsManager.reload();
 
 		expect(settingsManager.getDefaultThinkingLevel()).toBe("high");
-		expect(settingsManager.getImageAutoResize()).toBe(false);
+		expect(settingsManager.getBlockImages()).toBe(true);
 		expect(settingsManager.getCompactionEnabled()).toBe(false);
 		expect(settingsManager.getGlobalSettings()).toEqual({
 			defaultThinkingLevel: "high",
-			images: { autoResize: false },
+			images: { blockImages: true },
 			compaction: { enabled: false },
 		});
 	});
@@ -43,7 +43,7 @@ describe("regression #3616: in-memory settings survive reload", () => {
 	it("preserves initial settings when DefaultResourceLoader reloads", async () => {
 		const settingsManager = SettingsManager.inMemory({
 			defaultThinkingLevel: "high",
-			images: { autoResize: false },
+			images: { blockImages: true },
 			compaction: { enabled: false },
 		});
 		const resourceLoader = new DefaultResourceLoader({
@@ -53,34 +53,33 @@ describe("regression #3616: in-memory settings survive reload", () => {
 			noExtensions: true,
 			noSkills: true,
 			noPromptTemplates: true,
-			noThemes: true,
 			noContextFiles: true,
 		});
 
 		await resourceLoader.reload();
 
 		expect(settingsManager.getDefaultThinkingLevel()).toBe("high");
-		expect(settingsManager.getImageAutoResize()).toBe(false);
+		expect(settingsManager.getBlockImages()).toBe(true);
 		expect(settingsManager.getCompactionEnabled()).toBe(false);
 	});
 
 	it("preserves initial settings after an unrelated setter, flush, and reload", async () => {
 		const settingsManager = SettingsManager.inMemory({
-			images: { autoResize: false },
+			images: { blockImages: true },
 			compaction: { enabled: false },
 		});
 
-		settingsManager.setTheme("dark");
+		settingsManager.setDefaultProvider("openai");
 		await settingsManager.flush();
 		await settingsManager.reload();
 
-		expect(settingsManager.getTheme()).toBe("dark");
-		expect(settingsManager.getImageAutoResize()).toBe(false);
+		expect(settingsManager.getDefaultProvider()).toBe("openai");
+		expect(settingsManager.getBlockImages()).toBe(true);
 		expect(settingsManager.getCompactionEnabled()).toBe(false);
 		expect(settingsManager.getGlobalSettings()).toEqual({
-			images: { autoResize: false },
+			images: { blockImages: true },
 			compaction: { enabled: false },
-			theme: "dark",
+			defaultProvider: "openai",
 		});
 	});
 });

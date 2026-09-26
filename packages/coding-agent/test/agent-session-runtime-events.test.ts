@@ -75,7 +75,6 @@ describe("AgentSessionRuntime session lifecycle events", () => {
 				extensionFactories: [extensionFactory],
 				noSkills: true,
 				noPromptTemplates: true,
-				noThemes: true,
 			},
 		};
 		const createRuntime: CreateAgentSessionRuntimeFactory = async ({ cwd, sessionManager, sessionStartEvent }) => {

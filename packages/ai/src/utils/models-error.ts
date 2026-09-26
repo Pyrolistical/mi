@@ -12,7 +12,6 @@ export class ModelsError extends Error {
 	}
 }
 
-/** Callers surface `error.message` only, so keep the underlying reason in it. */
 function withCauseDetail(message: string, cause: unknown): string {
 	if (cause === undefined || cause === null) return message;
 	const detail = formatThrownValue(cause).trim();

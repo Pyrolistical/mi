@@ -18,7 +18,7 @@ describe("RuntimeCredentials", () => {
 
 	test("enumeration merges overrides without exposing keys", async () => {
 		const storage = AuthStorage.inMemory({
-			anthropic: { type: "oauth", access: "access", refresh: "refresh", expires: Date.now() + 60_000 },
+			anthropic: { type: "api_key", key: "stored-key" },
 		});
 		const credentials = new RuntimeCredentials(storage);
 		credentials.setRuntimeApiKey("anthropic", "runtime-key");

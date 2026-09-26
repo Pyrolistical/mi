@@ -8,7 +8,6 @@ import {
 	getCwdRelativePath,
 	isLocalPath,
 	normalizePath,
-	normalizeWindowsShellPath,
 	resolvePath,
 } from "../src/utils/paths.ts";
 
@@ -62,9 +61,7 @@ describe("canonicalizePath", () => {
 		const dir = createTempDir();
 		const target = join(dir, "target.txt");
 		const link = join(dir, "link.txt");
-		// Create a symlink whose target does not exist.
 		symlinkSync(target, link);
-		// realpathSync would throw, so canonicalizePath returns the link path.
 		expect(canonicalizePath(link)).toBe(link);
 	});
 });
@@ -107,53 +104,10 @@ describe("resolvePath", () => {
 	});
 
 	it("preserves POSIX absolute paths with literal percent sequences", () => {
-		if (process.platform === "win32") {
-			return;
-		}
-
 		const dir = createTempDir();
 		for (const filePath of [join(dir, "report%2026.md"), join(dir, "foo%2Fbar"), join(dir, "malformed%A.md")]) {
 			expect(resolvePath(filePath, join(dir, "base"))).toBe(resolve(filePath));
 		}
-	});
-
-	it("does not treat Windows file URL pathname strings as native paths", () => {
-		if (process.platform !== "win32") {
-			return;
-		}
-
-		const dir = createTempDir();
-		const filePath = join(dir, "dir", "SKILL.md");
-		const pathname = pathToFileURL(filePath).pathname;
-		expect(pathname).toMatch(/^\/[A-Za-z]:/);
-		expect(resolvePath(pathname, "E:\\project")).toBe(resolve(pathname));
-	});
-});
-
-describe("normalizeWindowsShellPath", () => {
-	it("converts Git Bash, MSYS, Cygwin, and WSL drive paths", () => {
-		expect(normalizeWindowsShellPath("/c/Users/example/project")).toBe("C:\\Users\\example\\project");
-		expect(normalizeWindowsShellPath("/cygdrive/d/work")).toBe("D:\\work");
-		expect(normalizeWindowsShellPath("/mnt/e/source")).toBe("E:\\source");
-		expect(normalizeWindowsShellPath("/c")).toBe("C:\\");
-	});
-
-	it("leaves other path forms unchanged", () => {
-		for (const path of [
-			"C:/Users/example",
-			"C:\\Users\\example",
-			"//server/share/file",
-			"/c/Users\\example",
-			"relative/file",
-			"/tmp/file",
-		]) {
-			expect(normalizeWindowsShellPath(path)).toBe(path);
-		}
-	});
-
-	it.runIf(process.platform === "win32")("is applied by normal path handling on Windows", () => {
-		expect(normalizePath("/c/Users/example")).toBe("C:\\Users\\example");
-		expect(resolvePath("/mnt/c/Users/example", "D:\\work")).toBe(resolve("C:/Users/example"));
 	});
 });
 

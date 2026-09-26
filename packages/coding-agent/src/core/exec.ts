@@ -1,25 +1,12 @@
-/**
- * Shared command execution utilities for extensions and custom tools.
- */
-
 import { spawn } from "node:child_process";
 import { waitForChildProcess } from "../utils/child-process.ts";
 
-/**
- * Options for executing shell commands.
- */
 export interface ExecOptions {
-	/** AbortSignal to cancel the command */
 	signal?: AbortSignal;
-	/** Timeout in milliseconds */
 	timeout?: number;
-	/** Working directory */
 	cwd?: string;
 }
 
-/**
- * Result of executing a shell command.
- */
 export interface ExecResult {
 	stdout: string;
 	stderr: string;
@@ -27,10 +14,6 @@ export interface ExecResult {
 	killed: boolean;
 }
 
-/**
- * Execute a shell command and return stdout/stderr/code.
- * Supports timeout and abort signal.
- */
 export async function execCommand(
 	command: string,
 	args: string[],
@@ -53,7 +36,6 @@ export async function execCommand(
 			if (!killed) {
 				killed = true;
 				proc.kill("SIGTERM");
-				// Force kill after 5 seconds if SIGTERM doesn't work
 				setTimeout(() => {
 					if (!proc.killed) {
 						proc.kill("SIGKILL");
@@ -62,7 +44,6 @@ export async function execCommand(
 			}
 		};
 
-		// Handle abort signal
 		if (options?.signal) {
 			if (options.signal.aborted) {
 				killProcess();
@@ -71,7 +52,6 @@ export async function execCommand(
 			}
 		}
 
-		// Handle timeout
 		if (options?.timeout && options.timeout > 0) {
 			timeoutId = setTimeout(() => {
 				killProcess();
@@ -86,8 +66,6 @@ export async function execCommand(
 			stderr += data.toString();
 		});
 
-		// Wait for process termination without hanging on inherited stdio handles
-		// held open by detached descendants.
 		waitForChildProcess(proc)
 			.then((code) => {
 				if (timeoutId) clearTimeout(timeoutId);

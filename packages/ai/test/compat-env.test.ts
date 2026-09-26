@@ -5,10 +5,10 @@ import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
 
 const context: Context = { messages: [{ role: "user", content: "hi", timestamp: Date.now() }] };
 
-const model: Model<"openai-responses"> = {
+const model: Model<"test-api"> = {
 	id: "test-model",
 	name: "Test Model",
-	api: "openai-responses",
+	api: "test-api",
 	provider: "custom-openai",
 	baseUrl: "https://example.test/v1",
 	reasoning: false,
@@ -46,7 +46,7 @@ describe("compat legacy API fallback", () => {
 	it("dispatches unknown providers through the legacy API registry", async () => {
 		let capturedApiKey: string | undefined;
 		registerApiProvider({
-			api: "openai-responses",
+			api: "test-api",
 			stream: (_model, _context, options) => {
 				capturedApiKey = options?.apiKey;
 				const stream = new AssistantMessageEventStream();

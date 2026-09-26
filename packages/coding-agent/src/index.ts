@@ -1,15 +1,9 @@
-// Core session management
-
 export { type Args, parseArgs } from "./cli/args.ts";
 
-// Config paths
 export {
 	CONFIG_DIR_NAME,
 	getAgentDir,
-	getDocsPath,
-	getExamplesPath,
 	getPackageDir,
-	getReadmePath,
 	VERSION,
 } from "./config.ts";
 export {
@@ -24,8 +18,6 @@ export {
 	type SessionStats,
 } from "./core/agent-session.ts";
 export { readStoredCredential } from "./core/auth-storage.ts";
-export type { CacheWarmingDecision, CacheWarmingStatus } from "./core/cache-warmer.ts";
-// Compaction
 export {
 	type BranchPreparation,
 	type BranchSummaryResult,
@@ -50,7 +42,6 @@ export {
 	shouldCompact,
 } from "./core/compaction/index.ts";
 export { createEventBus, type EventBus, type EventBusController } from "./core/event-bus.ts";
-// Extension system
 export type {
 	AfterProviderResponseEvent,
 	AgentActivityOutcome,
@@ -73,8 +64,6 @@ export type {
 	BoundaryResult,
 	BoundaryState,
 	BuildSystemPromptOptions,
-	CacheWarmingDecisionEvent,
-	CacheWarmingDecisionEventResult,
 	CompactionEntryDraft,
 	CompactOptions,
 	ContextEditEntryDraft,
@@ -106,17 +95,13 @@ export type {
 	ExtensionShortcut,
 	ExtensionUIContext,
 	ExtensionUIDialogOptions,
-	ExtensionVirtualModel,
 	ExtensionWidgetOptions,
-	FindToolCallEvent,
-	GrepToolCallEvent,
 	InlineExtension,
 	InputEvent,
 	InputEventResult,
 	InputSource,
 	KeybindingsManager,
 	LoadExtensionsResult,
-	LsToolCallEvent,
 	MarkdownTransformContext,
 	MarkdownTransformer,
 	MessageEndEvent,
@@ -128,12 +113,6 @@ export type {
 	ModelSelectEvent,
 	ModelSelectSource,
 	NormalizedBuildSystemPromptOptions,
-	PowerShellToolCallEvent,
-	ProjectTrustContext,
-	ProjectTrustEvent,
-	ProjectTrustEventDecision,
-	ProjectTrustEventResult,
-	ProjectTrustHandler,
 	ProviderConfig,
 	ProviderModelConfig,
 	ProviderStreamEvent,
@@ -193,17 +172,12 @@ export {
 	ExtensionRunner,
 	isBashToolResult,
 	isEditToolResult,
-	isFindToolResult,
-	isGrepToolResult,
-	isLsToolResult,
-	isPowerShellToolResult,
 	isReadToolResult,
 	isToolCallEventType,
 	isWriteToolResult,
 	wrapRegisteredTool,
 	wrapRegisteredTools,
 } from "./core/extensions/index.ts";
-// Footer data provider (git branch + extension statuses - data not otherwise available to extensions)
 export type { ReadonlyFooterDataProvider } from "./core/footer-data-provider.ts";
 export { convertToLlm } from "./core/messages.ts";
 export { ModelRegistry } from "./core/model-registry.ts";
@@ -222,18 +196,10 @@ export {
 	ModelRuntime,
 	type ModelRuntimeAuthOverrides,
 } from "./core/model-runtime.ts";
-export type {
-	PackageManager,
-	PathMetadata,
-	ProgressCallback,
-	ProgressEvent,
-	ResolvedPaths,
-	ResolvedResource,
-} from "./core/package-manager.ts";
-export { DefaultPackageManager } from "./core/package-manager.ts";
+export type { PathMetadata, ResolvedPaths, ResolvedResource } from "./core/resource-resolver.ts";
+export { ResourceResolver } from "./core/resource-resolver.ts";
 export type { ResourceCollision, ResourceDiagnostic, ResourceLoader } from "./core/resource-loader.ts";
 export { DefaultResourceLoader, loadProjectContextFiles } from "./core/resource-loader.ts";
-// SDK for programmatic usage
 export {
 	AgentSessionRuntime,
 	type AgentSessionRuntimeDiagnostic,
@@ -244,20 +210,13 @@ export {
 	type CreateAgentSessionRuntimeFactory,
 	type CreateAgentSessionRuntimeResult,
 	type CreateAgentSessionServicesOptions,
-	// Factory
 	createAgentSession,
 	createAgentSessionFromServices,
 	createAgentSessionRuntime,
 	createAgentSessionServices,
 	createBashTool,
-	// Tool factories (for custom cwd)
 	createCodingTools,
 	createEditTool,
-	createFindTool,
-	createGrepTool,
-	createLsTool,
-	createPowerShellTool,
-	createReadOnlyTools,
 	createReadTool,
 	createWriteTool,
 	type PromptTemplate,
@@ -294,19 +253,12 @@ export {
 	type ThinkingLevelChangeEntry,
 } from "./core/session-manager.ts";
 export {
-	type CacheWarmingMode,
 	type CompactionModelOverride,
 	type CompactionSettings,
-	type DefaultProjectTrust,
-	type FullscreenExitOutput,
 	type ImageSettings,
-	type PackageSource,
 	type RetrySettings,
 	SettingsManager,
-	type SettingsManagerCreateOptions,
-	type TuiMode,
 } from "./core/settings-manager.ts";
-// Skills
 export {
 	formatSkillsForPrompt,
 	type LoadSkillsFromDirOptions,
@@ -317,8 +269,6 @@ export {
 	type SkillFrontmatter,
 } from "./core/skills.ts";
 export { createSyntheticSourceInfo } from "./core/source-info.ts";
-export { type EditDiffResult, generateDiffString, generateUnifiedPatch } from "./core/tools/edit-diff.ts";
-// Tools
 export {
 	type BashOperations,
 	type BashSpawnContext,
@@ -328,39 +278,15 @@ export {
 	type BashToolOptions,
 	createBashToolDefinition,
 	createEditToolDefinition,
-	createFindToolDefinition,
-	createGrepToolDefinition,
 	createLocalBashOperations,
-	createLocalPowerShellOperations,
-	createLsToolDefinition,
-	createPowerShellToolDefinition,
 	createReadToolDefinition,
 	createWriteToolDefinition,
 	DEFAULT_MAX_BYTES,
 	DEFAULT_MAX_LINES,
 	type EditOperations,
-	type EditToolDetails,
 	type EditToolInput,
 	type EditToolOptions,
-	type FindOperations,
-	type FindToolDetails,
-	type FindToolInput,
-	type FindToolOptions,
 	formatSize,
-	type GrepOperations,
-	type GrepToolDetails,
-	type GrepToolInput,
-	type GrepToolOptions,
-	type LsOperations,
-	type LsToolDetails,
-	type LsToolInput,
-	type LsToolOptions,
-	type PowerShellOperations,
-	type PowerShellSpawnContext,
-	type PowerShellSpawnHook,
-	type PowerShellToolDetails,
-	type PowerShellToolInput,
-	type PowerShellToolOptions,
 	type ReadOperations,
 	type ReadToolDetails,
 	type ReadToolInput,
@@ -369,51 +295,15 @@ export {
 	type TruncationOptions,
 	type TruncationResult,
 	truncateHead,
-	truncateLine,
 	truncateTail,
 	type WriteOperations,
 	type WriteToolInput,
 	type WriteToolOptions,
 	withFileMutationQueue,
 } from "./core/tools/index.ts";
-export {
-	hasTrustRequiringProjectResources,
-	type ProjectTrustDecision,
-	ProjectTrustStore,
-	type ProjectTrustStoreEntry,
-	type ProjectTrustUpdate,
-} from "./core/trust-manager.ts";
-export {
-	type ModelRoute,
-	type ModelRouteReason,
-	type ModelRouteRequest,
-	VIRTUAL_MODEL_STATE_ENTRY,
-	type VirtualModelDefinition,
-	type VirtualModelStateData,
-} from "./core/virtual-models.ts";
-// Main entry point
 export { type MainOptions, main } from "./main.ts";
-// Run modes for programmatic SDK usage
+export { InteractiveMode, type InteractiveModeOptions } from "./modes/index.ts";
 export {
-	InteractiveMode,
-	type InteractiveModeOptions,
-	type JsonAgentSessionEvent,
-	type ModelInfo,
-	type PrintModeOptions,
-	RpcClient,
-	type RpcClientOptions,
-	type RpcCommand,
-	type RpcEventListener,
-	type RpcExtensionUIRequest,
-	type RpcExtensionUIResponse,
-	type RpcResponse,
-	type RpcSessionState,
-	runPrintMode,
-	runRpcMode,
-} from "./modes/index.ts";
-// UI components for extensions
-export {
-	ArminComponent,
 	AssistantMessageComponent,
 	BashExecutionComponent,
 	BorderedLoader,
@@ -429,19 +319,14 @@ export {
 	FooterComponent,
 	keyHint,
 	keyText,
-	LoginDialogComponent,
 	ModelSelectorComponent,
-	OAuthSelectorComponent,
-	type RenderDiffOptions,
 	rawKeyHint,
-	renderDiff,
 	SessionSelectorComponent,
 	type SettingsCallbacks,
 	type SettingsConfig,
 	SettingsSelectorComponent,
 	ShowImagesSelectorComponent,
 	SkillInvocationMessageComponent,
-	ThemeSelectorComponent,
 	ThinkingSelectorComponent,
 	ToolExecutionComponent,
 	type ToolExecutionOptions,
@@ -451,26 +336,14 @@ export {
 	UserMessageSelectorComponent,
 	type VisualTruncateResult,
 } from "./modes/interactive/components/index.ts";
-// Theme utilities for custom tools and extensions
 export {
-	getLanguageFromPath,
 	getMarkdownTheme,
 	getSelectListTheme,
 	getSettingsListTheme,
-	highlightCode,
-	initTheme,
 	Theme,
-	type ThemeAppearance,
-	type ThemeBg,
 	type ThemeColor,
-	type ThemeStyle,
-	type ThemeToken,
 } from "./modes/interactive/theme/theme.ts";
-// Clipboard utilities
 export { copyToClipboard } from "./utils/clipboard.ts";
 export { parseFrontmatter, stripFrontmatter } from "./utils/frontmatter.ts";
-export { convertToPng } from "./utils/image-convert.ts";
-export { formatDimensionNote, type ResizedImage, resizeImage } from "./utils/image-resize.ts";
 export { detectSupportedImageMimeTypeFromFile } from "./utils/mime.ts";
-// Shell utilities
-export { getPowerShellConfig, getShellConfig } from "./utils/shell.ts";
+export { getShellConfig } from "./utils/shell.ts";

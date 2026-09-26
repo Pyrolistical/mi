@@ -6,22 +6,15 @@ import { resolvePath } from "../utils/paths.ts";
 import type { ResourceDiagnostic } from "./diagnostics.ts";
 import { createSyntheticSourceInfo, type SourceInfo } from "./source-info.ts";
 
-/**
- * Represents a prompt template loaded from a markdown file
- */
 export interface PromptTemplate {
 	name: string;
 	description: string;
 	argumentHint?: string;
 	content: string;
 	sourceInfo: SourceInfo;
-	filePath: string; // Absolute path to the template file
+	filePath: string;
 }
 
-/**
- * Parse command arguments respecting quoted strings (bash-style)
- * Returns array of arguments
- */
 export function parseCommandArgs(argsString: string): string[] {
 	const args: string[] = [];
 	let current = "";
@@ -55,19 +48,6 @@ export function parseCommandArgs(argsString: string): string[] {
 	return args;
 }
 
-/**
- * Substitute argument placeholders in template content
- * Supports:
- * - $1, $2, ... for positional args
- * - $@ and $ARGUMENTS for all args
- * - ${N:-default} for positional arg N with default when missing/empty
- * - ${@:-default} and ${ARGUMENTS:-default} for all args with a default when empty
- * - ${@:N} for args from Nth onwards (bash-style slicing)
- * - ${@:N:L} for L args starting from Nth
- *
- * Note: Replacement happens on the template string only. Argument and default values
- * containing patterns like $1, $@, or $ARGUMENTS are NOT recursively substituted.
- */
 export function substituteArgs(content: string, args: string[]): string {
 	const allArgs = args.join(" ");
 
@@ -81,8 +61,7 @@ export function substituteArgs(content: string, args: string[]): string {
 			}
 
 			if (sliceStart) {
-				let start = parseInt(sliceStart, 10) - 1; // Convert to 0-indexed (user provides 1-indexed)
-				// Treat 0 as 1 (bash convention: args start at 1)
+				let start = parseInt(sliceStart, 10) - 1;
 				if (start < 0) start = 0;
 
 				if (sliceLength) {
@@ -128,12 +107,10 @@ function loadTemplateFromFile(
 
 	const name = basename(filePath).replace(/\.md$/, "");
 
-	// Get description from frontmatter or first non-empty line
 	let description = typeof frontmatter.description === "string" ? frontmatter.description : "";
 	if (!description) {
 		const firstLine = body.split("\n").find((line) => line.trim());
 		if (firstLine) {
-			// Truncate if too long
 			description = firstLine.slice(0, 60);
 			if (firstLine.length > 60) description += "...";
 		}
@@ -153,9 +130,6 @@ function loadTemplateFromFile(
 	};
 }
 
-/**
- * Scan a directory for .md files (non-recursive) and load them as prompt templates.
- */
 function loadTemplatesFromDir(dir: string, getSourceInfo: (filePath: string) => SourceInfo): LoadPromptTemplatesResult {
 	const templates: PromptTemplate[] = [];
 	const diagnostics: ResourceDiagnostic[] = [];
@@ -170,14 +144,12 @@ function loadTemplatesFromDir(dir: string, getSourceInfo: (filePath: string) => 
 		for (const entry of entries) {
 			const fullPath = join(dir, entry.name);
 
-			// For symlinks, check if they point to a file
 			let isFile = entry.isFile();
 			if (entry.isSymbolicLink()) {
 				try {
 					const stats = statSync(fullPath);
 					isFile = stats.isFile();
 				} catch {
-					// Broken symlink, skip it
 					continue;
 				}
 			}
@@ -198,13 +170,9 @@ function loadTemplatesFromDir(dir: string, getSourceInfo: (filePath: string) => 
 }
 
 export interface LoadPromptTemplatesOptions {
-	/** Working directory for project-local templates. */
 	cwd: string;
-	/** Agent config directory for global templates. */
 	agentDir: string;
-	/** Explicit prompt template paths (files or directories). */
 	promptPaths: string[];
-	/** Include default prompt directories. */
 	includeDefaults: boolean;
 }
 
@@ -213,12 +181,6 @@ export interface LoadPromptTemplatesResult {
 	diagnostics: ResourceDiagnostic[];
 }
 
-/**
- * Load all prompt templates from:
- * 1. Global: agentDir/prompts/
- * 2. Project: cwd/{CONFIG_DIR_NAME}/prompts/
- * 3. Explicit prompt paths
- */
 export function loadPromptTemplates(options: LoadPromptTemplatesOptions): LoadPromptTemplatesResult {
 	const resolvedCwd = resolvePath(options.cwd);
 	const resolvedAgentDir = resolvePath(options.agentDir);
@@ -270,7 +232,6 @@ export function loadPromptTemplates(options: LoadPromptTemplatesOptions): LoadPr
 		addResult(loadTemplatesFromDir(projectPromptsDir, getSourceInfo));
 	}
 
-	// 3. Load explicit prompt paths
 	for (const rawPath of promptPaths) {
 		const resolvedPath = resolvePath(rawPath, resolvedCwd, { trim: true });
 		if (!existsSync(resolvedPath)) {
@@ -297,10 +258,6 @@ export function loadPromptTemplates(options: LoadPromptTemplatesOptions): LoadPr
 	return { templates, diagnostics };
 }
 
-/**
- * Expand a prompt template if it matches a template name.
- * Returns the expanded content or the original text if not a template.
- */
 export function expandPromptTemplate(text: string, templates: PromptTemplate[]): string {
 	if (!text.startsWith("/")) return text;
 

@@ -34,7 +34,6 @@ describe("issue #7193 extension event-bus lifecycle", () => {
 			getExtensions: () => extensionsResult,
 			getSkills: () => ({ skills: [], diagnostics: [] }),
 			getPrompts: () => ({ prompts: [], diagnostics: [] }),
-			getThemes: () => ({ themes: [], diagnostics: [] }),
 			getAgentsFiles: () => ({ agentsFiles: [] }),
 			getSystemPrompt: () => undefined,
 			getSystemPromptSource: () => undefined,

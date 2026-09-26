@@ -33,33 +33,6 @@ describe("parseArgs", () => {
 		});
 	});
 
-	describe("--print flag", () => {
-		test("parses --print flag", () => {
-			const result = parseArgs(["--print"]);
-			expect(result.print).toBe(true);
-		});
-
-		test("parses -p shorthand", () => {
-			const result = parseArgs(["-p"]);
-			expect(result.print).toBe(true);
-		});
-
-		test("parses prompt after -p even when it starts with YAML frontmatter", () => {
-			const prompt = "---\ntitle: hello\n---\nSay hi.";
-			const result = parseArgs(["-p", prompt]);
-			expect(result.print).toBe(true);
-			expect(result.messages).toEqual([prompt]);
-			expect(result.unknownFlags.size).toBe(0);
-		});
-
-		test("does not consume options after -p as prompts", () => {
-			const result = parseArgs(["-p", "--provider", "openai", "Say hi."]);
-			expect(result.print).toBe(true);
-			expect(result.provider).toBe("openai");
-			expect(result.messages).toEqual(["Say hi."]);
-		});
-	});
-
 	describe("--continue flag", () => {
 		test("parses --continue flag", () => {
 			const result = parseArgs(["--continue"]);
@@ -131,11 +104,6 @@ describe("parseArgs", () => {
 			expect(result.messages).toEqual([]);
 		});
 
-		test("parses --export", () => {
-			const result = parseArgs(["--export", "session.jsonl"]);
-			expect(result.export).toBe("session.jsonl");
-		});
-
 		test("parses --thinking", () => {
 			const result = parseArgs(["--thinking", "high"]);
 			expect(result.thinking).toBe("high");
@@ -144,48 +112,6 @@ describe("parseArgs", () => {
 		test("parses --models as comma-separated list", () => {
 			const result = parseArgs(["--models", "gpt-4o,claude-sonnet,gemini-pro"]);
 			expect(result.models).toEqual(["gpt-4o", "claude-sonnet", "gemini-pro"]);
-		});
-	});
-
-	// Issue #9045
-	describe("--mode flag", () => {
-		test.each(["text", "json", "rpc"] as const)("parses --mode %s", (mode) => {
-			const result = parseArgs(["--mode", mode]);
-			expect(result.mode).toBe(mode);
-			expect(result.diagnostics).toEqual([]);
-		});
-
-		test.each(["yaml", ""])("rejects invalid --mode value %j", (mode) => {
-			const result = parseArgs(["--mode", mode, "--version"]);
-			expect(result.mode).toBeUndefined();
-			expect(result.version).toBe(true);
-			expect(result.messages).toEqual([]);
-			expect(result.unknownFlags.size).toBe(0);
-			expect(result.diagnostics).toEqual([
-				{ type: "error", message: `Invalid mode "${mode}". Valid values: text, json, rpc` },
-			]);
-		});
-
-		test("reports a missing --mode value", () => {
-			const result = parseArgs(["--mode"]);
-			expect(result.mode).toBeUndefined();
-			expect(result.unknownFlags.size).toBe(0);
-			expect(result.diagnostics).toEqual([{ type: "error", message: "--mode requires text, json, or rpc" }]);
-		});
-
-		test("does not consume another option as a --mode value", () => {
-			const result = parseArgs(["--mode", "--version"]);
-			expect(result.mode).toBeUndefined();
-			expect(result.version).toBe(true);
-			expect(result.unknownFlags.size).toBe(0);
-			expect(result.diagnostics).toEqual([{ type: "error", message: "--mode requires text, json, or rpc" }]);
-		});
-
-		test("reports an invalid --mode value after a valid one", () => {
-			const result = parseArgs(["--mode", "json", "--mode", "yaml"]);
-			expect(result.diagnostics).toEqual([
-				{ type: "error", message: 'Invalid mode "yaml". Valid values: text, json, rpc' },
-			]);
 		});
 	});
 
@@ -216,9 +142,8 @@ describe("parseArgs", () => {
 		});
 
 		test("works alongside other flags", () => {
-			const result = parseArgs(["--name", "named-run", "--print", "--model", "gpt-4o", "hello"]);
+			const result = parseArgs(["--name", "named-run", "--model", "gpt-4o", "hello"]);
 			expect(result.name).toBe("named-run");
-			expect(result.print).toBe(true);
 			expect(result.model).toBe("gpt-4o");
 			expect(result.messages).toEqual(["hello"]);
 		});
@@ -300,32 +225,6 @@ describe("parseArgs", () => {
 		});
 	});
 
-	describe("--theme flag", () => {
-		test("parses single --theme", () => {
-			const result = parseArgs(["--theme", "./theme.json"]);
-			expect(result.themes).toEqual(["./theme.json"]);
-		});
-
-		test("parses multiple --theme flags", () => {
-			const result = parseArgs(["--theme", "./dark.json", "--theme", "./light.json"]);
-			expect(result.themes).toEqual(["./dark.json", "./light.json"]);
-		});
-	});
-
-	describe("--use-theme flag", () => {
-		test("parses --use-theme", () => {
-			const result = parseArgs(["--use-theme", "light"]);
-			expect(result.useTheme).toBe("light");
-		});
-
-		test("reports when the theme name value is missing", () => {
-			const result = parseArgs(["--use-theme", "--print"]);
-			expect(result.useTheme).toBeUndefined();
-			expect(result.print).toBe(true);
-			expect(result.diagnostics).toEqual([{ type: "error", message: "--use-theme requires a theme name" }]);
-		});
-	});
-
 	describe("--no-skills flag", () => {
 		test("parses --no-skills flag", () => {
 			const result = parseArgs(["--no-skills"]);
@@ -337,13 +236,6 @@ describe("parseArgs", () => {
 		test("parses --no-prompt-templates flag", () => {
 			const result = parseArgs(["--no-prompt-templates"]);
 			expect(result.noPromptTemplates).toBe(true);
-		});
-	});
-
-	describe("--no-themes flag", () => {
-		test("parses --no-themes flag", () => {
-			const result = parseArgs(["--no-themes"]);
-			expect(result.noThemes).toBe(true);
 		});
 	});
 
@@ -359,28 +251,6 @@ describe("parseArgs", () => {
 		});
 	});
 
-	describe("project approval flags", () => {
-		test("parses --approve", () => {
-			const result = parseArgs(["--approve"]);
-			expect(result.projectTrustOverride).toBe(true);
-		});
-
-		test("parses -a shorthand", () => {
-			const result = parseArgs(["-a"]);
-			expect(result.projectTrustOverride).toBe(true);
-		});
-
-		test("parses --no-approve", () => {
-			const result = parseArgs(["--no-approve"]);
-			expect(result.projectTrustOverride).toBe(false);
-		});
-
-		test("parses -na shorthand", () => {
-			const result = parseArgs(["-na"]);
-			expect(result.projectTrustOverride).toBe(false);
-		});
-	});
-
 	describe("--verbose flag", () => {
 		test("parses --verbose flag", () => {
 			const result = parseArgs(["--verbose"]);
@@ -392,31 +262,6 @@ describe("parseArgs", () => {
 		test("parses --offline flag", () => {
 			const result = parseArgs(["--offline"]);
 			expect(result.offline).toBe(true);
-		});
-	});
-
-	describe("--tui-mode flag", () => {
-		test.each(["regular", "fullscreen"] as const)("parses %s mode", (mode) => {
-			const result = parseArgs(["--tui-mode", mode]);
-			expect(result.tuiMode).toBe(mode);
-		});
-
-		test("rejects invalid modes", () => {
-			const result = parseArgs(["--tui-mode", "other"]);
-			expect(result.diagnostics).toEqual([
-				{ type: "error", message: 'Invalid TUI mode "other". Valid values: regular, fullscreen' },
-			]);
-		});
-
-		test("requires a mode", () => {
-			const result = parseArgs(["--tui-mode"]);
-			expect(result.diagnostics).toEqual([{ type: "error", message: "--tui-mode requires regular or fullscreen" }]);
-		});
-
-		test("does not recognize the old --ui-mode flag", () => {
-			const result = parseArgs(["--ui-mode", "fullscreen"]);
-			expect(result.tuiMode).toBeUndefined();
-			expect(result.unknownFlags.get("ui-mode")).toBe("fullscreen");
 		});
 	});
 
@@ -515,7 +360,6 @@ describe("parseArgs", () => {
 				"anthropic",
 				"--model",
 				"claude-sonnet",
-				"--print",
 				"--thinking",
 				"high",
 				"@prompt.md",
@@ -523,7 +367,6 @@ describe("parseArgs", () => {
 			]);
 			expect(result.provider).toBe("anthropic");
 			expect(result.model).toBe("claude-sonnet");
-			expect(result.print).toBe(true);
 			expect(result.thinking).toBe("high");
 			expect(result.fileArgs).toEqual(["prompt.md"]);
 			expect(result.messages).toEqual(["Do the task"]);

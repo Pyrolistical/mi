@@ -1,8 +1,3 @@
-/**
- * Generic selector component for extensions.
- * Displays a list of string options with keyboard navigation.
- */
-
 import { Container, getKeybindings, Spacer, Text, type TUI } from "@earendil-works/pi-tui";
 import { theme } from "../theme/theme.ts";
 import { CountdownTimer } from "./countdown-timer.ts";
@@ -45,7 +40,7 @@ export class ExtensionSelectorComponent extends Container {
 		this.addChild(new DynamicBorder());
 		this.addChild(new Spacer(1));
 
-		this.titleText = new Text(theme.fg("accent", theme.bold(title)), 1, 0);
+		this.titleText = new Text(theme.fg("accent", title), 1, 0);
 		this.addChild(this.titleText);
 		if (opts?.description) {
 			this.addChild(new Spacer(1));
@@ -57,7 +52,7 @@ export class ExtensionSelectorComponent extends Container {
 			this.countdown = new CountdownTimer(
 				opts.timeout,
 				opts.tui,
-				(s) => this.titleText.setText(theme.fg("accent", theme.bold(`${this.baseTitle} (${s}s)`))),
+				(s) => this.titleText.setText(theme.fg("accent", `${this.baseTitle} (${s}s)`)),
 				() => this.onCancelCallback(),
 			);
 		}

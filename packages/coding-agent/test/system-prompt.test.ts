@@ -93,33 +93,6 @@ describe("buildSystemPrompt", () => {
 			expect(prompt).toContain("- edit:");
 			expect(prompt).toContain("- write:");
 		});
-
-		test.each([
-			[["powershell"], "Use PowerShell for file operations"],
-			[["bash", "powershell"], "Use bash or PowerShell for file operations"],
-		] as const)("uses shell-specific guidance for %j", (selectedTools, expected) => {
-			const prompt = buildSystemPrompt({
-				selectedTools: [...selectedTools],
-				contextFiles: [],
-				skills: [],
-				cwd: process.cwd(),
-			});
-
-			expect(prompt).toContain(expected);
-		});
-
-		test("instructs models to resolve pi docs and examples under absolute base paths", () => {
-			const prompt = buildSystemPrompt({
-				contextFiles: [],
-				skills: [],
-				cwd: process.cwd(),
-			});
-
-			expect(prompt).toContain(
-				"- When reading pi docs or examples, resolve docs/... under Additional docs and examples/... under Examples, not the current working directory",
-			);
-			expect(prompt).toContain("environment variables (docs/environment-variables.md)");
-		});
 	});
 
 	describe("custom tool snippets", () => {

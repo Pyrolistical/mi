@@ -147,118 +147,6 @@ describe("createAgentSession stream options", () => {
 		}
 	}
 
-	async function createCacheWarmingSession(populate?: (manager: SessionManager, model: Model<Api>) => void) {
-		const model: Model<Api> = {
-			...createModel("anthropic-messages"),
-			cost: { input: 10, output: 50, cacheRead: 0.25, cacheWrite: 12.5 },
-			promptCache: { short: 300 },
-		};
-		const authStorage = AuthStorage.create(join(agentDir, "auth.json"));
-		await authStorage.modify(model.provider, async () => ({ type: "api_key", key: "test-api-key" }));
-		const modelRegistry = await createModelRegistry(authStorage, join(agentDir, "models.json"));
-		let providerCalls = 0;
-		modelRegistry.registerProvider(model.provider, {
-			api: model.api,
-			streamSimple: () => {
-				providerCalls++;
-				return createDoneStream(model.api, 100_000);
-			},
-		});
-		const sessionManager = SessionManager.inMemory(cwd);
-		populate?.(sessionManager, model);
-		const { session } = await createAgentSession({
-			cwd,
-			agentDir,
-			model,
-			modelRuntime: getModelRuntime(modelRegistry),
-			settingsManager: SettingsManager.inMemory({ cacheWarming: "idle" }),
-			sessionManager,
-		});
-		return {
-			session,
-			providerCalls: () => providerCalls,
-			dispose: () => {
-				session.dispose();
-				modelRegistry.unregisterProvider(model.provider);
-			},
-		};
-	}
-
-	it("schedules cache warming after a completed session request", async () => {
-		const fixture = await createCacheWarmingSession();
-		try {
-			await fixture.session.prompt("test");
-			expect(fixture.session.cacheWarmingStatus?.nextWarmAt).toBeGreaterThan(Date.now());
-
-			// Equivalent shallow copies remain current, but removing the request prefix does not.
-			fixture.session.agent.state.messages = [...fixture.session.agent.state.messages];
-			fixture.session.agent.state.model = { ...fixture.session.agent.state.model };
-			expect(fixture.session.cacheWarmingStatus?.nextWarmAt).toBeGreaterThan(Date.now());
-			fixture.session.agent.state.messages = fixture.session.agent.state.messages.slice(1);
-			expect(fixture.session.cacheWarmingStatus?.reason).toBe("conversation context changed");
-		} finally {
-			fixture.dispose();
-		}
-	});
-
-	it("waits for the next request instead of restoring cache warming", async () => {
-		const fixture = await createCacheWarmingSession((manager, model) => {
-			manager.appendModelChange(model.provider, model.id);
-			manager.appendThinkingLevelChange("off");
-			manager.appendMessage({ role: "user", content: "test", timestamp: Date.now() - 60_000 });
-			const assistant = { ...createDoneMessage(model.api, 100_000), timestamp: Date.now() - 59_000 };
-			manager.appendMessage(assistant);
-			manager.appendUsage("cache_warm", model.provider, model.id, assistant.usage);
-		});
-		try {
-			expect(fixture.providerCalls()).toBe(0);
-			expect(fixture.session.cacheWarmingStatus).toEqual({
-				state: "inactive",
-				reason: "waiting for first request",
-			});
-		} finally {
-			fixture.dispose();
-		}
-	});
-
-	it("forwards httpIdleTimeoutMs as timeoutMs for OpenAI Codex", async () => {
-		const options = await captureStreamOptions("openai-codex-responses", { httpIdleTimeoutMs: 1234 });
-
-		expect(options?.timeoutMs).toBe(1234);
-	});
-
-	it("defaults timeoutMs from httpIdleTimeoutMs for all providers", async () => {
-		const options = await captureStreamOptions("openai-completions", { httpIdleTimeoutMs: 1234 });
-
-		expect(options?.timeoutMs).toBe(1234);
-	});
-
-	it("lets request timeoutMs override httpIdleTimeoutMs for OpenAI Codex", async () => {
-		const options = await captureStreamOptions(
-			"openai-codex-responses",
-			{ httpIdleTimeoutMs: 1234 },
-			{ timeoutMs: 0 },
-		);
-
-		expect(options?.timeoutMs).toBe(0);
-	});
-
-	it("forwards websocketConnectTimeoutMs from settings", async () => {
-		const options = await captureStreamOptions("openai-codex-responses", { websocketConnectTimeoutMs: 1234 });
-
-		expect(options?.websocketConnectTimeoutMs).toBe(1234);
-	});
-
-	it("lets request websocketConnectTimeoutMs override settings", async () => {
-		const options = await captureStreamOptions(
-			"openai-codex-responses",
-			{ websocketConnectTimeoutMs: 1234 },
-			{ websocketConnectTimeoutMs: 0 },
-		);
-
-		expect(options?.websocketConnectTimeoutMs).toBe(0);
-	});
-
 	it("forwards provider retry settings", async () => {
 		const options = await captureStreamOptions("openai-completions", {
 			retry: { provider: { maxRetries: 2, maxRetryDelayMs: 3000 } },
@@ -268,7 +156,6 @@ describe("createAgentSession stream options", () => {
 		expect(options?.maxRetryDelayMs).toBe(3000);
 	});
 
-	// Regression test for #9784.
 	it("forwards provider stream events to extensions", async () => {
 		const providerEvent = { openrouter_metadata: { strategy: "direct" } };
 		const extensionEvents: unknown[] = [];

@@ -5,15 +5,10 @@ function abortReason(signal: AbortSignal): unknown {
 	return error;
 }
 
-/** Create an operation-local signal for public APIs whose signal is optional. */
 export function operationSignal(signal?: AbortSignal): AbortSignal {
 	return signal ?? new AbortController().signal;
 }
 
-/**
- * Stop waiting for an operation when its signal aborts while continuing to
- * observe the abandoned promise so a later rejection is always handled.
- */
 export function raceWithAbortSignal<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
 	if (signal.aborted) {
 		void operation.catch(() => {});

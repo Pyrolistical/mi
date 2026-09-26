@@ -1,7 +1,3 @@
-/**
- * TUI session selector for --resume flag
- */
-
 import { setKeybindings } from "@earendil-works/pi-tui";
 import { KeybindingsManager } from "../core/keybindings.ts";
 import type { SessionInfo, SessionListProgress } from "../core/session-manager.ts";
@@ -11,7 +7,6 @@ import { createStartupTui, startStartupTui } from "./startup-ui.ts";
 
 type SessionsLoader = (onProgress?: SessionListProgress, signal?: AbortSignal) => Promise<SessionInfo[]>;
 
-/** Show TUI session selector and return selected session path or null if cancelled */
 export async function selectSession(
 	currentSessionsLoader: SessionsLoader,
 	allSessionsLoader: SessionsLoader,
@@ -50,6 +45,6 @@ export async function selectSession(
 
 		ui.addChild(selector);
 		ui.setFocus(selector.getSessionList());
-		startStartupTui(ui, settingsManager);
+		startStartupTui(ui);
 	});
 }

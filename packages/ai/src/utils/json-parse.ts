@@ -24,11 +24,6 @@ function escapeControlCharacter(char: string): string {
 	}
 }
 
-/**
- * Repairs malformed JSON string literals by:
- * - escaping raw control characters inside strings
- * - doubling backslashes before invalid escape characters
- */
 export function repairJson(json: string): string {
 	let repaired = "";
 	let inString = false;
@@ -94,13 +89,6 @@ export function parseJsonWithRepair<T>(json: string): T {
 	}
 }
 
-/**
- * Attempts to parse potentially incomplete JSON during streaming.
- * Always returns a valid object, even if the JSON is incomplete.
- *
- * @param partialJson The partial JSON string from streaming
- * @returns Parsed object or empty object if parsing fails
- */
 export function parseStreamingJson<T = Record<string, unknown>>(partialJson: string | undefined): T {
 	if (!partialJson || partialJson.trim() === "") {
 		return {} as T;

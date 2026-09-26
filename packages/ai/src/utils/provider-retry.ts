@@ -19,7 +19,6 @@ function isProviderError(error: unknown): error is ProviderError {
 	);
 }
 
-/** Mirrors the pinned OpenAI/Anthropic SDK retry policy; review when either SDK is upgraded. */
 function isRetryableProviderError(error: ProviderError): boolean {
 	const shouldRetry = error.headers?.get("x-should-retry");
 	if (shouldRetry === "true") return true;
@@ -94,14 +93,6 @@ function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
 	});
 }
 
-/**
- * Reproduce the retry behavior used by the OpenAI and Anthropic SDKs while making
- * their backoff sleep interruptible. Their built-in retry timers ignore the
- * request AbortSignal, so callers must invoke the SDK with `maxRetries: 0` and
- * wrap the request with this helper. Provider-requested delays above
- * `maxRetryDelayMs` fail immediately (60 seconds by default); set it to zero to
- * disable the limit.
- */
 export async function retryProviderRequest<T>(
 	request: () => Promise<T>,
 	options: ProviderRetryOptions = {},
@@ -111,7 +102,6 @@ export async function retryProviderRequest<T>(
 
 	for (;;) {
 		try {
-			// Each retry is a fresh SDK request, so X-Stainless-Retry-Count remains zero.
 			return await request();
 		} catch (error) {
 			if (options.signal?.aborted) throw createAbortError();

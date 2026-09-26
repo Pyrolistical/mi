@@ -113,7 +113,6 @@ function makeJsonSchemaNodeStrict(schema: unknown): void {
 	schema.additionalProperties = false;
 }
 
-/** Convert a tool schema to the strict subset expected by provider constrained sampling. */
 export function makeStrictJsonSchema(schema: Tool["parameters"]): Record<string, unknown> {
 	const cloned: unknown = structuredClone(schema);
 	if (!isJsonSchemaObject(cloned)) {

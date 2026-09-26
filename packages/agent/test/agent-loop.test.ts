@@ -12,7 +12,6 @@ import { agentLoop, agentLoopContinue, runAgentLoop } from "../src/agent-loop.ts
 import { setDefaultStreamFn } from "../src/index.ts";
 import type { AgentContext, AgentEvent, AgentLoopConfig, AgentMessage, AgentTool } from "../src/types.ts";
 
-// Mock stream for testing - mimics MockAssistantStream
 class MockAssistantStream extends EventStream<AssistantMessageEvent, AssistantMessage> {
 	constructor() {
 		super(
@@ -37,11 +36,11 @@ function createUsage() {
 	};
 }
 
-function createModel(): Model<"openai-responses"> {
+function createModel(): Model<"test-api"> {
 	return {
 		id: "mock",
 		name: "mock",
-		api: "openai-responses",
+		api: "test-api",
 		provider: "openai",
 		baseUrl: "https://example.invalid",
 		reasoning: false,
@@ -59,7 +58,7 @@ function createAssistantMessage(
 	return {
 		role: "assistant",
 		content,
-		api: "openai-responses",
+		api: "test-api",
 		provider: "openai",
 		model: "mock",
 		usage: createUsage(),
@@ -76,7 +75,6 @@ function createUserMessage(text: string): UserMessage {
 	};
 }
 
-// Simple identity converter for tests - just passes through standard messages
 function identityConverter(messages: AgentMessage[]): Message[] {
 	return messages.filter(
 		(m) => m.role === "system" || m.role === "user" || m.role === "assistant" || m.role === "toolResult",
@@ -149,12 +147,10 @@ describe("agentLoop with AgentMessage", () => {
 
 		const messages = await stream.result();
 
-		// Should have user message and assistant message
 		expect(messages.length).toBe(2);
 		expect(messages[0].role).toBe("user");
 		expect(messages[1].role).toBe("assistant");
 
-		// Verify event sequence
 		const eventTypes = events.map((e) => e.type);
 		expect(eventTypes).toContain("agent_start");
 		expect(eventTypes).toContain("turn_start");
@@ -185,7 +181,6 @@ describe("agentLoop with AgentMessage", () => {
 			config,
 			undefined,
 			(_model, providerContext) => {
-				// The provider receives a transcript: no top-level prompt or tool fields.
 				expect(Object.keys(providerContext)).toEqual(["messages"]);
 				expect(providerContext.messages[0]).toBe(initialSystem);
 				const response = new MockAssistantStream();
@@ -204,7 +199,6 @@ describe("agentLoop with AgentMessage", () => {
 	});
 
 	it("should handle custom message types via convertToLlm", async () => {
-		// Create a custom message type
 		interface CustomNotification {
 			role: "notification";
 			text: string;
@@ -218,7 +212,7 @@ describe("agentLoop with AgentMessage", () => {
 		};
 
 		const context: AgentContext = {
-			messages: [notification as unknown as AgentMessage], // Custom message in context
+			messages: [notification as unknown as AgentMessage],
 			tools: [],
 		};
 
@@ -228,7 +222,6 @@ describe("agentLoop with AgentMessage", () => {
 		const config: AgentLoopConfig = {
 			model: createModel(),
 			convertToLlm: (messages) => {
-				// Filter out notifications, convert rest
 				convertedMessages = messages
 					.filter((m) => (m as { role: string }).role !== "notification")
 					.filter((m) => m.role === "user" || m.role === "assistant" || m.role === "toolResult") as Message[];
@@ -252,8 +245,7 @@ describe("agentLoop with AgentMessage", () => {
 			events.push(event);
 		}
 
-		// The notification should have been filtered out in convertToLlm
-		expect(convertedMessages.length).toBe(1); // Only user message
+		expect(convertedMessages.length).toBe(1);
 		expect(convertedMessages[0].role).toBe("user");
 	});
 
@@ -276,7 +268,6 @@ describe("agentLoop with AgentMessage", () => {
 		const config: AgentLoopConfig = {
 			model: createModel(),
 			transformContext: async (messages) => {
-				// Keep only last 2 messages (prune old ones)
 				transformedMessages = messages.slice(-2);
 				return transformedMessages;
 			},
@@ -300,12 +291,9 @@ describe("agentLoop with AgentMessage", () => {
 		const stream = agentLoop([userPrompt], context, config, undefined, streamFn);
 
 		for await (const _ of stream) {
-			// consume
 		}
 
-		// transformContext should have been called first, keeping only last 2
 		expect(transformedMessages.length).toBe(2);
-		// Then convertToLlm receives the pruned messages
 		expect(convertedMessages.length).toBe(2);
 	});
 
@@ -365,14 +353,12 @@ describe("agentLoop with AgentMessage", () => {
 			const stream = new MockAssistantStream();
 			queueMicrotask(() => {
 				if (callIndex === 0) {
-					// First call: return tool call
 					const message = createAssistantMessage(
 						[{ type: "toolCall", id: "tool-1", name: "echo", arguments: { value: "hello" } }],
 						"toolUse",
 					);
 					stream.push({ type: "done", reason: "toolUse", message });
 				} else {
-					// Second call: return final response
 					const message = createAssistantMessage([{ type: "text", text: "done" }]);
 					stream.push({ type: "done", reason: "stop", message });
 				}
@@ -388,10 +374,8 @@ describe("agentLoop with AgentMessage", () => {
 			events.push(event);
 		}
 
-		// Tool should have been executed
 		expect(executed).toEqual(["hello"]);
 
-		// Should have tool execution events
 		const toolStart = events.find((e) => e.type === "tool_execution_start");
 		const toolEnd = events.find((e) => e.type === "tool_execution_end");
 		expect(toolStart).toBeDefined();
@@ -437,9 +421,6 @@ describe("agentLoop with AgentMessage", () => {
 			const stream = new MockAssistantStream();
 			queueMicrotask(() => {
 				if (callIndex === 0) {
-					// Output hit the token limit mid tool call. The salvage parser can
-					// produce arguments that validate but are silently truncated, so
-					// nothing in this message may execute.
 					const message = createAssistantMessage(
 						[{ type: "toolCall", id: "tool-1", name: "echo", arguments: { value: "hel" } }],
 						"length",
@@ -460,7 +441,6 @@ describe("agentLoop with AgentMessage", () => {
 			events.push(event);
 		}
 
-		// The tool must never execute with potentially truncated arguments.
 		expect(executed).toEqual([]);
 
 		const toolEnd = events.find((e) => e.type === "tool_execution_end");
@@ -471,7 +451,6 @@ describe("agentLoop with AgentMessage", () => {
 			expect(text && "text" in text ? text.text : "").toContain("output token limit");
 		}
 
-		// The loop continues so the model can re-issue the tool call.
 		expect(callIndex).toBe(2);
 		const messages = await stream.result();
 		expect(messages[messages.length - 1].role).toBe("assistant");
@@ -532,7 +511,6 @@ describe("agentLoop with AgentMessage", () => {
 
 		const stream = agentLoop([userPrompt], context, config, undefined, streamFn);
 		for await (const _event of stream) {
-			// consume
 		}
 
 		expect(executed).toEqual([123]);
@@ -611,7 +589,6 @@ describe("agentLoop with AgentMessage", () => {
 
 		const stream = agentLoop([userPrompt], context, config, undefined, streamFn);
 		for await (const _event of stream) {
-			// consume
 		}
 
 		expect(executed).toEqual([[{ oldText: "before", newText: "after" }]]);
@@ -745,7 +722,6 @@ describe("agentLoop with AgentMessage", () => {
 			convertToLlm: identityConverter,
 			toolExecution: "sequential",
 			getSteeringMessages: async () => {
-				// Return steering message after tool execution has started.
 				if (executed.length >= 1 && !queuedDelivered) {
 					queuedDelivered = true;
 					return [queuedUserMessage];
@@ -756,7 +732,6 @@ describe("agentLoop with AgentMessage", () => {
 
 		const events: AgentEvent[] = [];
 		const stream = agentLoop([userPrompt], context, config, undefined, (_model, ctx, _options) => {
-			// Check if interrupt message is in context on second call
 			if (callIndex === 1) {
 				sawInterruptInContext = ctx.messages.some(
 					(m) => m.role === "user" && typeof m.content === "string" && m.content === "interrupt",
@@ -766,7 +741,6 @@ describe("agentLoop with AgentMessage", () => {
 			const mockStream = new MockAssistantStream();
 			queueMicrotask(() => {
 				if (callIndex === 0) {
-					// First call: return two tool calls
 					const message = createAssistantMessage(
 						[
 							{ type: "toolCall", id: "tool-1", name: "echo", arguments: { value: "first" } },
@@ -776,7 +750,6 @@ describe("agentLoop with AgentMessage", () => {
 					);
 					mockStream.push({ type: "done", reason: "toolUse", message });
 				} else {
-					// Second call: return final response
 					const message = createAssistantMessage([{ type: "text", text: "done" }]);
 					mockStream.push({ type: "done", reason: "stop", message });
 				}
@@ -789,7 +762,6 @@ describe("agentLoop with AgentMessage", () => {
 			events.push(event);
 		}
 
-		// Both tools should execute before steering is injected
 		expect(executed).toEqual(["first", "second"]);
 
 		const toolEnds = events.filter(
@@ -799,7 +771,6 @@ describe("agentLoop with AgentMessage", () => {
 		expect(toolEnds[0].isError).toBe(false);
 		expect(toolEnds[1].isError).toBe(false);
 
-		// Queued message should appear in events after both tool result messages
 		const eventSequence = events.flatMap((event) => {
 			if (event.type !== "message_start") return [];
 			if (event.message.role === "toolResult") return [`tool:${event.message.toolCallId}`];
@@ -812,7 +783,6 @@ describe("agentLoop with AgentMessage", () => {
 		expect(eventSequence.indexOf("tool:tool-1")).toBeLessThan(eventSequence.indexOf("interrupt"));
 		expect(eventSequence.indexOf("tool:tool-2")).toBeLessThan(eventSequence.indexOf("interrupt"));
 
-		// Interrupt message should be in context when second LLM call is made
 		expect(sawInterruptInContext).toBe(true);
 	});
 
@@ -852,7 +822,6 @@ describe("agentLoop with AgentMessage", () => {
 		};
 
 		const userPrompt: AgentMessage = createUserMessage("run both");
-		// config is parallel (default), but tool forces sequential
 		const config: AgentLoopConfig = {
 			model: createModel(),
 			convertToLlm: identityConverter,
@@ -886,7 +855,6 @@ describe("agentLoop with AgentMessage", () => {
 			events.push(event);
 		}
 
-		// With sequential execution, second tool should NOT start before first finishes
 		expect(parallelObserved).toBe(false);
 
 		const toolResultIds = events.flatMap((event) => {
@@ -929,7 +897,6 @@ describe("agentLoop with AgentMessage", () => {
 			label: "Fast",
 			description: "Fast tool",
 			parameters: toolSchema,
-			// no executionMode = defaults to parallel
 			async execute(_toolCallId, params) {
 				executionOrder.push(`fast:${params.value}`);
 				return {
@@ -948,7 +915,6 @@ describe("agentLoop with AgentMessage", () => {
 		const config: AgentLoopConfig = {
 			model: createModel(),
 			convertToLlm: identityConverter,
-			// parallel by default, but slowTool forces sequential
 		};
 
 		let callIndex = 0;
@@ -979,7 +945,6 @@ describe("agentLoop with AgentMessage", () => {
 			events.push(event);
 		}
 
-		// Fast tool should NOT run before slow tool finishes
 		expect(executionOrder[0]).toBe("slow:a");
 		expect(executionOrder).toContain("fast:b");
 	});
@@ -1053,7 +1018,6 @@ describe("agentLoop with AgentMessage", () => {
 			events.push(event);
 		}
 
-		// With executionMode=parallel, second tool should start before first finishes
 		expect(parallelObserved).toBe(true);
 	});
 
@@ -1448,7 +1412,6 @@ describe("agentLoop with AgentMessage", () => {
 
 		expect(requestIncludedSteering).toEqual([false, true]);
 		expect(requestPreparations).toBe(2);
-		// Startup, post-turn delivery, then the final natural-stop check.
 		expect(steeringPolls).toBe(3);
 	});
 
@@ -1521,7 +1484,6 @@ describe("agentLoop with AgentMessage", () => {
 		});
 
 		for await (const _event of stream) {
-			// consume
 		}
 
 		expect(llmCalls).toBe(2);
@@ -1661,7 +1623,6 @@ describe("agentLoop with AgentMessage", () => {
 		expect(followUpPolls).toBe(0);
 		expect(callbackToolResultIds).toEqual(["tool-1"]);
 		expect(callbackContextRoles).toEqual(["system", "user", "assistant", "toolResult"]);
-		// The context declares no tools, so the loop announces the loadout with a system message.
 		expect(messages.map((message) => message.role)).toEqual(["system", "user", "assistant", "toolResult"]);
 		expect(events.map((event) => event.type)).toEqual([
 			"agent_start",
@@ -1776,7 +1737,6 @@ describe("agentLoop with AgentMessage", () => {
 		});
 
 		for await (const _event of stream) {
-			// consume
 		}
 
 		const messages = await stream.result();
@@ -1841,7 +1801,6 @@ describe("agentLoop with AgentMessage", () => {
 		});
 
 		for await (const _event of stream) {
-			// consume
 		}
 
 		expect(executed).toEqual(["second"]);
@@ -1898,7 +1857,6 @@ describe("agentLoop with AgentMessage", () => {
 		});
 
 		for await (const _event of stream) {
-			// consume
 		}
 
 		const messages = await stream.result();
@@ -1954,7 +1912,6 @@ describe("agentLoop with AgentMessage", () => {
 		});
 
 		for await (const _event of stream) {
-			// consume
 		}
 
 		expect(llmCalls).toBe(1);
@@ -2011,18 +1968,15 @@ describe("agentLoopContinue with AgentMessage", () => {
 
 		const messages = await stream.result();
 
-		// Should only return the new assistant message (not the existing user message)
 		expect(messages.length).toBe(1);
 		expect(messages[0].role).toBe("assistant");
 
-		// Should NOT have user message events (that's the key difference from agentLoop)
 		const messageEndEvents = events.filter((e) => e.type === "message_end");
 		expect(messageEndEvents.length).toBe(1);
 		expect((messageEndEvents[0] as any).message.role).toBe("assistant");
 	});
 
 	it("should allow custom message types as last message (caller responsibility)", async () => {
-		// Custom message that will be converted to user message by convertToLlm
 		interface CustomMessage {
 			role: "custom";
 			text: string;
@@ -2043,7 +1997,6 @@ describe("agentLoopContinue with AgentMessage", () => {
 		const config: AgentLoopConfig = {
 			model: createModel(),
 			convertToLlm: (messages) => {
-				// Convert custom to user message
 				return messages
 					.map((m) => {
 						if ((m as any).role === "custom") {
@@ -2068,7 +2021,6 @@ describe("agentLoopContinue with AgentMessage", () => {
 			return stream;
 		};
 
-		// Should not throw - the custom message will be converted to user message
 		const stream = agentLoopContinue(context, config, undefined, streamFn);
 
 		const events: AgentEvent[] = [];

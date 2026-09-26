@@ -102,7 +102,6 @@ describe("extension factory cache", () => {
 			agentDir,
 			noSkills: true,
 			noPromptTemplates: true,
-			noThemes: true,
 		});
 
 		await loader.reload();

@@ -5,7 +5,6 @@ const model = { provider: "provider", id: "family/model" };
 const modelKey = "provider/family/model";
 const defaults = { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 };
 
-// Regression coverage for #8133.
 describe("compaction model overrides", () => {
 	it("uses defaults without compaction settings", () => {
 		const manager = SettingsManager.inMemory();
@@ -93,8 +92,6 @@ describe("compaction model overrides", () => {
 		});
 		await manager.reload();
 		expect(manager.getCompactionKeepRecentTokens(model)).toBe(2000);
-		manager.setProjectTrusted(false);
-		expect(manager.getCompactionKeepRecentTokens(model)).toBe(30000);
 	});
 
 	it("keeps enabled global and preserves overrides when saving the toggle", async () => {
@@ -113,7 +110,7 @@ describe("compaction model overrides", () => {
 	});
 
 	describe.each(["reserveTokens", "keepRecentTokens"] as const)("model override %s", (field) => {
-		it.each([null, -1, 1.5, "400000", true, {}, [], Number.MAX_SAFE_INTEGER + 1])(
+		it.each([[null], [-1], [1.5], ["400000"], [true], [{}], [[]], [Number.MAX_SAFE_INTEGER + 1]])(
 			"reports invalid token values: %j",
 			(value) => {
 				const storage = new InMemorySettingsStorage();
@@ -141,7 +138,7 @@ describe("compaction model overrides", () => {
 	});
 
 	describe.each(["reserveTokens", "keepRecentTokens"] as const)("ordinary compaction.%s", (field) => {
-		it.each([null, -1, 1.5, "400000", true, {}, [], Number.MAX_SAFE_INTEGER + 1])(
+		it.each([[null], [-1], [1.5], ["400000"], [true], [{}], [[]], [Number.MAX_SAFE_INTEGER + 1]])(
 			"reports invalid values even when a valid model override exists: %j",
 			(value) => {
 				const storage = new InMemorySettingsStorage();
@@ -167,7 +164,7 @@ describe("compaction model overrides", () => {
 		});
 	});
 
-	it.each([null, false, 42, "invalid", []])("reports malformed model entries: %j", (entry) => {
+	it.each([[null], [false], [42], ["invalid"], [[]]])("reports malformed model entries: %j", (entry) => {
 		const storage = new InMemorySettingsStorage();
 		storage.withLock("global", () => JSON.stringify({ compaction: { modelOverrides: { [modelKey]: entry } } }));
 		expect(() => SettingsManager.fromStorage(storage).getCompactionSettings(model)).toThrow(

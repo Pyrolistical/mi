@@ -40,7 +40,6 @@ describe("inline extension naming", () => {
 			agentDir,
 			noSkills: true,
 			noPromptTemplates: true,
-			noThemes: true,
 			extensionFactories: [noop, noop],
 		});
 
@@ -60,7 +59,6 @@ describe("inline extension naming", () => {
 			agentDir,
 			noSkills: true,
 			noPromptTemplates: true,
-			noThemes: true,
 			extensionFactories: [
 				{ name: "my-provider", factory: noop },
 				{ name: "my-commands", factory: noop },
@@ -83,7 +81,6 @@ describe("inline extension naming", () => {
 			agentDir,
 			noSkills: true,
 			noPromptTemplates: true,
-			noThemes: true,
 			extensionFactories: [{ name: "built-in", factory: noop, hidden: true }],
 		});
 
@@ -103,7 +100,6 @@ describe("inline extension naming", () => {
 			agentDir,
 			noSkills: true,
 			noPromptTemplates: true,
-			noThemes: true,
 			extensionFactories: [noop, { name: "named-ext", factory: noop }, noop],
 		});
 

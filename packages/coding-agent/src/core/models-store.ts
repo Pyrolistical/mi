@@ -20,7 +20,6 @@ type ModelsFileReadState = {
 	reload?: ModelsFileReload;
 };
 
-// Optimize the common path without retaining an unbounded set of custom paths.
 let sharedModelsFileReadState: { path: string; readState: ModelsFileReadState } | undefined;
 
 export class InMemoryCodingAgentModelsStore implements ModelsStore {
@@ -43,7 +42,6 @@ export class InMemoryCodingAgentModelsStore implements ModelsStore {
 	}
 }
 
-/** Locked JSON-backed storage for dynamically refreshed provider catalogs. */
 export class FileModelsStore implements ModelsStore {
 	private readonly storage: AuthStorageBackend;
 	private readonly path: string;

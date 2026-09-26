@@ -7,7 +7,6 @@ import { afterEach, describe, expect, it } from "vitest";
 import { ENV_AGENT_DIR } from "../src/config.ts";
 
 const cliPath = resolve(__dirname, "../src/cli.ts");
-// --import takes a module specifier, not a filesystem path.
 const sourceResolverUrl = pathToFileURL(resolve(__dirname, "../src/experimental/source-resolver.ts")).href;
 const tempDirs: string[] = [];
 
@@ -56,7 +55,7 @@ describe("--session invalid file handling", () => {
 		mkdirSync(projectDir, { recursive: true });
 		writeFileSync(sessionFile, originalContent);
 
-		const result = await runCli(["--session", sessionFile, "-p", "hi"], projectDir, agentDir);
+		const result = await runCli(["--session", sessionFile, "hi"], projectDir, agentDir);
 
 		expect(result.code).toBe(1);
 		expect(result.stderr).toContain(`Error: Session file is not a valid pi session: ${sessionFile}`);

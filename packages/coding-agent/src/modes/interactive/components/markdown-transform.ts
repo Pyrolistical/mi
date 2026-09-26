@@ -22,7 +22,6 @@ function applyMarkdownTransformers(
 				transformedMarkdown = transformed;
 			}
 		} catch {
-			// Keep the current Markdown and continue with the next transformer.
 		}
 	}
 	return transformedMarkdown;

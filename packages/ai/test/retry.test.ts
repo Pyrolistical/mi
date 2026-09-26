@@ -9,7 +9,6 @@ const bedrockExplicitRetryMessage =
 const nvidiaNIMResourceExhaustedMessage = "ResourceExhausted: Worker local total request limit reached (288/48)";
 const bunFetchSocketClosedMessage =
 	"The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()";
-const openAIResponsesEarlyEofMessage = "OpenAI Responses stream ended before a terminal response event";
 const wrappedDnsLookupError =
 	"The pending stream has been canceled (caused by: getaddrinfo ENOTFOUND bedrock-runtime.us-east-1.amazonaws.com)";
 const azurePeakLoadError =
@@ -62,16 +61,7 @@ describe("provider retry classification", () => {
 		expect(isRetryableAssistantError(fauxAssistantMessage("", { stopReason: "error", errorMessage }))).toBe(true);
 	});
 
-	it("matches OpenAI Responses streams that end before terminal events", () => {
-		expect(
-			isRetryableAssistantError(
-				fauxAssistantMessage("", { stopReason: "error", errorMessage: openAIResponsesEarlyEofMessage }),
-			),
-		).toBe(true);
-	});
-
 	it("matches Azure peak-load capacity errors", () => {
-		// Regression for #9669.
 		expect(
 			isRetryableAssistantError(fauxAssistantMessage("", { stopReason: "error", errorMessage: azurePeakLoadError })),
 		).toBe(true);
@@ -89,7 +79,6 @@ describe("provider retry classification", () => {
 		expect(
 			isRetryableAssistantError(fauxAssistantMessage("", { stopReason: "error", errorMessage: "overloaded_error" })),
 		).toBe(true);
-		// Regression for #9627.
 		expect(
 			isRetryableAssistantError(
 				fauxAssistantMessage("", { stopReason: "error", errorMessage: "520 status code (no body)" }),
@@ -106,7 +95,6 @@ describe("provider retry classification", () => {
 
 describe("retryDelayMs", () => {
 	it("caps agent retry delay", () => {
-		// Regression for #8826.
 		expect(retryDelayMs({ baseDelayMs: 2000 }, 6)).toBe(60000);
 		expect(retryDelayMs({ baseDelayMs: 2000, maxAgentDelayMs: 5000 }, 5)).toBe(5000);
 		expect(retryDelayMs({ baseDelayMs: 2000, maxAgentDelayMs: 0 }, 5)).toBe(0);
@@ -152,13 +140,12 @@ describe("retryAssistantCall", () => {
 		const onRetryFinished = vi.fn();
 		const res = await retryAssistantCall(produce, enabled, undefined, { onRetryScheduled, onRetryFinished });
 		expect(res.stopReason).toBe("error");
-		expect(produce).toHaveBeenCalledTimes(4); // 1 initial + 3 retries
+		expect(produce).toHaveBeenCalledTimes(4);
 		expect(onRetryScheduled).toHaveBeenCalledTimes(3);
 		expect(onRetryFinished).toHaveBeenCalledWith(false, 3, "terminated");
 	});
 
 	it("reports capped retry delays", async () => {
-		// Regression for #8826.
 		let n = 0;
 		const policy: RetryPolicy = { enabled: true, maxRetries: 4, baseDelayMs: 10, maxAgentDelayMs: 15 };
 		const produce = vi.fn(async () => {
@@ -252,7 +239,6 @@ describe("retryAssistantCall", () => {
 		const policy: RetryPolicy = { enabled: true, maxRetries: 5, baseDelayMs: 10_000 };
 		const onRetryFinished = vi.fn();
 		const p = retryAssistantCall(produce, policy, controller.signal, { onRetryFinished });
-		// Let one error call resolve and the first backoff sleep start, then abort.
 		await vi.waitFor(() => expect(produce).toHaveBeenCalled());
 		controller.abort();
 		const res = await p;

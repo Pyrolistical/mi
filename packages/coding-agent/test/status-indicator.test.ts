@@ -9,7 +9,7 @@ import {
 	RetryStatusIndicator,
 	WorkingStatusIndicator,
 } from "../src/modes/interactive/components/status-indicator.ts";
-import { getEditorTheme, initTheme, theme } from "../src/modes/interactive/theme/theme.ts";
+import { getEditorTheme, theme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 
 describe("status indicators", () => {
@@ -26,7 +26,6 @@ describe("status indicators", () => {
 	});
 
 	it("keeps the top border unchanged unless the editor opts in", () => {
-		initTheme("dark");
 		const tui = {
 			requestRender: vi.fn(),
 			terminal: { rows: 10 },
@@ -37,13 +36,12 @@ describe("status indicators", () => {
 
 		expect(stripAnsi(editor.render(20)[0]!)).toBe("─".repeat(20));
 		const standaloneLine = indicator.render(20)[1]!;
-		expect(standaloneLine).toContain(theme.getFgAnsi("accent"));
-		expect(standaloneLine).toContain(theme.getFgAnsi("muted"));
+		expect(standaloneLine).toContain("\x1b[36m");
+		expect(standaloneLine).toContain("\x1b[90m");
 		indicator.dispose();
 	});
 
 	it("embeds the working indicator when the editor opts in", () => {
-		initTheme("dark");
 		const tui = {
 			requestRender: vi.fn(),
 			terminal: { rows: 10 },
@@ -59,12 +57,11 @@ describe("status indicators", () => {
 		const topBorder = editor.render(20)[0]!;
 		expect(stripAnsi(topBorder)).toBe("── ⠋ Working ───────");
 		expect(visibleWidth(topBorder)).toBe(20);
-		expect(topBorder.split(theme.getFgAnsi("thinkingHigh"))).toHaveLength(5);
+		expect(topBorder.split("\x1b[35m")).toHaveLength(5);
 		indicator.dispose();
 	});
 
 	it("embeds compaction, summary, and retry labels within the border width", () => {
-		initTheme("dark");
 		vi.useFakeTimers();
 		const tui = { requestRender: vi.fn(), terminal: { rows: 10 } } as unknown as TUI;
 		const editor = new CustomEditor(tui, getEditorTheme(), KeybindingsManager.create(), {
@@ -96,7 +93,6 @@ describe("status indicators", () => {
 	});
 
 	it("disposes retry countdown updates", () => {
-		initTheme("dark");
 		vi.useFakeTimers();
 		const requestRender = vi.fn();
 		const tui = { requestRender } as unknown as TUI;

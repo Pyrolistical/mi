@@ -3,14 +3,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Agent } from "@earendil-works/pi-agent-core";
 import { type AssistantMessage, createAssistantMessageEventStream, fauxAssistantMessage } from "@earendil-works/pi-ai";
-import { getModel, streamSimple } from "@earendil-works/pi-ai/compat";
+import { streamSimple } from "@earendil-works/pi-ai/compat";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AgentSession } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
-import { createModelRegistry, getModelRuntime } from "./model-runtime-test-utils.ts";
+import { createModelRegistry, getModelRuntime, writeOpenAIModelsJson } from "./model-runtime-test-utils.ts";
 import { createTestResourceLoader } from "./utilities.ts";
+import { openaiModel } from "../../ai/test/openai-models.ts";
 
 describe("AgentSession auto-compaction queue resume", () => {
 	let session: AgentSession;
@@ -22,7 +23,7 @@ describe("AgentSession auto-compaction queue resume", () => {
 		tempDir = join(tmpdir(), `pi-auto-compaction-queue-${Date.now()}`);
 		mkdirSync(tempDir, { recursive: true });
 
-		const model = getModel("anthropic", "claude-sonnet-4-5")!;
+		const model = openaiModel("gpt-5-mini");
 		const agent = new Agent({
 			streamFn: streamSimple,
 			initialState: {
@@ -35,8 +36,8 @@ describe("AgentSession auto-compaction queue resume", () => {
 		sessionManager = SessionManager.inMemory();
 		settingsManager = SettingsManager.create(tempDir, tempDir);
 		const authStorage = AuthStorage.create(join(tempDir, "auth.json"));
-		await authStorage.modify("anthropic", async () => ({ type: "api_key", key: "test-key" }));
-		const modelRegistry = await createModelRegistry(authStorage, tempDir);
+		await authStorage.modify("openai", async () => ({ type: "api_key", key: "test-key" }));
+		const modelRegistry = await createModelRegistry(authStorage, writeOpenAIModelsJson(tempDir));
 
 		session = new AgentSession({
 			agent,
@@ -247,8 +248,6 @@ describe("AgentSession auto-compaction queue resume", () => {
 	it("should trigger threshold compaction for error messages using last successful usage", async () => {
 		const model = session.model!;
 
-		// A successful assistant message with token usage just over the compaction threshold.
-		// Compute this from the selected model so generated catalog context-window changes do not break the test.
 		const compactionSettings = settingsManager.getCompactionSettings();
 		const thresholdTokens = (model.contextWindow ?? 200_000) - compactionSettings.reserveTokens + 1;
 		const successfulAssistant: AssistantMessage = {
@@ -269,7 +268,6 @@ describe("AgentSession auto-compaction queue resume", () => {
 			timestamp: Date.now(),
 		};
 
-		// An error message (e.g. 529 overloaded) with no useful usage data
 		const errorAssistant: AssistantMessage = {
 			role: "assistant",
 			content: [{ type: "text", text: "" }],
@@ -289,7 +287,6 @@ describe("AgentSession auto-compaction queue resume", () => {
 			timestamp: Date.now() + 1000,
 		};
 
-		// Put both messages into agent state so estimateContextTokens can find the successful one
 		session.agent.state.messages = [
 			{ role: "user", content: [{ type: "text", text: "hello" }], timestamp: Date.now() - 1000 },
 			successfulAssistant,
@@ -320,7 +317,6 @@ describe("AgentSession auto-compaction queue resume", () => {
 	it("should not trigger threshold compaction for error messages when no prior usage exists", async () => {
 		const model = session.model!;
 
-		// An error message with no prior successful assistant in context
 		const errorAssistant: AssistantMessage = {
 			role: "assistant",
 			content: [{ type: "text", text: "" }],
@@ -369,7 +365,6 @@ describe("AgentSession auto-compaction queue resume", () => {
 		const model = session.model!;
 		const preCompactionTimestamp = Date.now() - 10_000;
 
-		// A "kept" assistant message from before compaction with high usage
 		const keptAssistant: AssistantMessage = {
 			role: "assistant",
 			content: [{ type: "text", text: "kept response from before compaction" }],
@@ -388,7 +383,6 @@ describe("AgentSession auto-compaction queue resume", () => {
 			timestamp: preCompactionTimestamp,
 		};
 
-		// Record the kept assistant in the session and create a compaction after it
 		sessionManager.appendMessage({
 			role: "user",
 			content: [{ type: "text", text: "before compaction" }],
@@ -398,7 +392,6 @@ describe("AgentSession auto-compaction queue resume", () => {
 		const firstKeptEntryId = sessionManager.getEntries()[0]!.id;
 		sessionManager.appendCompaction("summary", firstKeptEntryId, keptAssistant.usage.totalTokens, undefined, false);
 
-		// Post-compaction error message
 		const errorAssistant: AssistantMessage = {
 			role: "assistant",
 			content: [{ type: "text", text: "" }],
@@ -418,7 +411,6 @@ describe("AgentSession auto-compaction queue resume", () => {
 			timestamp: Date.now(),
 		};
 
-		// Agent state has the kept assistant (pre-compaction) and the error (post-compaction)
 		session.agent.state.messages = [
 			{ role: "user", content: [{ type: "text", text: "kept user msg" }], timestamp: preCompactionTimestamp - 1000 },
 			keptAssistant,
@@ -443,7 +435,6 @@ describe("AgentSession auto-compaction queue resume", () => {
 
 		await checkCompaction(errorAssistant);
 
-		// Should NOT compact because the only usage data is from a kept pre-compaction message
 		expect(runAutoCompactionSpy).not.toHaveBeenCalled();
 	});
 });

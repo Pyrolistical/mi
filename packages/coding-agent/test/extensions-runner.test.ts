@@ -1,7 +1,4 @@
 import { createInMemoryModelRegistry } from "./model-runtime-test-utils.ts";
-/**
- * Tests for ExtensionRunner - conflict detection, error handling, tool wrapping.
- */
 
 import * as fs from "node:fs";
 import * as os from "node:os";
@@ -15,7 +12,7 @@ import {
 	loadExtensionFromFactory,
 	loadExtensions,
 } from "../src/core/extensions/loader.ts";
-import { ExtensionRunner, emitProjectTrustEvent } from "../src/core/extensions/runner.ts";
+import { ExtensionRunner } from "../src/core/extensions/runner.ts";
 import type {
 	ExtensionActions,
 	ExtensionContextActions,
@@ -99,7 +96,6 @@ describe("ExtensionRunner", () => {
 	const extensionContextActions: ExtensionContextActions = {
 		getModel: () => undefined,
 		isIdle: () => true,
-		isProjectTrusted: () => true,
 		getSignal: () => undefined,
 		abort: () => {},
 		hasPendingMessages: () => false,
@@ -115,55 +111,14 @@ describe("ExtensionRunner", () => {
 			const result = await discoverAndLoadExtensions([], tempDir, tempDir);
 			const runner = new ExtensionRunner(result.extensions, result.runtime, tempDir, sessionManager, modelRegistry);
 
-			// Before bindCore the default is an empty list (never undefined).
 			expect(runner.createContext().scopedModels).toEqual([]);
 
-			// After bindCore wires a getScopedModels action, ctx.scopedModels
-			// returns it live (same reference, lazy getter).
 			const scoped = [{ model: { id: "scoped-test" }, thinkingLevel: "high" }] as unknown as ScopedModel[];
 			runner.bindCore(extensionActions, { ...extensionContextActions, getScopedModels: () => scoped });
 			expect(runner.createContext().scopedModels).toBe(scoped);
 		});
 	});
 
-	describe("project_trust", () => {
-		it("continues past undecided handlers and returns the first yes/no decision", async () => {
-			const undecidedPath = path.join(extensionsDir, "undecided.ts");
-			const decidedPath = path.join(extensionsDir, "decided.ts");
-			fs.writeFileSync(
-				undecidedPath,
-				`export default function(pi) {
-	pi.on("project_trust", () => ({ trusted: "undecided", remember: true }));
-}`,
-			);
-			fs.writeFileSync(
-				decidedPath,
-				`export default function(pi) {
-	pi.on("project_trust", () => ({ trusted: "no", remember: true }));
-}`,
-			);
-
-			const extensionsResult = await loadExtensions([undecidedPath, decidedPath], tempDir);
-			const result = await emitProjectTrustEvent(
-				extensionsResult,
-				{ type: "project_trust", cwd: tempDir },
-				{
-					cwd: tempDir,
-					mode: "tui",
-					hasUI: false,
-					ui: {
-						select: async () => undefined,
-						confirm: async () => false,
-						input: async () => undefined,
-						notify: () => {},
-					},
-				},
-			);
-
-			expect(result.result).toEqual({ trusted: "no", remember: true });
-			expect(result.errors).toEqual([]);
-		});
-	});
 
 	describe("shortcut conflicts", () => {
 		it("warns when extension shortcut conflicts with built-in", async () => {
@@ -339,7 +294,6 @@ describe("ExtensionRunner", () => {
 		});
 
 		it("warns when two extensions register same shortcut", async () => {
-			// Use a non-reserved shortcut
 			const extCode1 = `
 				export default function(pi) {
 					pi.registerShortcut("ctrl+shift+x", {
@@ -366,7 +320,6 @@ describe("ExtensionRunner", () => {
 			const shortcuts = runner.getShortcuts(defaultKeybindings);
 
 			expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("shortcut conflict"));
-			// Last one wins
 			expect(shortcuts.has("ctrl+shift+x")).toBe(true);
 
 			warnSpy.mockRestore();
@@ -398,7 +351,6 @@ describe("ExtensionRunner", () => {
 			expect(tools.map((t) => t.definition.name).sort()).toEqual(["tool_a", "tool_b"]);
 		});
 
-		// Regression test for #9300.
 		it("rejects extension tools without a parameter schema", async () => {
 			const extensionPath = path.join(extensionsDir, "missing-parameters.js");
 			fs.writeFileSync(
@@ -553,47 +505,23 @@ describe("ExtensionRunner", () => {
 			expect(ctx.signal?.aborted).toBe(true);
 		});
 
-		it("exposes print mode and hasUI false by default", async () => {
+		it("exposes hasUI false by default", async () => {
 			const result = await discoverAndLoadExtensions([], tempDir, tempDir);
 			const runner = new ExtensionRunner(result.extensions, result.runtime, tempDir, sessionManager, modelRegistry);
 			runner.bindCore(extensionActions, extensionContextActions);
 
 			const ctx = runner.createContext();
-			expect(ctx.mode).toBe("print");
 			expect(ctx.hasUI).toBe(false);
 		});
 
-		it("exposes project trust state on ExtensionContext", async () => {
-			const result = await discoverAndLoadExtensions([], tempDir, tempDir);
-			const runner = new ExtensionRunner(result.extensions, result.runtime, tempDir, sessionManager, modelRegistry);
-			runner.bindCore(extensionActions, {
-				...extensionContextActions,
-				isProjectTrusted: () => false,
-			});
+		it("exposes hasUI true when a UI context is provided", async () => {
 
-			const ctx = runner.createContext();
-			expect(ctx.isProjectTrusted()).toBe(false);
-		});
-
-		it("exposes rpc mode with hasUI true when an RPC UI context is provided", async () => {
 			const result = await discoverAndLoadExtensions([], tempDir, tempDir);
 			const runner = new ExtensionRunner(result.extensions, result.runtime, tempDir, sessionManager, modelRegistry);
 			runner.bindCore(extensionActions, extensionContextActions);
-			runner.setUIContext({} as ExtensionUIContext, "rpc");
+			runner.setUIContext({} as ExtensionUIContext);
 
 			const ctx = runner.createContext();
-			expect(ctx.mode).toBe("rpc");
-			expect(ctx.hasUI).toBe(true);
-		});
-
-		it("exposes tui mode with hasUI true when a TUI UI context is provided", async () => {
-			const result = await discoverAndLoadExtensions([], tempDir, tempDir);
-			const runner = new ExtensionRunner(result.extensions, result.runtime, tempDir, sessionManager, modelRegistry);
-			runner.bindCore(extensionActions, extensionContextActions);
-			runner.setUIContext({} as ExtensionUIContext, "tui");
-
-			const ctx = runner.createContext();
-			expect(ctx.mode).toBe("tui");
 			expect(ctx.hasUI).toBe(true);
 		});
 	});
@@ -617,7 +545,6 @@ describe("ExtensionRunner", () => {
 				errors.push(err);
 			});
 
-			// Emit context event which will trigger the throwing handler
 			await runner.emitContext([]);
 
 			expect(errors.length).toBe(1);
@@ -625,7 +552,6 @@ describe("ExtensionRunner", () => {
 			expect(errors[0].event).toBe("context");
 		});
 
-		// Regression test for #9068.
 		it("fails closed when a user_bash handler throws", async () => {
 			const extCode = `
 				export default function(pi) {
@@ -647,7 +573,6 @@ describe("ExtensionRunner", () => {
 			expect(errors).toMatchObject([{ event: "user_bash", error: "Routing failed" }]);
 		});
 
-		// Regression test for #9068.
 		it.each([
 			["an empty object", "{}"],
 			["null operations", "{ operations: null }"],
@@ -837,10 +762,8 @@ describe("ExtensionRunner", () => {
 			const result = await discoverAndLoadExtensions([], tempDir, tempDir);
 			const runner = new ExtensionRunner(result.extensions, result.runtime, tempDir, sessionManager, modelRegistry);
 
-			// Setting a flag value should not throw
 			runner.setFlagValue("--test-flag", true);
 
-			// The flag values are stored in the shared runtime
 			expect(result.runtime.flagValues.get("--test-flag")).toBe(true);
 		});
 	});
@@ -1218,7 +1141,6 @@ describe("ExtensionRunner", () => {
 		});
 	});
 
-	// #8967: event handler unsubscription must not disturb other registrations.
 	describe("event subscriptions", () => {
 		async function loadSubscriptionExtension(factory: ExtensionFactory) {
 			const runtime = createExtensionRuntime();

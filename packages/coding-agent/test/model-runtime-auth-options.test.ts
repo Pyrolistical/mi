@@ -1,23 +1,12 @@
-import { type AuthType, type CredentialStore, InMemoryCredentialStore } from "@earendil-works/pi-ai";
+import { type CredentialStore, InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { describe, expect, it } from "vitest";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
 
-function authOptions(runtime: ModelRuntime, type?: AuthType) {
+function authOptions(runtime: ModelRuntime) {
 	return runtime
 		.getProviders()
-		.flatMap((provider) => [
-			...(!type || type === "oauth"
-				? provider.auth.oauth
-					? [{ type: "oauth" as const, provider, method: provider.auth.oauth }]
-					: []
-				: []),
-			...(!type || type === "api_key"
-				? provider.auth.apiKey
-					? [{ type: "api_key" as const, provider, method: provider.auth.apiKey }]
-					: []
-				: []),
-		]);
+		.map((provider) => ({ type: "api_key" as const, provider, method: provider.auth.apiKey }));
 }
 
 function testModel(id: string) {
@@ -35,10 +24,15 @@ function testModel(id: string) {
 describe("ModelRuntime auth options", () => {
 	it("accepts a pi-ai CredentialStore", async () => {
 		const credentials = new InMemoryCredentialStore();
-		await credentials.modify("anthropic", async () => ({ type: "api_key", key: "stored-key" }));
+		await credentials.modify("openrouter", async () => ({ type: "api_key", key: "stored-key" }));
 		const runtime = await ModelRuntime.create({ credentials, modelsPath: null });
+		runtime.registerProvider("openrouter", {
+			baseUrl: "https://openrouter.ai/api/v1",
+			api: "openai-completions",
+			models: [testModel("openai/gpt-5.5")],
+		});
 
-		expect((await runtime.getAuth("anthropic"))?.auth.apiKey).toBe("stored-key");
+		expect((await runtime.getAuth("openrouter"))?.auth.apiKey).toBe("stored-key");
 	});
 
 	it("scopes provider availability reads and records refresh failures", async () => {
@@ -56,105 +50,27 @@ describe("ModelRuntime auth options", () => {
 			delete: (providerId) => base.delete(providerId),
 		};
 		const runtime = await ModelRuntime.create({ credentials, modelsPath: null });
+		runtime.registerProvider("openrouter", {
+			baseUrl: "https://openrouter.ai/api/v1",
+			api: "openai-completions",
+			models: [testModel("openai/gpt-5.5")],
+		});
 
 		reads.length = 0;
-		await runtime.getAvailable("anthropic");
-		expect(new Set(reads)).toEqual(new Set(["anthropic"]));
+		await runtime.getAvailable("openrouter");
+		expect(new Set(reads)).toEqual(new Set(["openrouter"]));
 
 		failReads = true;
-		await expect(runtime.getAvailable("anthropic")).rejects.toThrow("Credential store read failed for anthropic");
-		expect(runtime.getError()).toContain("Availability refresh: Credential store read failed for anthropic");
+		await expect(runtime.getAvailable("openrouter")).rejects.toThrow("Credential store read failed for openrouter");
+		expect(runtime.getError()).toContain("Availability refresh: Credential store read failed for openrouter");
 
 		failReads = false;
 		await runtime.getAvailable();
 		expect(runtime.getError()).toBeUndefined();
 	});
 
-	it("projects provider-owned methods, names, and status", async () => {
-		const runtime = await ModelRuntime.create({ credentials: AuthStorage.inMemory(), modelsPath: null });
-		const options = authOptions(runtime);
 
-		expect(options).toEqual(
-			expect.arrayContaining([
-				expect.objectContaining({
-					type: "api_key",
-					provider: expect.objectContaining({ id: "amazon-bedrock", name: "Amazon Bedrock" }),
-					method: expect.objectContaining({ name: "AWS credentials or bearer token" }),
-				}),
-				expect.objectContaining({
-					type: "api_key",
-					provider: expect.objectContaining({ id: "google-vertex", name: "Google Vertex AI" }),
-					method: expect.objectContaining({ name: "Google Cloud credentials" }),
-				}),
-				expect.objectContaining({
-					type: "oauth",
-					provider: expect.objectContaining({ id: "anthropic", name: "Anthropic" }),
-				}),
-				expect.objectContaining({
-					type: "api_key",
-					provider: expect.objectContaining({ id: "cloudflare-ai-gateway", name: "Cloudflare AI Gateway" }),
-				}),
-				expect.objectContaining({
-					type: "api_key",
-					provider: expect.objectContaining({ id: "cloudflare-workers-ai", name: "Cloudflare Workers AI" }),
-				}),
-			]),
-		);
-		expect(authOptions(runtime, "api_key").every((option) => option.type === "api_key")).toBe(true);
-		expect(authOptions(runtime, "oauth").every((option) => option.type === "oauth")).toBe(true);
-		expect(options.some((option) => option.provider.id === "openai-codex" && option.type === "api_key")).toBe(false);
-	});
 
-	it("attaches the provider's active auth status to every method option", async () => {
-		const runtime = await ModelRuntime.create({
-			credentials: AuthStorage.inMemory({
-				anthropic: {
-					type: "oauth",
-					access: "access",
-					refresh: "refresh",
-					expires: Date.now() + 60_000,
-				},
-			}),
-			modelsPath: null,
-		});
-
-		const options = authOptions(runtime).filter((option) => option.provider.id === "anthropic");
-		expect(options).toHaveLength(2);
-		expect(await runtime.checkAuth("anthropic")).toMatchObject({ type: "oauth" });
-	});
-
-	it("distinguishes subscription OAuth from generic OAuth sign-in", async () => {
-		const runtime = await ModelRuntime.create({
-			credentials: AuthStorage.inMemory({
-				anthropic: {
-					type: "oauth",
-					access: "anthropic-access",
-					refresh: "anthropic-refresh",
-					expires: Date.now() + 60 * 60_000,
-				},
-				openrouter: {
-					type: "oauth",
-					access: "openrouter-key",
-					refresh: "",
-					expires: Number.MAX_SAFE_INTEGER,
-				},
-				radius: {
-					type: "oauth",
-					access: "radius-access",
-					refresh: "radius-refresh",
-					expires: Date.now() + 60 * 60_000,
-				},
-			}),
-			modelsPath: null,
-		});
-
-		expect(runtime.isUsingOAuth("anthropic")).toBe(true);
-		expect(runtime.isUsingSubscription("anthropic")).toBe(true);
-		expect(runtime.isUsingOAuth("openrouter")).toBe(true);
-		expect(runtime.isUsingSubscription("openrouter")).toBe(false);
-		expect(runtime.isUsingOAuth("radius")).toBe(true);
-		expect(runtime.isUsingSubscription("radius")).toBe(false);
-	});
 
 	it("constructs an API key method for an extension API-key provider", async () => {
 		const runtime = await ModelRuntime.create({ credentials: AuthStorage.inMemory(), modelsPath: null });
@@ -173,7 +89,6 @@ describe("ModelRuntime auth options", () => {
 			provider: { id: "extension-api-key", name: "Extension API Key" },
 			method: { name: "API key" },
 		});
-		expect(options[0]?.method.login).toBeTypeOf("function");
 	});
 
 	it("resolves configured auth from request-scoped environment overrides", async () => {
@@ -263,64 +178,5 @@ describe("ModelRuntime auth options", () => {
 		});
 	});
 
-	it("forwards cancellation to extension OAuth refresh", async () => {
-		const credentials = AuthStorage.inMemory({
-			"extension-oauth": {
-				type: "oauth",
-				access: "expired",
-				refresh: "refresh",
-				expires: 0,
-			},
-		});
-		const runtime = await ModelRuntime.create({ credentials, modelsPath: null });
-		let refreshSignal: AbortSignal | undefined;
-		runtime.registerProvider("extension-oauth", {
-			name: "Extension OAuth",
-			baseUrl: "https://example.test/v1",
-			api: "openai-completions",
-			oauth: {
-				name: "Extension subscription",
-				login: async () => ({ access: "access", refresh: "refresh", expires: Date.now() + 60_000 }),
-				refreshToken: async (credential, signal) => {
-					refreshSignal = signal;
-					return { ...credential, expires: Date.now() + 60_000 };
-				},
-				getApiKey: (credential) => credential.access,
-			},
-			models: [testModel("extension-model")],
-		});
-		const controller = new AbortController();
 
-		await runtime.getAuth("extension-oauth", { signal: controller.signal });
-		expect(refreshSignal).toBeInstanceOf(AbortSignal);
-		const reason = new Error("cancelled");
-		controller.abort(reason);
-		expect(refreshSignal?.aborted).toBe(true);
-		expect(refreshSignal?.reason).toBe(reason);
-	});
-
-	it("does not fabricate an API key method for an extension OAuth-only provider", async () => {
-		const runtime = await ModelRuntime.create({ credentials: AuthStorage.inMemory(), modelsPath: null });
-		runtime.registerProvider("extension-oauth", {
-			name: "Extension OAuth",
-			baseUrl: "https://example.test/v1",
-			api: "openai-completions",
-			oauth: {
-				name: "Extension subscription",
-				isSubscription: true,
-				login: async () => ({ access: "access", refresh: "refresh", expires: Date.now() + 60_000 }),
-				refreshToken: async (credentials) => credentials,
-				getApiKey: (credentials) => credentials.access,
-			},
-			models: [testModel("extension-model")],
-		});
-
-		const options = authOptions(runtime).filter((option) => option.provider.id === "extension-oauth");
-		expect(options).toHaveLength(1);
-		expect(options[0]).toMatchObject({
-			type: "oauth",
-			provider: { id: "extension-oauth", name: "Extension OAuth" },
-			method: { name: "Extension subscription", isSubscription: true },
-		});
-	});
 });

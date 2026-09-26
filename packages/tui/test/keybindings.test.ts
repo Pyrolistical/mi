@@ -27,25 +27,6 @@ describe("KeybindingsManager", () => {
 		assert.deepStrictEqual(keybindings.getKeys("tui.editor.historyNext"), []);
 	});
 
-	it("binds unmodified terminal viewport shortcuts to alternate-screen navigation", () => {
-		const keybindings = new KeybindingsManager(TUI_KEYBINDINGS);
-
-		assert.deepStrictEqual(keybindings.getKeys("tui.altScreen.pageUp"), ["pageUp"]);
-		assert.deepStrictEqual(keybindings.getKeys("tui.altScreen.pageDown"), ["pageDown"]);
-		assert.deepStrictEqual(keybindings.getKeys("tui.altScreen.halfPageUp"), []);
-		assert.deepStrictEqual(keybindings.getKeys("tui.altScreen.halfPageDown"), []);
-		assert.deepStrictEqual(keybindings.getKeys("tui.altScreen.lineUp"), []);
-		assert.deepStrictEqual(keybindings.getKeys("tui.altScreen.lineDown"), []);
-		assert.deepStrictEqual(keybindings.getKeys("tui.altScreen.previousPrompt"), ["ctrl+shift+up", "ctrl+up"]);
-		assert.deepStrictEqual(keybindings.getKeys("tui.altScreen.nextPrompt"), ["ctrl+shift+down", "ctrl+down"]);
-		assert.deepStrictEqual(keybindings.getKeys("tui.altScreen.search"), ["ctrl+shift+f"]);
-		assert.deepStrictEqual(keybindings.getKeys("tui.altScreen.searchNext"), ["enter", "ctrl+g"]);
-		assert.deepStrictEqual(keybindings.getKeys("tui.altScreen.searchPrevious"), ["shift+enter", "ctrl+shift+g"]);
-		assert.deepStrictEqual(keybindings.getKeys("tui.altScreen.searchClose"), ["escape"]);
-		assert.deepStrictEqual(keybindings.getKeys("tui.altScreen.top"), ["home"]);
-		assert.deepStrictEqual(keybindings.getKeys("tui.altScreen.bottom"), ["end"]);
-	});
-
 	it("does not evict selector confirm when input submit is rebound", () => {
 		const keybindings = new KeybindingsManager(TUI_KEYBINDINGS, {
 			"tui.input.submit": ["enter", "ctrl+enter"],

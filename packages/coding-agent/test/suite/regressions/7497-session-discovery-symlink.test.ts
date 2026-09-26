@@ -5,8 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ENV_AGENT_DIR } from "../../../src/config.ts";
 import { SessionManager } from "../../../src/core/session-manager.ts";
 
-const DIRECTORY_LINK_TYPE = process.platform === "win32" ? "junction" : "dir";
-
 describe("regression #7497: discover sessions through symlinked directories", () => {
 	let tempDir: string;
 	let sessionsDir: string;
@@ -42,7 +40,7 @@ describe("regression #7497: discover sessions through symlinked directories", ()
 		const targetDir = join(tempDir, "linked-sessions");
 		writeSession(targetDir, "linked");
 		const aliasDir = join(sessionsDir, "--linked--");
-		symlinkSync(targetDir, aliasDir, DIRECTORY_LINK_TYPE);
+		symlinkSync(targetDir, aliasDir, "dir");
 
 		const sessions = await SessionManager.listAll();
 
@@ -54,7 +52,7 @@ describe("regression #7497: discover sessions through symlinked directories", ()
 		writeSession(join(sessionsDir, "--regular--"), "regular");
 		const targetDir = join(tempDir, "removed-sessions");
 		mkdirSync(targetDir);
-		symlinkSync(targetDir, join(sessionsDir, "--broken--"), DIRECTORY_LINK_TYPE);
+		symlinkSync(targetDir, join(sessionsDir, "--broken--"), "dir");
 		rmSync(targetDir, { recursive: true });
 
 		const sessions = await SessionManager.listAll();
@@ -62,7 +60,7 @@ describe("regression #7497: discover sessions through symlinked directories", ()
 		expect(sessions.map((session) => session.id)).toEqual(["regular"]);
 	});
 
-	it.skipIf(process.platform === "win32")("ignores links to files", async () => {
+	it("ignores links to files", async () => {
 		writeSession(join(sessionsDir, "--regular--"), "regular");
 		const targetFile = join(tempDir, "not-a-directory");
 		writeFileSync(targetFile, "");

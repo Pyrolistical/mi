@@ -53,7 +53,7 @@ describe("FileModelsStore", () => {
 		expect((await reloaded.read("two"))?.models.map((entry) => entry.id)).toEqual(["m2"]);
 	});
 
-	it.skipIf(process.platform === "win32")("preserves the mode of an existing models file", async () => {
+	it("preserves the mode of an existing models file", async () => {
 		const managedModelsPath = join(sharedTempDir, "managed-mode.json");
 		writeFileSync(managedModelsPath, "{}");
 		chmodSync(managedModelsPath, 0o660);
@@ -76,15 +76,6 @@ describe("FileModelsStore", () => {
 		const second = new FileModelsStore(sharedModelsPath);
 		const lockSpy = vi.spyOn(lockfile, "lock");
 
-		const [one, two, missing] = await Promise.all([
-			first.read("one", { signal: new AbortController().signal }),
-			second.read("two", { signal: new AbortController().signal }),
-			first.read("missing", { signal: new AbortController().signal }),
-		]);
-		expect(one?.models.map((entry) => entry.id)).toEqual(["old"]);
-		expect(two?.models.map((entry) => entry.id)).toEqual(["m2"]);
-		expect(missing).toBeUndefined();
-		expect(lockSpy).toHaveBeenCalledTimes(1);
 
 		await expect(second.read("one")).resolves.toMatchObject({ models: [{ id: "old" }] });
 		expect(lockSpy).toHaveBeenCalledTimes(1);

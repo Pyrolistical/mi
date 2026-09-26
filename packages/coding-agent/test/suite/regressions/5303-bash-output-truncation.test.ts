@@ -4,21 +4,6 @@ import { PassThrough } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { waitForChildProcess } from "../../../src/utils/child-process.ts";
 
-/**
- * Regression test for https://github.com/earendil-works/pi/issues/5303
- *
- * waitForChildProcess armed a fixed 100ms timer on `exit` and destroyed the
- * stdio streams when it fired. When a short-lived detached descendant kept the
- * stdout pipe open, `close` never fired, so that timer was the only thing that
- * resolved the wait, and any output written more than 100ms after exit was
- * binned. In practice every git commit whose pre-commit hook runs lint-staged
- * came back truncated mid-listr2 output, read by the model as a hang.
- *
- * The fix re-arms the grace on each chunk, so an actively writing pipe keeps us
- * reading while a genuinely idle held-open handle still releases after the
- * grace elapses. Both behaviours are covered below with virtual time so host
- * load cannot reorder a real subprocess's writes and the grace timer.
- */
 describe("issue #5303 bash output truncation past exit", () => {
 	function createChild(): ChildProcessByStdio<null, PassThrough, PassThrough> {
 		return Object.assign(new EventEmitter(), {

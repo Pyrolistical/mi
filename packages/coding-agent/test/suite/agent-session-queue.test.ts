@@ -155,7 +155,6 @@ describe("AgentSession queue characterization", () => {
 		expect(getAssistantTexts(harness)).toContain("follow-up response");
 	});
 
-	// Regression test for #8718.
 	it("runs direct steering and follow-up messages through input handlers", async () => {
 		const inputEvents: Array<Pick<InputEvent, "text" | "source" | "streamingBehavior">> = [];
 		const waiting = await createWaitingHarness({
@@ -184,16 +183,16 @@ describe("AgentSession queue characterization", () => {
 		await waitForToolStart;
 		inputEvents.length = 0;
 		try {
-			await harness.session.steer("steer me", undefined, { source: "rpc" });
-			await harness.session.steer("handle steer", undefined, { source: "rpc" });
-			await harness.session.followUp("follow me", undefined, { source: "rpc" });
-			await harness.session.followUp("handle follow", undefined, { source: "rpc" });
+			await harness.session.steer("steer me", undefined, { source: "extension" });
+			await harness.session.steer("handle steer", undefined, { source: "extension" });
+			await harness.session.followUp("follow me", undefined, { source: "extension" });
+			await harness.session.followUp("handle follow", undefined, { source: "extension" });
 
 			expect(inputEvents).toEqual([
-				{ text: "steer me", source: "rpc", streamingBehavior: "steer" },
-				{ text: "handle steer", source: "rpc", streamingBehavior: "steer" },
-				{ text: "follow me", source: "rpc", streamingBehavior: "followUp" },
-				{ text: "handle follow", source: "rpc", streamingBehavior: "followUp" },
+				{ text: "steer me", source: "extension", streamingBehavior: "steer" },
+				{ text: "handle steer", source: "extension", streamingBehavior: "steer" },
+				{ text: "follow me", source: "extension", streamingBehavior: "followUp" },
+				{ text: "handle follow", source: "extension", streamingBehavior: "followUp" },
 			]);
 			expect(harness.session.getSteeringMessages()).toEqual(["transformed: steer me"]);
 			expect(harness.session.getFollowUpMessages()).toEqual(["transformed: follow me"]);

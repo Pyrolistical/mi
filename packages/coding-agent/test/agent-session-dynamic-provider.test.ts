@@ -2,7 +2,6 @@ import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Provider } from "@earendil-works/pi-ai";
-import { getModel } from "@earendil-works/pi-ai/compat";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
@@ -11,12 +10,14 @@ import type { ExtensionFactory } from "../src/core/sdk.ts";
 import { createAgentSession } from "../src/core/sdk.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
+import { openaiModel } from "../../ai/test/openai-models.ts";
+import { writeOpenAIModelsJson } from "./model-runtime-test-utils.ts";
 
-function nativeAnthropicProvider(baseUrl: string): Provider {
-	const model = { ...getModel("anthropic", "claude-sonnet-4-5")!, baseUrl };
+function nativeOpenAIProvider(baseUrl: string): Provider {
+	const model = { ...openaiModel("gpt-5-mini"), baseUrl };
 	return {
-		id: "anthropic",
-		name: "Native Anthropic",
+		id: "openai",
+		name: "Native OpenAI",
 		baseUrl,
 		auth: {
 			apiKey: {
@@ -50,14 +51,14 @@ describe("AgentSession dynamic provider registration", () => {
 		}
 	});
 
-	async function createSession(extensionFactories: ExtensionFactory[]) {
+	async function createSession(extensionFactories: ExtensionFactory[], modelsJson?: "openai") {
 		const settingsManager = SettingsManager.create(tempDir, agentDir);
 		const sessionManager = SessionManager.inMemory();
 		const authStorage = AuthStorage.create(join(agentDir, "auth.json"));
-		await authStorage.modify("anthropic", async () => ({ type: "api_key", key: "test-key" }));
+		await authStorage.modify("openai", async () => ({ type: "api_key", key: "test-key" }));
 		const modelRuntime = await ModelRuntime.create({
 			credentials: authStorage,
-			modelsPath: join(agentDir, "models.json"),
+			modelsPath: modelsJson === "openai" ? writeOpenAIModelsJson(agentDir) : join(agentDir, "models.json"),
 		});
 		const resourceLoader = new DefaultResourceLoader({
 			cwd: tempDir,
@@ -70,7 +71,7 @@ describe("AgentSession dynamic provider registration", () => {
 		const { session } = await createAgentSession({
 			cwd: tempDir,
 			agentDir,
-			model: getModel("anthropic", "claude-sonnet-4-5")!,
+			model: openaiModel("gpt-5-mini"),
 			settingsManager,
 			sessionManager,
 			modelRuntime,
@@ -93,11 +94,14 @@ describe("AgentSession dynamic provider registration", () => {
 	}
 
 	it("applies top-level registerProvider overrides to the active model", async () => {
-		const session = await createSession([
-			(pi) => {
-				pi.registerProvider("anthropic", { baseUrl: "http://localhost:8080/top-level" });
-			},
-		]);
+		const session = await createSession(
+			[
+				(pi) => {
+					pi.registerProvider("openai", { baseUrl: "http://localhost:8080/top-level" });
+				},
+			],
+			"openai",
+		);
 
 		expect(session.model?.baseUrl).toBe("http://localhost:8080/top-level");
 		expect(await capturePromptBaseUrl(session)).toBe("http://localhost:8080/top-level");
@@ -106,13 +110,16 @@ describe("AgentSession dynamic provider registration", () => {
 	});
 
 	it("applies session_start registerProvider overrides to the active model", async () => {
-		const session = await createSession([
-			(pi) => {
-				pi.on("session_start", () => {
-					pi.registerProvider("anthropic", { baseUrl: "http://localhost:8080/session-start" });
-				});
-			},
-		]);
+		const session = await createSession(
+			[
+				(pi) => {
+					pi.on("session_start", () => {
+						pi.registerProvider("openai", { baseUrl: "http://localhost:8080/session-start" });
+					});
+				},
+			],
+			"openai",
+		);
 
 		await session.bindExtensions({});
 
@@ -125,7 +132,7 @@ describe("AgentSession dynamic provider registration", () => {
 	it("registers native pi-ai providers during extension loading", async () => {
 		const session = await createSession([
 			(pi) => {
-				pi.registerProvider(nativeAnthropicProvider("http://localhost:8080/native-top-level"));
+				pi.registerProvider(nativeOpenAIProvider("http://localhost:8080/native-top-level"));
 			},
 		]);
 
@@ -136,16 +143,19 @@ describe("AgentSession dynamic provider registration", () => {
 	});
 
 	it("applies command-time registerProvider overrides without reload", async () => {
-		const session = await createSession([
-			(pi) => {
-				pi.registerCommand("use-proxy", {
-					description: "Use proxy",
-					handler: async () => {
-						pi.registerProvider("anthropic", { baseUrl: "http://localhost:8080/command" });
-					},
-				});
-			},
-		]);
+		const session = await createSession(
+			[
+				(pi) => {
+					pi.registerCommand("use-proxy", {
+						description: "Use proxy",
+						handler: async () => {
+							pi.registerProvider("openai", { baseUrl: "http://localhost:8080/command" });
+						},
+					});
+				},
+			],
+			"openai",
+		);
 
 		await session.bindExtensions({});
 		await session.prompt("/use-proxy");
@@ -162,7 +172,7 @@ describe("AgentSession dynamic provider registration", () => {
 				pi.registerCommand("use-native", {
 					description: "Use native provider",
 					handler: async () => {
-						pi.registerProvider(nativeAnthropicProvider("http://localhost:8080/native-command"));
+						pi.registerProvider(nativeOpenAIProvider("http://localhost:8080/native-command"));
 					},
 				});
 			},

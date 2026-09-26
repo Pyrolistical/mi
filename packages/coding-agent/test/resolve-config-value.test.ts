@@ -1,13 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import {
 	clearConfigValueCache,
 	resolveConfigValue,
 	resolveConfigValueUncached,
 } from "../src/core/resolve-config-value.ts";
-import * as shellModule from "../src/utils/shell.ts";
 
 describe("resolveConfigValue", () => {
 	let tempDir: string;
@@ -21,7 +20,6 @@ describe("resolveConfigValue", () => {
 	afterEach(() => {
 		if (existsSync(tempDir)) rmSync(tempDir, { recursive: true });
 		clearConfigValueCache();
-		vi.restoreAllMocks();
 	});
 
 	test("resolves literals, environment templates, and escapes", () => {
@@ -100,22 +98,5 @@ describe("resolveConfigValue", () => {
 		expect(resolveConfigValueUncached(command)).toBe("value");
 		expect(resolveConfigValueUncached(command)).toBe("value");
 		expect(readFileSync(counterFile, "utf-8").trim()).toBe("2");
-	});
-
-	test("uses stdin when the configured Windows shell requires it", () => {
-		if (process.platform === "win32") return;
-		const platformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
-		vi.spyOn(shellModule, "getShellConfig").mockReturnValue({
-			shell: "/bin/bash",
-			args: ["-s"],
-			commandTransport: "stdin",
-		});
-		try {
-			Object.defineProperty(process, "platform", { configurable: true, value: "win32" });
-			const expansion = "$" + "{name}";
-			expect(resolveConfigValueUncached(`!name='World'; echo "Hello, ${expansion}!"`)).toBe("Hello, World!");
-		} finally {
-			if (platformDescriptor) Object.defineProperty(process, "platform", platformDescriptor);
-		}
 	});
 });

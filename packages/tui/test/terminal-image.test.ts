@@ -1,27 +1,18 @@
-/**
- * Tests for terminal image detection and line handling
- */
-
 import assert from "node:assert";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { Image } from "../src/components/image.ts";
 import {
-	cropKittyImageLine,
 	deleteAllKittyImages,
-	deleteAllKittyPlacements,
 	deleteKittyImage,
 	detectCapabilities,
 	encodeITerm2,
 	encodeKitty,
 	getCapabilities,
-	getKittyImageMetadata,
-	getKittyImagePlacement,
 	hyperlink,
 	imageFallback,
 	isImageLine,
-	registerKittyImageMetadata,
 	renderImage,
 	resetCapabilitiesCache,
 	setCapabilities,
@@ -34,19 +25,16 @@ const ENV_KEYS = [
 	"TERM",
 	"TERM_PROGRAM",
 	"TERMINAL_EMULATOR",
-	"COLORTERM",
 	"TMUX",
 	"KITTY_WINDOW_ID",
 	"GHOSTTY_RESOURCES_DIR",
 	"WEZTERM_PANE",
 	"ITERM_SESSION_ID",
-	"WT_SESSION",
 	"CMUX_WORKSPACE_ID",
 	"WARP_SESSION_ID",
 	"WARP_TERMINAL_SESSION_UUID",
 	"PI_HYPERLINKS",
 	"PI_IMAGE_PROTOCOL",
-	"PI_TRUE_COLOR",
 ] as const;
 
 function withEnv<T>(overrides: Record<string, string | undefined>, fn: () => T): T {
@@ -72,19 +60,16 @@ function withEnv<T>(overrides: Record<string, string | undefined>, fn: () => T):
 describe("isImageLine", () => {
 	describe("iTerm2 image protocol", () => {
 		it("should detect iTerm2 image escape sequence at start of line", () => {
-			// iTerm2 image escape sequence: ESC ]1337;File=...
 			const iterm2ImageLine = "\x1b]1337;File=size=100,100;inline=1:base64encodeddata==\x07";
 			assert.strictEqual(isImageLine(iterm2ImageLine), true);
 		});
 
 		it("should detect iTerm2 image escape sequence with text before it", () => {
-			// Simulating a line that has text then image data (bug scenario)
 			const lineWithTextAndImage = "Some text \x1b]1337;File=size=100,100;inline=1:base64data==\x07 more text";
 			assert.strictEqual(isImageLine(lineWithTextAndImage), true);
 		});
 
 		it("should detect iTerm2 image escape sequence in middle of long line", () => {
-			// Simulate a very long line with image data in the middle
 			const longLineWithImage =
 				"Text before image..." + "\x1b]1337;File=inline=1:verylongbase64data==" + "...text after";
 			assert.strictEqual(isImageLine(longLineWithImage), true);
@@ -103,19 +88,16 @@ describe("isImageLine", () => {
 
 	describe("Kitty image protocol", () => {
 		it("should detect Kitty image escape sequence at start of line", () => {
-			// Kitty image escape sequence: ESC _G
 			const kittyImageLine = "\x1b_Ga=T,f=100,t=f,d=base64data...\x1b\\\x1b_Gm=i=1;\x1b\\";
 			assert.strictEqual(isImageLine(kittyImageLine), true);
 		});
 
 		it("should detect Kitty image escape sequence with text before it", () => {
-			// Bug scenario: text + image data in same line
 			const lineWithTextAndKittyImage = "Output: \x1b_Ga=T,f=100;data...\x1b\\\x1b_Gm=i=1;\x1b\\";
 			assert.strictEqual(isImageLine(lineWithTextAndKittyImage), true);
 		});
 
 		it("should detect Kitty image escape sequence with padding", () => {
-			// Kitty protocol adds padding to escape sequences
 			const kittyWithPadding = "  \x1b_Ga=T,f=100...\x1b\\\x1b_Gm=i=1;\x1b\\  ";
 			assert.strictEqual(isImageLine(kittyWithPadding), true);
 		});
@@ -123,16 +105,13 @@ describe("isImageLine", () => {
 
 	describe("Bug regression tests", () => {
 		it("should detect image sequences in very long lines (304k+ chars)", () => {
-			// This simulates the crash scenario: a line with 304,401 chars
-			// containing image escape sequences somewhere
-			const base64Char = "A".repeat(100); // 100 chars of base64-like data
+			const base64Char = "A".repeat(100);
 			const imageSequence = "\x1b]1337;File=size=800,600;inline=1:";
 
-			// Build a long line with image sequence
 			const longLine =
 				"Text prefix " +
 				imageSequence +
-				base64Char.repeat(3000) + // ~300,000 chars
+				base64Char.repeat(3000) +
 				" suffix";
 
 			assert.strictEqual(longLine.length > 300000, true);
@@ -140,14 +119,11 @@ describe("isImageLine", () => {
 		});
 
 		it("should detect image sequences when terminal doesn't support images", () => {
-			// The bug occurred when getImageEscapePrefix() returned null
-			// isImageLine should still detect image sequences regardless
 			const lineWithImage = "Read image file [image/jpeg]\x1b]1337;File=inline=1:base64data==\x07";
 			assert.strictEqual(isImageLine(lineWithImage), true);
 		});
 
 		it("should detect image sequences with ANSI codes before them", () => {
-			// Text might have ANSI styling before image data
 			const lineWithAnsiAndImage = "\x1b[31mError output \x1b]1337;File=inline=1:image==\x07";
 			assert.strictEqual(isImageLine(lineWithAnsiAndImage), true);
 		});
@@ -175,13 +151,11 @@ describe("isImageLine", () => {
 		});
 
 		it("should not detect images in lines with partial iTerm2 sequences", () => {
-			// Similar prefix but missing the complete sequence
 			const partialSequence = "Some text with ]1337;File but missing ESC at start";
 			assert.strictEqual(isImageLine(partialSequence), false);
 		});
 
 		it("should not detect images in lines with partial Kitty sequences", () => {
-			// Similar prefix but missing the complete sequence
 			const partialSequence = "Some text with _G but missing ESC at start";
 			assert.strictEqual(isImageLine(partialSequence), false);
 		});
@@ -208,7 +182,6 @@ describe("isImageLine", () => {
 		});
 
 		it("should not falsely detect image in line with file path containing keywords", () => {
-			// File path might contain "1337" or "File" but without escape sequences
 			const filePathLine = "/path/to/File_1337_backup/image.jpg";
 			assert.strictEqual(isImageLine(filePathLine), false);
 		});
@@ -226,14 +199,14 @@ describe("detectCapabilities", () => {
 
 	it("applies environment overrides", () => {
 		assert.deepStrictEqual(
-			withEnv({ PI_HYPERLINKS: "1", PI_IMAGE_PROTOCOL: "kitty", PI_TRUE_COLOR: "1" }, () => detectCapabilities()),
-			{ images: "kitty", trueColor: true, hyperlinks: true },
+			withEnv({ PI_HYPERLINKS: "1", PI_IMAGE_PROTOCOL: "kitty" }, () => detectCapabilities()),
+			{ images: "kitty", hyperlinks: true },
 		);
 		assert.deepStrictEqual(
-			withEnv({ TERM_PROGRAM: "iterm.app", PI_HYPERLINKS: "0", PI_IMAGE_PROTOCOL: "none", PI_TRUE_COLOR: "0" }, () =>
+			withEnv({ TERM_PROGRAM: "iterm.app", PI_HYPERLINKS: "0", PI_IMAGE_PROTOCOL: "none" }, () =>
 				detectCapabilities(),
 			),
-			{ images: null, trueColor: false, hyperlinks: false },
+			{ images: null, hyperlinks: false },
 		);
 	});
 
@@ -244,21 +217,20 @@ describe("detectCapabilities", () => {
 					TERM_PROGRAM: "ghostty",
 					PI_HYPERLINKS: "auto",
 					PI_IMAGE_PROTOCOL: "auto",
-					PI_TRUE_COLOR: "auto",
 				},
 				() => detectCapabilities(),
 			),
-			{ images: "kitty", trueColor: true, hyperlinks: true },
+			{ images: "kitty", hyperlinks: true },
 		);
 	});
 
 	it("applies and clears programmatic overrides", () => {
-		withEnv({ PI_HYPERLINKS: "1", PI_IMAGE_PROTOCOL: "kitty", PI_TRUE_COLOR: "1" }, () => {
-			setCapabilityOverrides({ images: null, trueColor: false, hyperlinks: false });
+		withEnv({ PI_HYPERLINKS: "1", PI_IMAGE_PROTOCOL: "kitty" }, () => {
+			setCapabilityOverrides({ images: null, hyperlinks: false });
 			try {
-				assert.deepStrictEqual(getCapabilities(), { images: null, trueColor: false, hyperlinks: false });
+				assert.deepStrictEqual(getCapabilities(), { images: null, hyperlinks: false });
 				setCapabilityOverrides({});
-				assert.deepStrictEqual(getCapabilities(), { images: "kitty", trueColor: true, hyperlinks: true });
+				assert.deepStrictEqual(getCapabilities(), { images: "kitty", hyperlinks: true });
 			} finally {
 				setCapabilityOverrides({});
 				resetCapabilitiesCache();
@@ -349,7 +321,6 @@ describe("detectCapabilities", () => {
 		withEnv({ TERM_PROGRAM: "WarpTerminal" }, () => {
 			const caps = detectCapabilities();
 			assert.strictEqual(caps.images, "kitty");
-			assert.strictEqual(caps.trueColor, true);
 			assert.strictEqual(caps.hyperlinks, true);
 		});
 	});
@@ -358,7 +329,6 @@ describe("detectCapabilities", () => {
 		withEnv({ WARP_SESSION_ID: "some-session-id" }, () => {
 			const caps = detectCapabilities();
 			assert.strictEqual(caps.images, "kitty");
-			assert.strictEqual(caps.trueColor, true);
 			assert.strictEqual(caps.hyperlinks, true);
 		});
 	});
@@ -367,7 +337,6 @@ describe("detectCapabilities", () => {
 		withEnv({ WARP_TERMINAL_SESSION_UUID: "d0e1a2e5-7ca7-44cd-9037-ac7222011161" }, () => {
 			const caps = detectCapabilities();
 			assert.strictEqual(caps.images, "kitty");
-			assert.strictEqual(caps.trueColor, true);
 			assert.strictEqual(caps.hyperlinks, true);
 		});
 	});
@@ -403,49 +372,15 @@ describe("detectCapabilities", () => {
 
 	it("enables Alacritty capabilities for Zed", () => {
 		withEnv({ TERM_PROGRAM: "zed" }, () => {
-			assert.deepStrictEqual(detectCapabilities(), { images: null, trueColor: true, hyperlinks: true });
-		});
-	});
-
-	it("enables truecolor and hyperlinks for Windows Terminal outside multiplexers", () => {
-		withEnv({ WT_SESSION: "session", TERM: "xterm-256color" }, () => {
-			const caps = detectCapabilities();
-			assert.strictEqual(caps.trueColor, true);
-			assert.strictEqual(caps.hyperlinks, true);
-			assert.strictEqual(caps.images, null);
+			assert.deepStrictEqual(detectCapabilities(), { images: null, hyperlinks: true });
 		});
 	});
 
 	it("enables truecolor without hyperlinks for JetBrains terminal", () => {
 		withEnv({ TERMINAL_EMULATOR: "JetBrains-JediTerm", TERM: "xterm-256color" }, () => {
 			const caps = detectCapabilities();
-			assert.strictEqual(caps.trueColor, true);
 			assert.strictEqual(caps.hyperlinks, false);
 			assert.strictEqual(caps.images, null);
-		});
-	});
-
-	it("does not inherit Windows Terminal truecolor through tmux", () => {
-		withEnv({ WT_SESSION: "session", TMUX: "/tmp/tmux-1000/default,1234,0", TERM: "tmux-256color" }, () => {
-			const caps = detectCapabilities(() => false);
-			assert.strictEqual(caps.trueColor, false);
-			assert.strictEqual(caps.hyperlinks, false);
-			assert.strictEqual(caps.images, null);
-		});
-	});
-
-	it("trusts explicit truecolor hints through tmux", () => {
-		withEnv({ COLORTERM: "truecolor", TMUX: "/tmp/tmux-1000/default,1234,0", TERM: "tmux-256color" }, () => {
-			const caps = detectCapabilities(() => false);
-			assert.strictEqual(caps.trueColor, true);
-			assert.strictEqual(caps.hyperlinks, false);
-			assert.strictEqual(caps.images, null);
-		});
-	});
-
-	it("detects truecolor from direct-color TERM values", () => {
-		withEnv({ TERM: "xterm-direct" }, () => {
-			assert.strictEqual(detectCapabilities(() => false).trueColor, true);
 		});
 	});
 });
@@ -466,11 +401,10 @@ describe("Kitty image cursor movement", () => {
 	it("suppresses Kitty replies for delete commands", () => {
 		assert.strictEqual(deleteKittyImage(42), "\x1b_Ga=d,d=I,i=42,q=2\x1b\\");
 		assert.strictEqual(deleteAllKittyImages(), "\x1b_Ga=d,d=A,q=2\x1b\\");
-		assert.strictEqual(deleteAllKittyPlacements(), "\x1b_Ga=d,d=a,q=2\x1b\\");
 	});
 
 	it("preserves renderImage's default terminal-side cursor movement", () => {
-		setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
+		setCapabilities({ images: "kitty", hyperlinks: true });
 		setCellDimensions({ widthPx: 10, heightPx: 10 });
 		try {
 			const result = renderImage("AAAA", { widthPx: 20, heightPx: 20 }, { maxWidthCells: 2 });
@@ -484,7 +418,7 @@ describe("Kitty image cursor movement", () => {
 	});
 
 	it("can opt renderImage into no terminal-side cursor movement", () => {
-		setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
+		setCapabilities({ images: "kitty", hyperlinks: true });
 		setCellDimensions({ widthPx: 10, heightPx: 10 });
 		try {
 			const result = renderImage("AAAA", { widthPx: 20, heightPx: 20 }, { maxWidthCells: 2, moveCursor: false });
@@ -497,50 +431,8 @@ describe("Kitty image cursor movement", () => {
 		}
 	});
 
-	it("registers metadata and crops a partially visible placement", () => {
-		setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
-		setCellDimensions({ widthPx: 10, heightPx: 10 });
-		try {
-			const result = renderImage(
-				"AAAA",
-				{ widthPx: 100, heightPx: 100 },
-				{ maxWidthCells: 3, imageId: 42, moveCursor: false },
-			);
-			assert.ok(result);
-			assert.deepStrictEqual(getKittyImageMetadata(result.sequence), {
-				imageId: 42,
-				columns: 3,
-				rows: 3,
-				widthPx: 100,
-				heightPx: 100,
-			});
-			assert.ok(cropKittyImageLine(result.sequence, 2, 1).includes("y=66,h=34,r=1"));
-		} finally {
-			resetCapabilitiesCache();
-			setCellDimensions({ widthPx: 9, heightPx: 18 });
-		}
-	});
-
-	it("creates placement-only commands for uploaded and cropped images", () => {
-		registerKittyImageMetadata({ imageId: 42, columns: 3, rows: 3, widthPx: 100, heightPx: 100 });
-		const transmission = encodeKitty("A".repeat(8192), {
-			columns: 3,
-			rows: 3,
-			imageId: 42,
-			moveCursor: false,
-		});
-		const line = `left ${cropKittyImageLine(transmission, 2, 1)} right`;
-		const placement = getKittyImagePlacement(line);
-		assert.ok(placement);
-		assert.strictEqual(placement.transmissionBytes, line.length - "left ".length - " right".length);
-		assert.strictEqual(placement.estimatedDecodedBytes, 100 * 100 * 4);
-		assert.strictEqual(placement.sequence, "\x1b_Ga=p,q=2,C=1,c=3,i=42,y=66,h=34,r=1\x1b\\");
-		assert.strictEqual(placement.replacementLine, `left ${placement.sequence} right`);
-		assert.ok(!placement.replacementLine.includes("AAAA"));
-	});
-
 	it("honors maxHeightCells by reducing rendered width", () => {
-		setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
+		setCapabilities({ images: "kitty", hyperlinks: true });
 		setCellDimensions({ widthPx: 10, heightPx: 10 });
 		try {
 			const result = renderImage("AAAA", { widthPx: 10, heightPx: 100 }, { maxWidthCells: 10, maxHeightCells: 5 });
@@ -554,7 +446,7 @@ describe("Kitty image cursor movement", () => {
 	});
 
 	it("caps Image component height to a square pixel box by default", () => {
-		setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
+		setCapabilities({ images: "kitty", hyperlinks: true });
 		setCellDimensions({ widthPx: 10, heightPx: 20 });
 		try {
 			const image = new Image(
@@ -574,7 +466,7 @@ describe("Kitty image cursor movement", () => {
 	});
 
 	it("places image sequence on first line with empty padding rows", () => {
-		setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
+		setCapabilities({ images: "kitty", hyperlinks: true });
 		setCellDimensions({ widthPx: 10, heightPx: 10 });
 		try {
 			const image = new Image(
@@ -599,7 +491,7 @@ describe("Kitty image cursor movement", () => {
 	});
 
 	it("truncates long image fallback lines to render width", () => {
-		setCapabilities({ images: null, trueColor: false, hyperlinks: false });
+		setCapabilities({ images: null, hyperlinks: false });
 		try {
 			const longPath = join(
 				homedir(),
@@ -628,7 +520,6 @@ describe("Kitty image cursor movement", () => {
 	});
 });
 
-// #8938: reduce Kitty placement distortion without shrinking iTerm2 reservations.
 describe("image cell sizing", () => {
 	afterEach(() => {
 		resetCapabilitiesCache();
@@ -637,7 +528,7 @@ describe("image cell sizing", () => {
 
 	describe("Kitty", () => {
 		beforeEach(() => {
-			setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
+			setCapabilities({ images: "kitty", hyperlinks: true });
 		});
 
 		it("reserves at least one Kitty row for thin images", () => {
@@ -648,7 +539,7 @@ describe("image cell sizing", () => {
 			assert.ok(result.sequence.includes(",c=60,r=1;"));
 		});
 
-		it("keeps Kitty placement, reserved lines, and cropping metadata consistent across width changes", () => {
+		it("keeps Kitty placement and reserved lines consistent across width changes", () => {
 			setCellDimensions({ widthPx: 9, heightPx: 18 });
 			const image = new Image(
 				"AAAA",
@@ -661,23 +552,10 @@ describe("image cell sizing", () => {
 			assert.strictEqual(lines.length, 4);
 			assert.deepStrictEqual(lines.slice(1), ["", "", ""]);
 			assert.ok(lines[0].includes(",c=60,r=4,i=8938;"));
-			assert.deepStrictEqual(getKittyImageMetadata(lines[0]), {
-				imageId: 8938,
-				columns: 60,
-				rows: 4,
-				widthPx: 615,
-				heightPx: 86,
-			});
-			const cropped = cropKittyImageLine(lines[0], 1, 2);
-			assert.strictEqual(
-				getKittyImagePlacement(cropped)?.sequence,
-				"\x1b_Ga=p,q=2,C=1,c=60,i=8938,y=21,h=44,r=2\x1b\\",
-			);
 
 			const narrowerLines = image.render(32);
 			assert.strictEqual(narrowerLines.length, 2);
 			assert.ok(narrowerLines[0].includes(",c=30,r=2,i=8938;"));
-			assert.strictEqual(getKittyImageMetadata(narrowerLines[0])?.rows, 2);
 		});
 
 		it("keeps the ceiling placement when rounding down would increase distortion", () => {
@@ -688,7 +566,7 @@ describe("image cell sizing", () => {
 			assert.ok(result.sequence.includes(",c=60,r=5;"));
 		});
 
-		it("keeps height-limited Kitty columns, reservations, and crop metadata consistent", () => {
+		it("keeps height-limited Kitty columns and reservations consistent", () => {
 			setCellDimensions({ widthPx: 14, heightPx: 28 });
 			const image = new Image(
 				"AAAA",
@@ -700,17 +578,6 @@ describe("image cell sizing", () => {
 			const lines = image.render(32);
 			assert.strictEqual(lines.length, 15);
 			assert.ok(lines[0].includes(",c=13,r=15,i=8938;"));
-			assert.deepStrictEqual(getKittyImageMetadata(lines[0]), {
-				imageId: 8938,
-				columns: 13,
-				rows: 15,
-				widthPx: 400,
-				heightPx: 900,
-			});
-			assert.strictEqual(
-				getKittyImagePlacement(cropKittyImageLine(lines[0], 1, 2))?.sequence,
-				"\x1b_Ga=p,q=2,C=1,c=13,i=8938,y=60,h=120,r=2\x1b\\",
-			);
 			const narrowerLines = image.render(22);
 			assert.strictEqual(narrowerLines.length, 10);
 			assert.ok(narrowerLines[0].includes(",c=9,r=10,i=8938;"));
@@ -734,7 +601,7 @@ describe("image cell sizing", () => {
 
 	describe("iTerm2", () => {
 		beforeEach(() => {
-			setCapabilities({ images: "iterm2", trueColor: true, hyperlinks: true });
+			setCapabilities({ images: "iterm2", hyperlinks: true });
 		});
 
 		it("keeps iTerm2's ceiling width when height-limited", () => {
@@ -768,7 +635,7 @@ describe("image cell sizing", () => {
 
 describe("imageFallback", () => {
 	it("shortens home-prefixed absolute paths without hyperlinks", () => {
-		setCapabilities({ images: null, trueColor: false, hyperlinks: false });
+		setCapabilities({ images: null, hyperlinks: false });
 		try {
 			const abs = join(homedir(), ".pi", "agent", "shot.png");
 			const result = imageFallback("image/png", { widthPx: 1280, heightPx: 720 }, abs);
@@ -779,7 +646,7 @@ describe("imageFallback", () => {
 	});
 
 	it("wraps shortened absolute paths in OSC 8 file links when hyperlinks are enabled", () => {
-		setCapabilities({ images: null, trueColor: false, hyperlinks: true });
+		setCapabilities({ images: null, hyperlinks: true });
 		try {
 			const abs = join(homedir(), ".pi", "agent", "shot.png");
 			const result = imageFallback("image/png", { widthPx: 10, heightPx: 10 }, abs);
@@ -788,7 +655,6 @@ describe("imageFallback", () => {
 				result.includes(abs.replaceAll("\\", "/")) || result.includes(abs),
 				"file URL should target absolute path",
 			);
-			// Visible text must use ~/... not the expanded home path.
 			const visible = result.replace(/\x1b\]8;;.*?\x1b\\/g, "");
 			assert.strictEqual(visible, "[Image: ~/.pi/agent/shot.png [image/png] 10x10]");
 		} finally {
@@ -797,7 +663,7 @@ describe("imageFallback", () => {
 	});
 
 	it("leaves bare basenames unchanged and does not hyperlink them", () => {
-		setCapabilities({ images: null, trueColor: false, hyperlinks: true });
+		setCapabilities({ images: null, hyperlinks: true });
 		try {
 			const result = imageFallback("image/png", { widthPx: 1, heightPx: 1 }, "clankolas.png");
 			assert.strictEqual(result, "[Image: clankolas.png [image/png] 1x1]");
@@ -808,7 +674,7 @@ describe("imageFallback", () => {
 	});
 
 	it("omits filename segment when not provided", () => {
-		setCapabilities({ images: null, trueColor: false, hyperlinks: false });
+		setCapabilities({ images: null, hyperlinks: false });
 		try {
 			assert.strictEqual(imageFallback("image/png", { widthPx: 8, heightPx: 6 }), "[Image: [image/png] 8x6]");
 		} finally {

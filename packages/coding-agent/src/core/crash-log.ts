@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { getAgentDir, VERSION } from "../config.ts";
 import type { Extension } from "./extensions/types.ts";
@@ -21,7 +21,7 @@ function crashLogPath(agentDir = getAgentDir()): string {
 	return join(agentDir, "crashes.json");
 }
 
-export function readCrashLog(path = crashLogPath()): CrashRecord[] {
+function readCrashLog(path = crashLogPath()): CrashRecord[] {
 	try {
 		const records: unknown = JSON.parse(readFileSync(path, "utf8"));
 		return Array.isArray(records)
@@ -66,7 +66,6 @@ function stackContainsPath(stack: string, targetPath: string, includeDescendants
 	return false;
 }
 
-/** Find loaded extensions with source files in a stack trace. */
 export function findExtensionStackMatches(
 	stack: string | undefined,
 	extensions: readonly ExtensionStackMetadata[],
@@ -90,27 +89,15 @@ export function findExtensionStackMatches(
 
 	for (const extension of extensions) {
 		const resolvedPath = normalizeStackPath(extension.resolvedPath);
-		const singleFilePackage =
-			extension.sourceInfo.origin === "package" &&
-			!/^(?:npm:|git:|https?:\/\/|ssh:\/\/)/u.test(extension.sourceInfo.source) &&
-			/\.[cm]?[jt]s$/u.test(extension.sourceInfo.source);
-		const packageRoot =
-			extension.sourceInfo.origin === "package" && !singleFilePackage && extension.sourceInfo.baseDir
-				? extension.sourceInfo.baseDir
-				: undefined;
 		const slashIndex = resolvedPath.lastIndexOf("/");
 		const directoryEntry = /\/index\.[cm]?[jt]s$/u.test(resolvedPath);
-		const matched = packageRoot
-			? stackContainsPath(normalizedStack, packageRoot, true)
-			: directoryEntry && slashIndex !== -1
+		const matched =
+			directoryEntry && slashIndex !== -1
 				? stackContainsPath(normalizedStack, resolvedPath.slice(0, slashIndex), true)
 				: stackContainsPath(normalizedStack, resolvedPath, false);
 		if (!matched) continue;
 
-		const label =
-			extension.sourceInfo.origin === "package" && extension.sourceInfo.source
-				? extension.sourceInfo.source
-				: extension.path;
+		const label = extension.path;
 		if (!seen.has(label)) {
 			seen.add(label);
 			matches.push(label);
@@ -119,7 +106,6 @@ export function findExtensionStackMatches(
 	return matches;
 }
 
-/** Best-effort persistence for callers that are already crashing. */
 export function recordCrash(
 	crash: { kind: CrashRecord["kind"]; error: unknown; sessionFile?: string; cwd: string },
 	path = crashLogPath(),
@@ -142,7 +128,6 @@ export function recordCrash(
 	}
 }
 
-/** Return the newest recent crash, marking pending records as announced. */
 export function takeUnnotifiedCrash(path = crashLogPath(), now = Date.now()): CrashRecord | undefined {
 	const records = readCrashLog(path);
 	const crash = [...records]
@@ -155,15 +140,6 @@ export function takeUnnotifiedCrash(path = crashLogPath(), now = Date.now()): Cr
 			path,
 		);
 	} catch {
-		// Showing the notice again is harmless.
 	}
 	return crash;
-}
-
-export function clearCrashLog(path = crashLogPath()): void {
-	try {
-		rmSync(path, { force: true });
-	} catch {
-		// The records can be attached again if cleanup fails.
-	}
 }

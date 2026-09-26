@@ -2,13 +2,11 @@ import { execSync } from "node:child_process";
 import { homedir } from "node:os";
 import { isAbsolute } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { TerminalColorMode } from "./colors.ts";
 
 export type ImageProtocol = "kitty" | "iterm2" | null;
 
 export interface TerminalCapabilities {
 	images: ImageProtocol;
-	trueColor: boolean;
 	hyperlinks: boolean;
 }
 
@@ -26,16 +24,13 @@ export interface ImageRenderOptions {
 	maxWidthCells?: number;
 	maxHeightCells?: number;
 	preserveAspectRatio?: boolean;
-	/** Kitty image ID. If provided, reuses/replaces existing image with this ID. */
 	imageId?: number;
-	/** Whether Kitty should apply its default cursor movement after placement. */
 	moveCursor?: boolean;
 }
 
 let cachedCapabilities: TerminalCapabilities | null = null;
 let capabilityOverrides: Partial<TerminalCapabilities> = {};
 
-// Default cell dimensions - updated by TUI when terminal responds to query
 let cellDimensions: CellDimensions = { widthPx: 9, heightPx: 18 };
 
 export function getCellDimensions(): CellDimensions {
@@ -46,11 +41,6 @@ export function setCellDimensions(dims: CellDimensions): void {
 	cellDimensions = dims;
 }
 
-/**
- * Checks whether the attached tmux client forwards OSC 8 hyperlinks to the
- * outer terminal. tmux only re-emits them when its `client_termfeatures` lists
- * `hyperlinks`, and strips them otherwise. On any error fallbacks `false`.
- */
 function probeTmuxHyperlinks(): boolean {
 	try {
 		const termfeatures = execSync("tmux display-message -p '#{client_termfeatures}'", {
@@ -71,66 +61,44 @@ function detectCapabilitiesFromEnvironment(tmuxForwardsHyperlink: () => boolean)
 	const termProgram = process.env.TERM_PROGRAM?.toLowerCase() || "";
 	const terminalEmulator = process.env.TERMINAL_EMULATOR?.toLowerCase() || "";
 	const term = process.env.TERM?.toLowerCase() || "";
-	const colorTerm = process.env.COLORTERM?.toLowerCase() || "";
-	const hasTrueColorHint = colorTerm === "truecolor" || colorTerm === "24bit" || term.endsWith("-direct");
-	const isWindowsConsole = process.platform === "win32";
 
-	// Emit OSC 8 hyperlinks only when tmux confirms it forwards.
-	// Image protocols are unreliable under tmux, so leave `images: null`.
 	if (process.env.TMUX || term.startsWith("tmux")) {
-		return { images: null, trueColor: hasTrueColorHint, hyperlinks: tmuxForwardsHyperlink() };
+		return { images: null, hyperlinks: tmuxForwardsHyperlink() };
 	}
 
-	// screen does not forward OSC 8 hyperlinks, so keep them off there.
 	if (term.startsWith("screen")) {
-		return { images: null, trueColor: hasTrueColorHint, hyperlinks: false };
+		return { images: null, hyperlinks: false };
 	}
 
 	if (process.env.KITTY_WINDOW_ID || termProgram === "kitty") {
-		return { images: "kitty", trueColor: true, hyperlinks: true };
+		return { images: "kitty", hyperlinks: true };
 	}
 
 	if (termProgram === "ghostty" || term.includes("ghostty") || process.env.GHOSTTY_RESOURCES_DIR) {
-		return { images: "kitty", trueColor: true, hyperlinks: true };
+		return { images: "kitty", hyperlinks: true };
 	}
 
 	if (process.env.WEZTERM_PANE || termProgram === "wezterm") {
-		return { images: "kitty", trueColor: true, hyperlinks: true };
+		return { images: "kitty", hyperlinks: true };
 	}
 
-	// Warp supports the Kitty graphics protocol and OSC 8 hyperlinks.
 	if (termProgram === "warpterminal" || process.env.WARP_SESSION_ID || process.env.WARP_TERMINAL_SESSION_UUID) {
-		return { images: "kitty", trueColor: true, hyperlinks: true };
+		return { images: "kitty", hyperlinks: true };
 	}
 
 	if (process.env.ITERM_SESSION_ID || termProgram === "iterm.app") {
-		return { images: "iterm2", trueColor: true, hyperlinks: true };
-	}
-
-	if (process.env.WT_SESSION) {
-		return { images: null, trueColor: true, hyperlinks: true };
+		return { images: "iterm2", hyperlinks: true };
 	}
 
 	if (termProgram === "alacritty" || termProgram === "vscode" || termProgram === "zed") {
-		return { images: null, trueColor: true, hyperlinks: true };
+		return { images: null, hyperlinks: true };
 	}
 
 	if (terminalEmulator === "jetbrains-jediterm") {
-		return { images: null, trueColor: true, hyperlinks: false };
+		return { images: null, hyperlinks: false };
 	}
 
-	// Windows Terminal does not always set WT_SESSION, for example when it hosts
-	// a cmd.exe launched directly from Win+R. Modern Windows consoles support
-	// truecolor; keep hyperlinks off unless we positively detected support above.
-	if (isWindowsConsole) {
-		return { images: null, trueColor: true, hyperlinks: false };
-	}
-
-	// Unknown terminal: be conservative. OSC 8 is rendered invisibly as "just
-	// text" on terminals that swallow it, which means the URL disappears from
-	// the rendered output. Default to the legacy `text (url)` behavior unless we
-	// have positively identified a hyperlink-capable terminal above.
-	return { images: null, trueColor: hasTrueColorHint, hyperlinks: false };
+	return { images: null, hyperlinks: false };
 }
 
 function parseBooleanCapabilityOverride(value: string | undefined): boolean | undefined {
@@ -149,11 +117,9 @@ export function detectCapabilities(tmuxForwardsHyperlink: () => boolean = probeT
 			: imageProtocol === "none" || imageProtocol === "0"
 				? null
 				: undefined;
-	const trueColor = parseBooleanCapabilityOverride(process.env.PI_TRUE_COLOR);
 	return {
 		...detected,
 		...(images !== undefined ? { images } : {}),
-		...(trueColor !== undefined ? { trueColor } : {}),
 		...(hyperlinks !== undefined ? { hyperlinks } : {}),
 	};
 }
@@ -169,28 +135,18 @@ export function getCapabilities(): TerminalCapabilities {
 	return cachedCapabilities;
 }
 
-export function getTerminalColorMode(capabilities: TerminalCapabilities = getCapabilities()): TerminalColorMode {
-	return capabilities.trueColor ? "truecolor" : "256color";
-}
-
 export function resetCapabilitiesCache(): void {
 	cachedCapabilities = null;
 }
 
-/** Override selected auto-detected capabilities. */
 export function setCapabilityOverrides(overrides: Partial<TerminalCapabilities>): void {
-	if (
-		capabilityOverrides.images === overrides.images &&
-		capabilityOverrides.trueColor === overrides.trueColor &&
-		capabilityOverrides.hyperlinks === overrides.hyperlinks
-	) {
+	if (capabilityOverrides.images === overrides.images && capabilityOverrides.hyperlinks === overrides.hyperlinks) {
 		return;
 	}
 	capabilityOverrides = { ...overrides };
 	cachedCapabilities = null;
 }
 
-/** Override the cached capabilities. Useful in tests to exercise both code paths. */
 export function setCapabilities(caps: TerminalCapabilities): void {
 	cachedCapabilities = caps;
 }
@@ -199,21 +155,13 @@ const KITTY_PREFIX = "\x1b_G";
 const ITERM2_PREFIX = "\x1b]1337;File=";
 
 export function isImageLine(line: string): boolean {
-	// Fast path: sequence at line start (single-row images)
 	if (line.startsWith(KITTY_PREFIX) || line.startsWith(ITERM2_PREFIX)) {
 		return true;
 	}
-	// Slow path: sequence elsewhere (multi-row images have cursor-up prefix)
 	return line.includes(KITTY_PREFIX) || line.includes(ITERM2_PREFIX);
 }
 
-/**
- * Generate a random image ID for Kitty graphics protocol.
- * Uses random IDs to avoid collisions between different module instances
- * (e.g., main app vs extensions).
- */
 export function allocateImageId(): number {
-	// Use random ID in range [1, 0xffffffff] to avoid collisions
 	return Math.floor(Math.random() * 0xfffffffe) + 1;
 }
 
@@ -223,7 +171,6 @@ export function encodeKitty(
 		columns?: number;
 		rows?: number;
 		imageId?: number;
-		/** Whether Kitty should apply its default cursor movement after placement. Default: true. */
 		moveCursor?: boolean;
 	} = {},
 ): string {
@@ -263,25 +210,12 @@ export function encodeKitty(
 	return chunks.join("");
 }
 
-/**
- * Delete a Kitty graphics image by ID.
- * Uses uppercase 'I' to also free the image data.
- */
 export function deleteKittyImage(imageId: number): string {
 	return `\x1b_Ga=d,d=I,i=${imageId},q=2\x1b\\`;
 }
 
-/**
- * Delete all visible Kitty graphics images.
- * Uses uppercase 'A' to also free the image data.
- */
 export function deleteAllKittyImages(): string {
 	return "\x1b_Ga=d,d=A,q=2\x1b\\";
-}
-
-/** Delete all visible Kitty placements while retaining their uploaded image data. */
-export function deleteAllKittyPlacements(): string {
-	return "\x1b_Ga=d,d=a,q=2\x1b\\";
 }
 
 export function encodeITerm2(
@@ -312,129 +246,9 @@ export function encodeITerm2(
 	return `\x1b]1337;File=${params.join(";")}:${base64Data}\x07`;
 }
 
-export interface ImageCellSize {
+interface ImageCellSize {
 	columns: number;
 	rows: number;
-}
-
-export interface KittyImageMetadata extends ImageCellSize {
-	imageId: number;
-	widthPx: number;
-	heightPx: number;
-}
-
-interface RegisteredKittyImageMetadata extends KittyImageMetadata {
-	transmissionGeneration: number;
-}
-
-export interface KittyImagePlacement {
-	imageId: number;
-	transmissionGeneration: number;
-	transmissionBytes: number;
-	estimatedDecodedBytes: number;
-	sequence: string;
-	replacementLine: string;
-}
-
-const kittyImageMetadata = new Map<number, RegisteredKittyImageMetadata>();
-let kittyTransmissionGeneration = 0;
-
-export function registerKittyImageMetadata(metadata: KittyImageMetadata): void {
-	kittyTransmissionGeneration += 1;
-	kittyImageMetadata.delete(metadata.imageId);
-	kittyImageMetadata.set(metadata.imageId, { ...metadata, transmissionGeneration: kittyTransmissionGeneration });
-	if (kittyImageMetadata.size > 1000) {
-		const oldestImageId = kittyImageMetadata.keys().next().value;
-		if (oldestImageId !== undefined) kittyImageMetadata.delete(oldestImageId);
-	}
-}
-
-function getRegisteredKittyImageMetadata(line: string): RegisteredKittyImageMetadata | undefined {
-	const controls = /\x1b_G([^;]*);/.exec(line)?.[1];
-	if (!controls) return undefined;
-	const imageId = /(?:^|,)i=(\d+)(?:,|$)/.exec(controls)?.[1];
-	return imageId === undefined ? undefined : kittyImageMetadata.get(Number.parseInt(imageId, 10));
-}
-
-export function getKittyImageMetadata(line: string): KittyImageMetadata | undefined {
-	const metadata = getRegisteredKittyImageMetadata(line);
-	if (!metadata) return undefined;
-	return {
-		imageId: metadata.imageId,
-		columns: metadata.columns,
-		rows: metadata.rows,
-		widthPx: metadata.widthPx,
-		heightPx: metadata.heightPx,
-	};
-}
-
-const KITTY_PLACEMENT_CONTROL_KEYS = new Set([
-	"i",
-	"p",
-	"x",
-	"y",
-	"w",
-	"h",
-	"X",
-	"Y",
-	"c",
-	"r",
-	"C",
-	"U",
-	"z",
-	"P",
-	"Q",
-	"H",
-	"V",
-]);
-
-/** Build a placement-only command for an image line emitted by {@link renderImage}. */
-export function getKittyImagePlacement(line: string): KittyImagePlacement | undefined {
-	const match = /\x1b_G([^;]*);/.exec(line);
-	const metadata = getRegisteredKittyImageMetadata(line);
-	if (!match || !metadata) return undefined;
-
-	let commandStart = match.index;
-	let commandControls = match[1];
-	let transmissionEnd: number;
-	while (true) {
-		const terminator = line.indexOf("\x1b\\", commandStart + KITTY_PREFIX.length);
-		if (terminator === -1) return undefined;
-		transmissionEnd = terminator + 2;
-		if (!/(?:^|,)m=1(?:,|$)/.test(commandControls)) break;
-		commandStart = transmissionEnd;
-		if (!line.startsWith(KITTY_PREFIX, commandStart)) return undefined;
-		const controlsEnd = line.indexOf(";", commandStart + KITTY_PREFIX.length);
-		if (controlsEnd === -1) return undefined;
-		commandControls = line.slice(commandStart + KITTY_PREFIX.length, controlsEnd);
-	}
-
-	const controls = match[1]
-		.split(",")
-		.filter((control) => KITTY_PLACEMENT_CONTROL_KEYS.has(control.split("=", 1)[0] ?? ""));
-	const sequence = `\x1b_Ga=p,q=2,${controls.join(",")}\x1b\\`;
-	return {
-		imageId: metadata.imageId,
-		transmissionGeneration: metadata.transmissionGeneration,
-		transmissionBytes: transmissionEnd - match.index,
-		estimatedDecodedBytes: metadata.widthPx * metadata.heightPx * 4,
-		sequence,
-		replacementLine: `${line.slice(0, match.index)}${sequence}${line.slice(transmissionEnd)}`,
-	};
-}
-
-export function cropKittyImageLine(line: string, hiddenRows: number, visibleRows: number): string {
-	const metadata = getKittyImageMetadata(line);
-	const match = /\x1b_G([^;]*);/.exec(line);
-	if (!metadata || !match || hiddenRows < 0 || hiddenRows >= metadata.rows || visibleRows <= 0) return line;
-	const croppedRows = Math.min(visibleRows, metadata.rows - hiddenRows);
-	if (hiddenRows === 0 && croppedRows === metadata.rows) return line;
-	const sourceY = Math.floor((metadata.heightPx * hiddenRows) / metadata.rows);
-	const sourceEnd = Math.ceil((metadata.heightPx * (hiddenRows + croppedRows)) / metadata.rows);
-	const sourceHeight = Math.max(1, Math.min(metadata.heightPx, sourceEnd) - sourceY);
-	const controls = match[1].split(",").filter((control) => !/^[yhr]=/.test(control));
-	controls.push(`y=${sourceY}`, `h=${sourceHeight}`, `r=${croppedRows}`);
-	return `${line.slice(0, match.index)}\x1b_G${controls.join(",")};${line.slice(match.index + match[0].length)}`;
 }
 
 function chooseLessDistortedCellCount(upperCount: number, idealCount: number): number {
@@ -446,7 +260,7 @@ function chooseLessDistortedCellCount(upperCount: number, idealCount: number): n
 	return lowerDistortion < upperDistortion ? lowerCount : upperCount;
 }
 
-export function calculateImageCellSize(
+function calculateImageCellSize(
 	imageDimensions: ImageDimensions,
 	maxWidthCells: number,
 	maxHeightCells?: number,
@@ -647,7 +461,6 @@ export function renderImage(
 	}
 
 	const maxWidth = options.maxWidthCells ?? 80;
-	// Reduce Kitty's cell-aligned distortion without shrinking iTerm2 reservations.
 	const size = calculateImageCellSize(
 		imageDimensions,
 		maxWidth,
@@ -657,15 +470,6 @@ export function renderImage(
 	);
 
 	if (caps.images === "kitty") {
-		if (options.imageId !== undefined) {
-			registerKittyImageMetadata({
-				imageId: options.imageId,
-				columns: size.columns,
-				rows: size.rows,
-				widthPx: imageDimensions.widthPx,
-				heightPx: imageDimensions.heightPx,
-			});
-		}
 		const sequence = encodeKitty(base64Data, {
 			columns: size.columns,
 			rows: size.rows,
@@ -687,21 +491,10 @@ export function renderImage(
 	return null;
 }
 
-/**
- * Wrap text in an OSC 8 hyperlink sequence.
- * The text is rendered as a clickable hyperlink in terminals that support OSC 8
- * (Ghostty, Kitty, WezTerm, iTerm2, VSCode, and others).
- * In terminals that do not support OSC 8, the escape sequences are ignored
- * and only the plain text is displayed.
- *
- * @param text - The visible text to display
- * @param url - The URL to link to
- */
 export function hyperlink(text: string, url: string): string {
 	return `\x1b]8;;${url}\x1b\\${text}\x1b]8;;\x1b\\`;
 }
 
-/** Shorten home-prefixed absolute paths to ~/... for compact display. */
 function shortenImagePath(filename: string): string {
 	const home = homedir();
 	if (home && (filename === home || filename.startsWith(`${home}/`) || filename.startsWith(`${home}\\`))) {
@@ -710,11 +503,6 @@ function shortenImagePath(filename: string): string {
 	return filename;
 }
 
-/**
- * Text fallback when the terminal cannot render inline images.
- * Absolute paths are shown shortened (~/...) and, when OSC 8 hyperlinks are
- * available, linked to file:// so the full path remains openable.
- */
 export function imageFallback(mimeType: string, dimensions?: ImageDimensions, filename?: string): string {
 	const parts: string[] = [];
 	if (filename) {

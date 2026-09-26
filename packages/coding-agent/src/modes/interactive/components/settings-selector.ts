@@ -1,36 +1,11 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import { getSupportedThinkingLevels, type Model, type Transport } from "@earendil-works/pi-ai";
-import {
-	type Component,
-	Container,
-	getCapabilities,
-	type ScrollViewScrollbar,
-	type SelectItem,
-	type SettingItem,
-	SettingsList,
-	Spacer,
-	Text,
-} from "@earendil-works/pi-tui";
-import { formatHttpIdleTimeoutMs, HTTP_IDLE_TIMEOUT_CHOICES } from "../../../core/http-dispatcher.ts";
-import {
-	CACHE_WARMING_MODES,
-	type CacheWarmingMode,
-	type DefaultProjectTrust,
-	type FullscreenExitOutput,
-	type MermaidRenderingMode,
-	type TuiMode,
-	type WarningSettings,
-} from "../../../core/settings-manager.ts";
-import {
-	getSettingsListTheme,
-	parseAutoThemeSetting,
-	SYSTEM_THEME_NAME,
-	type TerminalTheme,
-	theme,
-} from "../theme/theme.ts";
+import { getSupportedThinkingLevels, type Model } from "@earendil-works/pi-ai";
+import { Container, getCapabilities, type SelectItem, type SettingItem, SettingsList } from "@earendil-works/pi-tui";
+import type { WarningSettings } from "../../../core/settings-manager.ts";
+import { getSettingsListTheme, theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyDisplayText } from "./keybinding-hints.ts";
-import { SelectSubmenu, SteppedSubmenu, type SteppedSubmenuStep } from "./settings-submenu.ts";
+import { SteppedSubmenu, type SteppedSubmenuStep } from "./settings-submenu.ts";
 
 const MODEL_PICKER_LAYOUT = { minPrimaryColumnWidth: 12, maxPrimaryColumnWidth: 46 };
 
@@ -44,16 +19,6 @@ const THINKING_DESCRIPTIONS: Record<ThinkingLevel, string> = {
 	max: "Maximum reasoning",
 };
 
-const DEFAULT_PROJECT_TRUST_LABELS: Record<DefaultProjectTrust, string> = {
-	ask: "Ask",
-	always: "Always trust",
-	never: "Never trust",
-};
-
-const DEFAULT_PROJECT_TRUST_BY_LABEL = new Map(
-	Object.entries(DEFAULT_PROJECT_TRUST_LABELS).map(([value, label]) => [label, value as DefaultProjectTrust]),
-);
-
 export interface SettingsConfig {
 	autoCompact: boolean;
 	defaultModel: string;
@@ -61,25 +26,15 @@ export interface SettingsConfig {
 	availableDefaultModels: readonly Model<any>[];
 	showImages: boolean;
 	imageWidthCells: number;
-	autoResizeImages: boolean;
 	blockImages: boolean;
 	enableSkillCommands: boolean;
 	steeringMode: "all" | "one-at-a-time";
 	followUpMode: "all" | "one-at-a-time";
-	transport: Transport;
-	httpIdleTimeoutMs: number;
-	cacheWarmingMode: CacheWarmingMode;
 	thinkingLevel: ThinkingLevel;
 	availableThinkingLevels: ThinkingLevel[];
 	modelThinkingLevels: Record<string, ThinkingLevel>;
-	currentTheme: string;
-	terminalTheme: TerminalTheme;
-	availableThemes: string[];
 	hideThinkingBlock: boolean;
-	mermaidRenderingMode: MermaidRenderingMode;
 	showCacheMissNotices: boolean;
-	collapseChangelog: boolean;
-	enableInstallTelemetry: boolean;
 	doubleEscapeAction: "fork" | "tree" | "none";
 	treeFilterMode: "default" | "no-tools" | "user-only" | "labeled-only" | "all";
 	showHardwareCursor: boolean;
@@ -87,13 +42,8 @@ export interface SettingsConfig {
 	outputPad: 0 | 1;
 	autocompleteMaxVisible: number;
 	quietStartup: boolean;
-	defaultProjectTrust: DefaultProjectTrust;
 	clearOnShrink: boolean;
 	showTerminalProgress: boolean;
-	tuiMode: TuiMode;
-	fullscreenExitOutput: FullscreenExitOutput;
-	fullscreenScrollbar: ScrollViewScrollbar;
-	fullscreenCopyOnSelect: boolean;
 	warnings: WarningSettings;
 }
 
@@ -101,23 +51,14 @@ export interface SettingsCallbacks {
 	onAutoCompactChange: (enabled: boolean) => void;
 	onShowImagesChange: (enabled: boolean) => void;
 	onImageWidthCellsChange: (width: number) => void;
-	onAutoResizeImagesChange: (enabled: boolean) => void;
 	onBlockImagesChange: (blocked: boolean) => void;
 	onEnableSkillCommandsChange: (enabled: boolean) => void;
 	onSteeringModeChange: (mode: "all" | "one-at-a-time") => void;
 	onFollowUpModeChange: (mode: "all" | "one-at-a-time") => void;
-	onTransportChange: (transport: Transport) => void;
-	onHttpIdleTimeoutMsChange: (timeoutMs: number) => void;
-	onCacheWarmingModeChange: (mode: CacheWarmingMode) => void;
 	onModelThinkingLevelChange: (provider: string, modelId: string, level: ThinkingLevel) => void;
 	onModelThinkingLevelRemove: (provider: string, modelId: string) => void;
-	onThemeChange: (theme: string) => void;
-	onThemePreview?: (theme: string) => void;
 	onHideThinkingBlockChange: (hidden: boolean) => void;
-	onMermaidRenderingModeChange: (mode: MermaidRenderingMode) => void;
 	onShowCacheMissNoticesChange: (shown: boolean) => void;
-	onCollapseChangelogChange: (collapsed: boolean) => void;
-	onEnableInstallTelemetryChange: (enabled: boolean) => void;
 	onDoubleEscapeActionChange: (action: "fork" | "tree" | "none") => void;
 	onTreeFilterModeChange: (mode: "default" | "no-tools" | "user-only" | "labeled-only" | "all") => void;
 	onShowHardwareCursorChange: (enabled: boolean) => void;
@@ -125,20 +66,12 @@ export interface SettingsCallbacks {
 	onOutputPadChange: (padding: 0 | 1) => void;
 	onAutocompleteMaxVisibleChange: (maxVisible: number) => void;
 	onQuietStartupChange: (enabled: boolean) => void;
-	onDefaultProjectTrustChange: (defaultProjectTrust: DefaultProjectTrust) => void;
 	onClearOnShrinkChange: (enabled: boolean) => void;
 	onShowTerminalProgressChange: (enabled: boolean) => void;
-	onTuiModeChange: (mode: TuiMode) => void;
-	onFullscreenExitOutputChange: (output: FullscreenExitOutput) => void;
-	onFullscreenScrollbarChange: (mode: ScrollViewScrollbar) => void;
-	onFullscreenCopyOnSelectChange: (enabled: boolean) => void;
 	onWarningsChange: (warnings: WarningSettings) => void;
 	onCancel: () => void;
 }
 
-/**
- * A submenu component for selecting from a list of options.
- */
 class WarningSettingsSubmenu extends Container {
 	private settingsList: SettingsList;
 	private state: WarningSettings;
@@ -201,261 +134,6 @@ function modelItemLabel(model: Model<any>): string {
 	return `${model.id} ${theme.fg("muted", `[${model.provider}]`)}`;
 }
 
-function themeItems(availableThemes: string[], currentTheme: string): SelectItem[] {
-	return availableThemes.map((name) => ({
-		value: name,
-		label: `${name === currentTheme ? "✓ " : "  "}${name}`,
-		...(name === SYSTEM_THEME_NAME ? { description: "Theme created from your terminal's colors" } : {}),
-	}));
-}
-
-const AUTOMATIC_THEME_VALUE = "/";
-
-/** The system theme comes first, then automatic mode, then the remaining themes. */
-function singleModeThemeItems(availableThemes: string[], currentTheme: string): SelectItem[] {
-	const items = themeItems(availableThemes, currentTheme);
-	const systemIndex = items.findIndex((item) => item.value === SYSTEM_THEME_NAME);
-	const system = systemIndex === -1 ? [] : items.splice(systemIndex, 1);
-	return [
-		...system,
-		{
-			value: AUTOMATIC_THEME_VALUE,
-			label: "  automatic",
-			description: "Use separate themes for light and dark terminal appearance",
-		},
-		...items,
-	];
-}
-
-function preferredTheme(availableThemes: string[], preferred: string | undefined, fallback: string): string {
-	if (preferred && availableThemes.includes(preferred)) return preferred;
-	if (availableThemes.includes(fallback)) return fallback;
-	return availableThemes[0] ?? fallback;
-}
-
-function defaultAutomaticThemes(
-	currentThemeSetting: string,
-	availableThemes: string[],
-): { lightTheme: string; darkTheme: string } {
-	const autoTheme = parseAutoThemeSetting(currentThemeSetting);
-	if (autoTheme) return autoTheme;
-
-	const currentFixedTheme = currentThemeSetting.includes("/") ? undefined : currentThemeSetting;
-	const themeName = preferredTheme(availableThemes, currentFixedTheme, SYSTEM_THEME_NAME);
-	return { lightTheme: themeName, darkTheme: themeName };
-}
-
-class ThemeSubmenu extends Container {
-	private inputComponent: Component | undefined;
-	private readonly callbacks: SettingsCallbacks;
-	private readonly availableThemes: string[];
-	private readonly terminalTheme: TerminalTheme;
-	private readonly onDone: (selectedValue?: string) => void;
-	private readonly originalThemeSetting: string;
-	private mode: "single" | "automatic";
-	private singleTheme: string;
-	private lightTheme: string;
-	private darkTheme: string;
-
-	constructor(
-		currentThemeSetting: string,
-		terminalTheme: TerminalTheme,
-		availableThemes: string[],
-		callbacks: SettingsCallbacks,
-		onDone: (selectedValue?: string) => void,
-	) {
-		super();
-		this.callbacks = callbacks;
-		this.availableThemes = availableThemes;
-		this.terminalTheme = terminalTheme;
-		this.onDone = onDone;
-		this.originalThemeSetting = currentThemeSetting;
-		const autoTheme = parseAutoThemeSetting(currentThemeSetting);
-		const automaticThemes = defaultAutomaticThemes(currentThemeSetting, availableThemes);
-		const fixedTheme = autoTheme || currentThemeSetting.includes("/") ? undefined : currentThemeSetting;
-		this.mode = autoTheme ? "automatic" : "single";
-		this.lightTheme = automaticThemes.lightTheme;
-		this.darkTheme = automaticThemes.darkTheme;
-		this.singleTheme = preferredTheme(
-			availableThemes,
-			fixedTheme ?? (autoTheme ? this.getActiveAutomaticTheme() : undefined),
-			SYSTEM_THEME_NAME,
-		);
-
-		if (this.mode === "automatic") {
-			this.showAutomaticMenu();
-		} else {
-			this.showSingleMenu();
-		}
-	}
-
-	handleInput(data: string): void {
-		this.inputComponent?.handleInput?.(data);
-	}
-
-	private setContent(renderComponent: Component, inputComponent: Component = renderComponent): void {
-		this.clear();
-		this.addChild(renderComponent);
-		this.inputComponent = inputComponent;
-	}
-
-	private showSingleMenu(): void {
-		this.mode = "single";
-		const menu = new SelectSubmenu(
-			"Theme",
-			"Select a theme, or choose automatic to follow terminal appearance.",
-			singleModeThemeItems(this.availableThemes, this.singleTheme),
-			this.singleTheme,
-			(value) => {
-				if (value === AUTOMATIC_THEME_VALUE) {
-					this.mode = "automatic";
-					this.callbacks.onThemePreview?.(this.getThemeSetting());
-					this.showAutomaticMenu();
-					return;
-				}
-
-				this.singleTheme = value;
-				this.apply(value);
-			},
-			() => this.cancel(),
-			(value) => {
-				this.callbacks.onThemePreview?.(value === AUTOMATIC_THEME_VALUE ? this.getAutomaticThemeSetting() : value);
-			},
-		);
-		this.setContent(menu);
-	}
-
-	private showAutomaticMenu(): void {
-		this.mode = "automatic";
-		const content = new Container();
-		content.addChild(new Text(theme.bold(theme.fg("accent", "Automatic Theme")), 0, 0));
-		content.addChild(new Spacer(1));
-		content.addChild(new Text(theme.fg("muted", "Choose themes for terminal light and dark appearance."), 0, 0));
-		content.addChild(new Text(theme.fg("muted", "Light/dark detection requires terminal support."), 0, 0));
-		content.addChild(new Spacer(1));
-
-		const items: SettingItem[] = [
-			{
-				id: "light-theme",
-				label: "Light theme",
-				description: "Theme to use in automatic mode when the terminal is light",
-				currentValue: this.lightTheme,
-				submenu: (currentValue, done) =>
-					this.createThemeSelect(
-						"Light Theme",
-						"Select the theme to use for light terminal appearance",
-						currentValue,
-						done,
-						(value) => {
-							this.lightTheme = value;
-							this.callbacks.onThemePreview?.(this.getThemeSetting());
-							done(value);
-						},
-					),
-			},
-			{
-				id: "dark-theme",
-				label: "Dark theme",
-				description: "Theme to use in automatic mode when the terminal is dark",
-				currentValue: this.darkTheme,
-				submenu: (currentValue, done) =>
-					this.createThemeSelect(
-						"Dark Theme",
-						"Select the theme to use for dark terminal appearance",
-						currentValue,
-						done,
-						(value) => {
-							this.darkTheme = value;
-							this.callbacks.onThemePreview?.(this.getThemeSetting());
-							done(value);
-						},
-					),
-			},
-			{
-				id: "apply",
-				label: "Apply",
-				description: "Save and go back",
-				currentValue: "save and go back",
-				values: ["save and go back"],
-			},
-			{
-				id: "single-mode",
-				label: "Change mode",
-				description: "Switch to one theme for light and dark",
-				currentValue: "switch to single theme",
-				values: ["switch to single theme"],
-			},
-		];
-
-		const settingsList = new SettingsList(
-			items,
-			Math.min(items.length, 10),
-			getSettingsListTheme(),
-			(id) => {
-				switch (id) {
-					case "single-mode":
-						this.mode = "single";
-						this.singleTheme = this.getActiveAutomaticTheme();
-						this.callbacks.onThemePreview?.(this.singleTheme);
-						this.showSingleMenu();
-						break;
-					case "apply":
-						this.apply(this.getAutomaticThemeSetting());
-						break;
-				}
-			},
-			() => this.cancel(),
-		);
-		content.addChild(settingsList);
-		this.setContent(content, settingsList);
-	}
-
-	private createThemeSelect(
-		title: string,
-		description: string,
-		currentValue: string,
-		done: (selectedValue?: string) => void,
-		onSelect: (value: string) => void,
-	): SelectSubmenu {
-		return new SelectSubmenu(
-			title,
-			description,
-			themeItems(this.availableThemes, currentValue),
-			currentValue,
-			onSelect,
-			() => {
-				this.callbacks.onThemePreview?.(this.getThemeSetting());
-				done();
-			},
-			(value) => this.callbacks.onThemePreview?.(value),
-		);
-	}
-
-	private getThemeSetting(): string {
-		return this.mode === "automatic" ? this.getAutomaticThemeSetting() : this.singleTheme;
-	}
-
-	private getActiveAutomaticTheme(): string {
-		return this.terminalTheme === "light" ? this.lightTheme : this.darkTheme;
-	}
-
-	private getAutomaticThemeSetting(): string {
-		return `${this.lightTheme}/${this.darkTheme}`;
-	}
-
-	private apply(themeSetting: string): void {
-		this.onDone(themeSetting);
-	}
-
-	private cancel(): void {
-		this.callbacks.onThemePreview?.(this.originalThemeSetting);
-		this.onDone();
-	}
-}
-
-/**
- * Main settings selector component.
- */
 export class SettingsSelectorComponent extends Container {
 	private settingsList: SettingsList;
 
@@ -497,41 +175,11 @@ export class SettingsSelectorComponent extends Container {
 				values: ["one-at-a-time", "all"],
 			},
 			{
-				id: "transport",
-				label: "Transport",
-				description: "Preferred transport for providers that support multiple transports",
-				currentValue: config.transport,
-				values: ["sse", "websocket", "websocket-cached", "auto"],
-			},
-			{
-				id: "http-idle-timeout",
-				label: "HTTP idle timeout",
-				description:
-					"Maximum idle gap while waiting for HTTP headers or body chunks. Disable for local models that pause longer than five minutes.",
-				currentValue: formatHttpIdleTimeoutMs(config.httpIdleTimeoutMs),
-				values: HTTP_IDLE_TIMEOUT_CHOICES.map((choice) => choice.label),
-			},
-			{
-				id: "cache-warming-mode",
-				label: "Cache warming",
-				description:
-					"off; streaming while the agent runs; idle also between runs while continuation stays profitable",
-				currentValue: config.cacheWarmingMode,
-				values: [...CACHE_WARMING_MODES],
-			},
-			{
 				id: "hide-thinking",
 				label: "Hide thinking",
 				description: "Hide thinking blocks in assistant responses",
 				currentValue: config.hideThinkingBlock ? "true" : "false",
 				values: ["true", "false"],
-			},
-			{
-				id: "mermaid-rendering",
-				label: "Mermaid diagrams",
-				description: "Render Mermaid code blocks as Unicode diagrams",
-				currentValue: config.mermaidRenderingMode,
-				values: ["off", "final", "streaming"],
 			},
 			{
 				id: "cache-miss-notices",
@@ -541,32 +189,11 @@ export class SettingsSelectorComponent extends Container {
 				values: ["true", "false"],
 			},
 			{
-				id: "collapse-changelog",
-				label: "Collapse changelog",
-				description: "Show condensed changelog after updates",
-				currentValue: config.collapseChangelog ? "true" : "false",
-				values: ["true", "false"],
-			},
-			{
 				id: "quiet-startup",
 				label: "Quiet startup",
 				description: "Disable verbose printing at startup",
 				currentValue: config.quietStartup ? "true" : "false",
 				values: ["true", "false"],
-			},
-			{
-				id: "install-telemetry",
-				label: "Install telemetry",
-				description: "Send an anonymous version/update ping after changelog-detected updates",
-				currentValue: config.enableInstallTelemetry ? "true" : "false",
-				values: ["true", "false"],
-			},
-			{
-				id: "default-project-trust",
-				label: "Default project trust",
-				description: "Fallback behavior when no extension or saved trust decision decides project trust",
-				currentValue: DEFAULT_PROJECT_TRUST_LABELS[config.defaultProjectTrust],
-				values: Object.values(DEFAULT_PROJECT_TRUST_LABELS),
 			},
 			{
 				id: "double-escape-action",
@@ -698,47 +325,9 @@ export class SettingsSelectorComponent extends Container {
 					);
 				},
 			},
-			{
-				id: "tui-mode",
-				label: "TUI mode",
-				description: "Interface layout; fullscreen mode is experimental",
-				currentValue: config.tuiMode,
-				values: ["regular", "fullscreen"],
-			},
-			{
-				id: "fullscreen-exit-output",
-				label: "Fullscreen exit output",
-				description: "Print the transcript or only a session resume hint when exiting fullscreen mode",
-				currentValue: config.fullscreenExitOutput,
-				values: ["transcript", "resume-hint"],
-			},
-			{
-				id: "fullscreen-scrollbar",
-				label: "Fullscreen scrollbar",
-				description: "Scrollbar behavior in fullscreen mode; has no effect in regular mode",
-				currentValue: config.fullscreenScrollbar,
-				values: ["auto", "always", "hidden"],
-			},
-			{
-				id: "fullscreen-copy-on-select",
-				label: "Fullscreen copy on select",
-				description: "Automatically copy selected text in fullscreen mode; disable to copy selections with Ctrl+X",
-				currentValue: config.fullscreenCopyOnSelect ? "true" : "false",
-				values: ["true", "false"],
-			},
-			{
-				id: "theme",
-				label: "Theme",
-				description: "Color theme for the interface",
-				currentValue: config.currentTheme,
-				submenu: (currentValue, done) =>
-					new ThemeSubmenu(currentValue, config.terminalTheme, config.availableThemes, callbacks, done),
-			},
 		];
 
-		// Only show image toggle if terminal supports it
 		if (supportsImages) {
-			// Insert after autocompact
 			items.splice(1, 0, {
 				id: "show-images",
 				label: "Show images",
@@ -755,18 +344,7 @@ export class SettingsSelectorComponent extends Container {
 			});
 		}
 
-		// Image auto-resize toggle (always available, affects both attached and read images)
 		items.splice(supportsImages ? 3 : 1, 0, {
-			id: "auto-resize-images",
-			label: "Auto-resize images",
-			description: "Resize large images to 2000x2000 max for better model compatibility",
-			currentValue: config.autoResizeImages ? "true" : "false",
-			values: ["true", "false"],
-		});
-
-		// Block images toggle (always available, insert after auto-resize-images)
-		const autoResizeIndex = items.findIndex((item) => item.id === "auto-resize-images");
-		items.splice(autoResizeIndex + 1, 0, {
 			id: "block-images",
 			label: "Block images",
 			description: "Prevent images from being sent to LLM providers",
@@ -774,7 +352,6 @@ export class SettingsSelectorComponent extends Container {
 			values: ["true", "false"],
 		});
 
-		// Skill commands toggle (insert after block-images)
 		const blockImagesIndex = items.findIndex((item) => item.id === "block-images");
 		items.splice(blockImagesIndex + 1, 0, {
 			id: "skill-commands",
@@ -784,7 +361,6 @@ export class SettingsSelectorComponent extends Container {
 			values: ["true", "false"],
 		});
 
-		// Hardware cursor toggle (insert after skill-commands)
 		const skillCommandsIndex = items.findIndex((item) => item.id === "skill-commands");
 		items.splice(skillCommandsIndex + 1, 0, {
 			id: "show-hardware-cursor",
@@ -794,7 +370,6 @@ export class SettingsSelectorComponent extends Container {
 			values: ["true", "false"],
 		});
 
-		// Editor padding toggle (insert after show-hardware-cursor)
 		const hardwareCursorIndex = items.findIndex((item) => item.id === "show-hardware-cursor");
 		items.splice(hardwareCursorIndex + 1, 0, {
 			id: "editor-padding",
@@ -804,7 +379,6 @@ export class SettingsSelectorComponent extends Container {
 			values: ["0", "1", "2", "3"],
 		});
 
-		// Output padding toggle (insert after editor-padding)
 		const editorPaddingIndex = items.findIndex((item) => item.id === "editor-padding");
 		items.splice(editorPaddingIndex + 1, 0, {
 			id: "output-padding",
@@ -814,7 +388,6 @@ export class SettingsSelectorComponent extends Container {
 			values: ["0", "1"],
 		});
 
-		// Autocomplete max visible toggle (insert after output-padding)
 		const outputPaddingIndex = items.findIndex((item) => item.id === "output-padding");
 		items.splice(outputPaddingIndex + 1, 0, {
 			id: "autocomplete-max-visible",
@@ -824,7 +397,6 @@ export class SettingsSelectorComponent extends Container {
 			values: ["3", "5", "7", "10", "15", "20"],
 		});
 
-		// Clear on shrink toggle (insert after autocomplete-max-visible)
 		const autocompleteIndex = items.findIndex((item) => item.id === "autocomplete-max-visible");
 		items.splice(autocompleteIndex + 1, 0, {
 			id: "clear-on-shrink",
@@ -834,7 +406,6 @@ export class SettingsSelectorComponent extends Container {
 			values: ["true", "false"],
 		});
 
-		// Terminal progress toggle (insert after clear-on-shrink)
 		const clearOnShrinkIndex = items.findIndex((item) => item.id === "clear-on-shrink");
 		items.splice(clearOnShrinkIndex + 1, 0, {
 			id: "terminal-progress",
@@ -844,7 +415,6 @@ export class SettingsSelectorComponent extends Container {
 			values: ["true", "false"],
 		});
 
-		// Add borders
 		this.addChild(new DynamicBorder());
 
 		this.settingsList = new SettingsList(
@@ -862,9 +432,6 @@ export class SettingsSelectorComponent extends Container {
 					case "image-width-cells":
 						callbacks.onImageWidthCellsChange(parseInt(newValue, 10));
 						break;
-					case "auto-resize-images":
-						callbacks.onAutoResizeImagesChange(newValue === "true");
-						break;
 					case "block-images":
 						callbacks.onBlockImagesChange(newValue === "true");
 						break;
@@ -877,44 +444,15 @@ export class SettingsSelectorComponent extends Container {
 					case "follow-up-mode":
 						callbacks.onFollowUpModeChange(newValue as "all" | "one-at-a-time");
 						break;
-					case "transport":
-						callbacks.onTransportChange(newValue as Transport);
-						break;
-					case "http-idle-timeout": {
-						const choice = HTTP_IDLE_TIMEOUT_CHOICES.find((item) => item.label === newValue);
-						if (choice) {
-							callbacks.onHttpIdleTimeoutMsChange(choice.timeoutMs);
-						}
-						break;
-					}
-					case "cache-warming-mode":
-						callbacks.onCacheWarmingModeChange(newValue as CacheWarmingMode);
-						break;
 					case "hide-thinking":
 						callbacks.onHideThinkingBlockChange(newValue === "true");
-						break;
-					case "mermaid-rendering":
-						callbacks.onMermaidRenderingModeChange(newValue as MermaidRenderingMode);
 						break;
 					case "cache-miss-notices":
 						callbacks.onShowCacheMissNoticesChange(newValue === "true");
 						break;
-					case "collapse-changelog":
-						callbacks.onCollapseChangelogChange(newValue === "true");
-						break;
 					case "quiet-startup":
 						callbacks.onQuietStartupChange(newValue === "true");
 						break;
-					case "install-telemetry":
-						callbacks.onEnableInstallTelemetryChange(newValue === "true");
-						break;
-					case "default-project-trust": {
-						const defaultProjectTrust = DEFAULT_PROJECT_TRUST_BY_LABEL.get(newValue);
-						if (defaultProjectTrust) {
-							callbacks.onDefaultProjectTrustChange(defaultProjectTrust);
-						}
-						break;
-					}
 					case "double-escape-action":
 						callbacks.onDoubleEscapeActionChange(newValue as "fork" | "tree");
 						break;
@@ -940,21 +478,6 @@ export class SettingsSelectorComponent extends Container {
 						break;
 					case "terminal-progress":
 						callbacks.onShowTerminalProgressChange(newValue === "true");
-						break;
-					case "tui-mode":
-						callbacks.onTuiModeChange(newValue as TuiMode);
-						break;
-					case "fullscreen-exit-output":
-						callbacks.onFullscreenExitOutputChange(newValue as FullscreenExitOutput);
-						break;
-					case "fullscreen-scrollbar":
-						callbacks.onFullscreenScrollbarChange(newValue as ScrollViewScrollbar);
-						break;
-					case "fullscreen-copy-on-select":
-						callbacks.onFullscreenCopyOnSelectChange(newValue === "true");
-						break;
-					case "theme":
-						callbacks.onThemeChange(newValue);
 						break;
 				}
 			},

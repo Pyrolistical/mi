@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { transformMessages } from "../src/api/transform-messages.ts";
 import type { AssistantMessage, Message, Model, ToolCall } from "../src/types.ts";
 
-// Normalize function matching what anthropic.ts uses
 function anthropicNormalizeToolCallId(
 	id: string,
 	_model: Model<"anthropic-messages">,
@@ -30,7 +29,7 @@ function makeAssistantMessage(content: AssistantMessage["content"]): AssistantMe
 	return {
 		role: "assistant",
 		content,
-		api: "openai-responses",
+		api: "test-api",
 		provider: "github-copilot",
 		model: "gpt-5",
 		usage: {
@@ -80,7 +79,6 @@ describe("OpenAI to Anthropic session migration for Copilot Claude", () => {
 		const result = transformMessages(messages, model, anthropicNormalizeToolCallId);
 		const assistantMsg = result.find((m) => m.role === "assistant") as AssistantMessage;
 
-		// Thinking block should be converted to text since models differ
 		const textBlocks = assistantMsg.content.filter((b) => b.type === "text");
 		const thinkingBlocks = assistantMsg.content.filter((b) => b.type === "thinking");
 		expect(thinkingBlocks).toHaveLength(0);
@@ -102,7 +100,7 @@ describe("OpenAI to Anthropic session migration for Copilot Claude", () => {
 						thoughtSignature: JSON.stringify({ type: "reasoning.encrypted", id: "call_123", data: "encrypted" }),
 					},
 				],
-				api: "openai-responses",
+				api: "test-api",
 				provider: "github-copilot",
 				model: "gpt-5",
 				usage: {

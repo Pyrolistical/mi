@@ -2,18 +2,13 @@ import type { TUI } from "../tui.ts";
 import { Text } from "./text.ts";
 
 export interface LoaderIndicatorOptions {
-	/** Animation frames. Use an empty array to hide the indicator. */
 	frames?: string[];
-	/** Frame interval in milliseconds for animated indicators. */
 	intervalMs?: number;
 }
 
 const DEFAULT_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const DEFAULT_INTERVAL_MS = 80;
 
-/**
- * Loader component that updates with an optional spinning animation.
- */
 export class Loader extends Text {
 	private frames = [...DEFAULT_FRAMES];
 	private intervalMs = DEFAULT_INTERVAL_MS;

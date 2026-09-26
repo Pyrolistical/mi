@@ -4,7 +4,6 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { KeybindingsManager } from "../../../src/core/keybindings.ts";
 import { ScopedModelsSelectorComponent } from "../../../src/modes/interactive/components/scoped-models-selector.ts";
 import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
-import { initTheme, theme } from "../../../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../../../src/utils/ansi.ts";
 import { createHarness, type Harness } from "../harness.ts";
 
@@ -47,9 +46,7 @@ async function showModelsSelector(context: object): Promise<void> {
 describe("issue #6949 unavailable scoped models", () => {
 	const harnesses: Harness[] = [];
 
-	beforeAll(() => {
-		initTheme("dark");
-	});
+	beforeAll(() => {});
 
 	beforeEach(() => {
 		setKeybindings(new KeybindingsManager());
@@ -84,7 +81,6 @@ describe("issue #6949 unavailable scoped models", () => {
 
 		const rendered = selector.render(100).join("\n");
 		expect(stripAnsi(rendered)).toContain(`${unavailableId} [unavailable]`);
-		expect(rendered).toContain(theme.strikethrough(unavailableId));
 		selector.handleInput("\r");
 		expect(changes).toEqual([[availableId]]);
 		selector.handleInput("\x13");

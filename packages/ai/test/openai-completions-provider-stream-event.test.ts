@@ -54,7 +54,6 @@ describe("openai-completions provider stream events", () => {
 		mockState.chunks = [];
 	});
 
-	// Regression test for #9784.
 	it("exposes provider chunks including OpenRouter metadata", async () => {
 		const firstChunk = {
 			id: "chatcmpl-1",

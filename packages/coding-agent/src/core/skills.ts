@@ -7,10 +7,8 @@ import { canonicalizePath, resolvePath } from "../utils/paths.ts";
 import type { ResourceDiagnostic } from "./diagnostics.ts";
 import { createSyntheticSourceInfo, type SourceInfo } from "./source-info.ts";
 
-/** Max name length per spec */
 const MAX_NAME_LENGTH = 64;
 
-/** Max description length per spec */
 const MAX_DESCRIPTION_LENGTH = 1024;
 
 const IGNORE_FILE_NAMES = [".gitignore", ".ignore", ".fdignore"];
@@ -85,10 +83,6 @@ export interface LoadSkillsResult {
 	diagnostics: ResourceDiagnostic[];
 }
 
-/**
- * Validate skill name per Agent Skills spec.
- * Returns array of validation error messages (empty if valid).
- */
 function validateName(name: string): string[] {
 	const errors: string[] = [];
 
@@ -111,9 +105,6 @@ function validateName(name: string): string[] {
 	return errors;
 }
 
-/**
- * Validate description per Agent Skills spec.
- */
 function validateDescription(description: unknown): string[] {
 	const errors: string[] = [];
 
@@ -127,9 +118,7 @@ function validateDescription(description: unknown): string[] {
 }
 
 export interface LoadSkillsFromDirOptions {
-	/** Directory to scan for skills */
 	dir: string;
-	/** Source identifier for these skills */
 	source: string;
 }
 
@@ -157,14 +146,6 @@ function createSkillSourceInfo(filePath: string, baseDir: string, source: string
 	}
 }
 
-/**
- * Load skills from a directory.
- *
- * Discovery rules:
- * - if a directory contains SKILL.md, treat it as a skill root and do not recurse further
- * - otherwise, load direct .md children in the root
- * - recurse into subdirectories to find SKILL.md
- */
 export function loadSkillsFromDir(options: LoadSkillsFromDirOptions): LoadSkillsResult {
 	const { dir, source } = options;
 	return loadSkillsFromDirInternal(dir, source, true);
@@ -225,14 +206,12 @@ function loadSkillsFromDirInternal(
 				continue;
 			}
 
-			// Skip node_modules to avoid scanning dependencies
 			if (entry.name === "node_modules") {
 				continue;
 			}
 
 			const fullPath = join(dir, entry.name);
 
-			// For symlinks, check if they point to a directory and follow them
 			let isDirectory = entry.isDirectory();
 			let isFile = entry.isFile();
 			if (entry.isSymbolicLink()) {
@@ -241,7 +220,6 @@ function loadSkillsFromDirInternal(
 					isDirectory = stats.isDirectory();
 					isFile = stats.isFile();
 				} catch {
-					// Broken symlink, skip it
 					continue;
 				}
 			}
@@ -310,23 +288,19 @@ function loadSkillFromFile(
 	const skillDir = dirname(filePath);
 	const parentDirName = basename(skillDir);
 
-	// Validate description
 	const descErrors = validateDescription(description);
 	for (const error of descErrors) {
 		diagnostics.push({ type: "warning", message: error, path: filePath });
 	}
 
-	// Use name from frontmatter, or fall back to parent directory name
 	const frontmatterName = typeof frontmatter.name === "string" ? frontmatter.name : undefined;
 	const name = frontmatterName || parentDirName;
 
-	// Validate name
 	const nameErrors = validateName(name);
 	for (const error of nameErrors) {
 		diagnostics.push({ type: "warning", message: error, path: filePath });
 	}
 
-	// Still load the skill even with warnings, unless description is missing or empty.
 	if (!hasDescription) {
 		return { skill: null, diagnostics };
 	}
@@ -344,14 +318,6 @@ function loadSkillFromFile(
 	};
 }
 
-/**
- * Format skills for inclusion in a system prompt.
- * Uses XML format per Agent Skills standard.
- * See: https://agentskills.io/integrate-skills
- *
- * Skills with disableModelInvocation=true are excluded from the prompt
- * (they can only be invoked explicitly via /skill:name commands).
- */
 export function formatSkillsForPrompt(skills: Skill[], fileReadTool: "read" | "bash" = "read"): string {
 	const visibleSkills = skills.filter((s) => !s.disableModelInvocation);
 
@@ -392,24 +358,15 @@ function escapeXml(str: string): string {
 }
 
 export interface LoadSkillsOptions {
-	/** Working directory for project-local skills. */
 	cwd: string;
-	/** Agent config directory for global skills. */
 	agentDir: string;
-	/** Explicit skill paths (files or directories) */
 	skillPaths: string[];
-	/** Include default skills directories. */
 	includeDefaults: boolean;
 }
 
-/**
- * Load skills from all configured locations.
- * Returns skills and any validation diagnostics.
- */
 export function loadSkills(options: LoadSkillsOptions): LoadSkillsResult {
 	const { agentDir, skillPaths, includeDefaults } = options;
 
-	// Resolve agentDir - if not provided, use default from config
 	const resolvedCwd = resolvePath(options.cwd);
 	const resolvedAgentDir = resolvePath(agentDir ?? getAgentDir());
 
@@ -421,10 +378,8 @@ export function loadSkills(options: LoadSkillsOptions): LoadSkillsResult {
 	function addSkills(result: LoadSkillsResult) {
 		allDiagnostics.push(...result.diagnostics);
 		for (const skill of result.skills) {
-			// Resolve symlinks to detect duplicate files
 			const realPath = canonicalizePath(skill.filePath);
 
-			// Skip silently if we've already loaded this exact file (via symlink)
 			if (realPathSet.has(realPath)) {
 				continue;
 			}

@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
-import { getModel, normalizeContext } from "../src/compat.ts";
+import { normalizeContext } from "../src/compat.ts";
 import type { Model } from "../src/types.ts";
+import { openaiModel } from "./openai-models.ts";
 
 interface FakeOpenAIClientOptions {
 	apiKey: string;
@@ -81,7 +82,7 @@ describe("openai-completions prompt caching", () => {
 	});
 
 	function createModel(overrides: Partial<Model<"openai-completions">> = {}): Model<"openai-completions"> {
-		const { compat: _compat, ...baseModel } = getModel("openai", "gpt-4o-mini");
+		const { compat: _compat, ...baseModel } = openaiModel("gpt-4o-mini");
 		return {
 			...(baseModel as Omit<Model<"openai-completions">, "api">),
 			api: "openai-completions",
@@ -112,14 +113,7 @@ describe("openai-completions prompt caching", () => {
 		};
 	}
 
-	it("sets prompt_cache_key for direct OpenAI requests when caching is enabled", async () => {
-		const { payload } = await captureRequest({ sessionId: "session-123" });
-
-		expect(payload?.prompt_cache_key).toBe("session-123");
-		expect(payload?.prompt_cache_retention).toBeUndefined();
-	});
-
-	it("sets prompt_cache_retention to 24h for direct OpenAI requests when cacheRetention is long", async () => {
+	it("sets prompt_cache_key and 24h retention when cacheRetention is long", async () => {
 		const { payload } = await captureRequest({ cacheRetention: "long", sessionId: "session-456" });
 
 		expect(payload?.prompt_cache_key).toBe("session-456");
@@ -128,7 +122,7 @@ describe("openai-completions prompt caching", () => {
 
 	it("clamps prompt_cache_key to OpenAI's 64-character limit", async () => {
 		const sessionId = "x".repeat(67);
-		const { payload } = await captureRequest({ sessionId });
+		const { payload } = await captureRequest({ cacheRetention: "long", sessionId });
 
 		expect(payload?.prompt_cache_key).toBe("x".repeat(64));
 	});
@@ -151,7 +145,7 @@ describe("openai-completions prompt caching", () => {
 		expect(payload?.prompt_cache_retention).toBeUndefined();
 	});
 
-	it("uses PI_CACHE_RETENTION for direct OpenAI requests", async () => {
+	it("uses PI_CACHE_RETENTION", async () => {
 		process.env.PI_CACHE_RETENTION = "long";
 		const { payload } = await captureRequest({ sessionId: "session-env" });
 
@@ -171,24 +165,6 @@ describe("openai-completions prompt caching", () => {
 		expect(headers["x-session-affinity"]).toBe("session-affinity");
 	});
 
-	it.each(["accounts/fireworks/models/glm-5p3", "accounts/fireworks/routers/glm-5p3-fast"] as const)(
-		"sends Fireworks session affinity for %s",
-		async (modelId) => {
-			const model = getModel("fireworks", modelId);
-			const { headers } = await captureRequest({ sessionId: "fireworks-session" }, model);
-
-			expect(headers["x-session-affinity"]).toBe("fireworks-session");
-		},
-	);
-
-	it("sends Baseten session affinity for built-in catalog models", async () => {
-		const model = getModel("baseten", "zai-org/GLM-5.2");
-		const { headers } = await captureRequest({ sessionId: "baseten-catalog-session" }, model);
-
-		expect(headers["x-session-affinity"]).toBe("baseten-catalog-session");
-		expect(headers["x-client-request-id"]).toBe("baseten-catalog-session");
-	});
-
 	it("uses OpenAI no-session format when configured", async () => {
 		const model = createModel({
 			compat: { sendSessionAffinityHeaders: true, sessionAffinityFormat: "openai-nosession" },
@@ -196,7 +172,7 @@ describe("openai-completions prompt caching", () => {
 		const { payload, headers } = await captureRequest({ sessionId: "session-nosession" }, model);
 
 		expect(payload?.session_id).toBeUndefined();
-		expect(payload?.prompt_cache_key).toBe("session-nosession");
+		expect(payload?.prompt_cache_key).toBeUndefined();
 		expect(headers.session_id).toBeUndefined();
 		expect(headers["x-client-request-id"]).toBe("session-nosession");
 		expect(headers["x-session-affinity"]).toBe("session-nosession");
@@ -218,8 +194,25 @@ describe("openai-completions prompt caching", () => {
 		expect(headers["x-session-affinity"]).toBeUndefined();
 	});
 
-	it("sends OpenRouter session-affinity header by default for built-in OpenRouter models", async () => {
-		const model = getModel("openrouter", "auto");
+	it("sends OpenRouter session-affinity header when enabled", async () => {
+		const model = {
+			id: "auto",
+			name: "Auto",
+			api: "openai-completions",
+			provider: "openrouter",
+			baseUrl: "https://openrouter.ai/api/v1",
+			reasoning: true,
+			input: ["text", "image"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 2000000,
+			maxTokens: 30000,
+			compat: {
+				supportsDeveloperRole: false,
+				thinkingFormat: "openrouter",
+				supportsStrictMode: true,
+				sendSessionAffinityHeaders: true,
+			},
+		} satisfies Model<"openai-completions">;
 		const { payload, headers } = await captureRequest({ sessionId: "session-openrouter" }, model);
 
 		expect(payload?.session_id).toBeUndefined();

@@ -11,7 +11,6 @@ import type { SessionEntry } from "../src/core/session-manager.ts";
 const zeroCost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 };
 
 const models: ModelPriceSource = {
-	// $/million tokens; used as cache-read price fallback on full-miss turns
 	getModel: () => ({ cost: { cacheRead: 0.3 } }),
 };
 
@@ -66,9 +65,7 @@ function usageEntry(kind: string, timestamp: number): SessionEntry {
 	};
 }
 
-// Turn 1: fresh 100k cache write at $3.75/M
 const turn1 = assistant({ cacheWrite: 100_000, cost: { cacheWrite: 0.375 }, timestamp: 0 });
-// Turn 2: healthy, everything read back at $0.30/M
 const turn2 = assistant({
 	cacheRead: 100_000,
 	cacheWrite: 5_000,
@@ -78,11 +75,9 @@ const turn2 = assistant({
 
 describe("computeCacheWaste", () => {
 	it("accumulates missed tokens and cost across turns", () => {
-		// Turn 3: full miss, previous 105k prompt re-billed at $3.75/M write
 		const turn3 = assistant({ cacheWrite: 110_000, cost: { cacheWrite: 0.4125 }, timestamp: 120_000 });
 		const totals = computeCacheWaste([entry(turn1), entry(turn2), entry(turn3)], models);
 		expect(totals.missedTokens).toBe(105_000);
-		// 105k at ($3.75 - $0.30)/M
 		expect(totals.missedCost).toBeCloseTo(0.36225, 5);
 	});
 
@@ -130,7 +125,6 @@ describe("detectCacheMiss", () => {
 		expect(miss).toBeDefined();
 		expect(miss?.missedTokens).toBe(105_000);
 		expect(miss?.missedCost).toBeCloseTo(0.36225, 5);
-		// 600s - 60s since the previous request
 		expect(miss?.idleMs).toBe(540_000);
 		expect(miss?.modelChanged).toBe(false);
 	});

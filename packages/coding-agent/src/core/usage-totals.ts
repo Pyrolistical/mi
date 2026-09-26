@@ -33,7 +33,6 @@ export interface UsageCostBreakdownEntry {
 	tokens: number;
 }
 
-/** Group model-attributed usage by model and all other usage into a separate bucket. */
 export function getUsageCostBreakdown(entries: SessionEntry[]): UsageCostBreakdownEntry[] {
 	const totalsByKey = new Map<string, UsageTotals>();
 

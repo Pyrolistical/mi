@@ -42,7 +42,6 @@ class ModelCatalogRefreshCoordinator {
 
 const modelCatalogRefreshCoordinator = new ModelCatalogRefreshCoordinator();
 
-/** Share concurrent interactive all-catalog refreshes while keeping each caller's cancellation independent. */
 export function refreshModelCatalogs(
 	modelRuntime: ModelCatalogRuntime,
 	signal: AbortSignal,

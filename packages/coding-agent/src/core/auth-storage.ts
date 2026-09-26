@@ -1,8 +1,3 @@
-/**
- * CredentialStore implementation backed by auth.json.
- * Provider auth orchestration belongs to ModelRuntime and pi-ai Models.
- */
-
 import type { AuthOperationOptions, Credential, CredentialInfo, CredentialStore } from "@earendil-works/pi-ai";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
@@ -21,7 +16,6 @@ type LockResult<T> = {
 	next?: string;
 };
 
-// The mode applies only on creation so administrator-managed modes and ACLs remain intact.
 const AUTH_FILE_WRITE_OPTIONS = { encoding: "utf-8", mode: 0o600 } as const;
 
 type AuthFileReload = {
@@ -85,7 +79,6 @@ export class FileAuthStorageBackend implements AuthStorageBackend {
 				lastError = error;
 				const start = Date.now();
 				while (Date.now() - start < delayMs) {
-					// Sleep synchronously to avoid changing callers to async.
 				}
 			}
 		}
@@ -193,7 +186,6 @@ export class FileAuthStorageBackend implements AuthStorageBackend {
 				try {
 					await release();
 				} catch {
-					// Ignore unlock errors when lock is compromised.
 				}
 			}
 		}
@@ -289,7 +281,7 @@ export class ReadOnlyAuthStorage implements CredentialStore {
 	}
 }
 
-export class InMemoryAuthStorageBackend implements AuthStorageBackend {
+class InMemoryAuthStorageBackend implements AuthStorageBackend {
 	private value: string | undefined;
 	private asyncChain: Promise<unknown> = Promise.resolve();
 
@@ -321,9 +313,6 @@ export class InMemoryAuthStorageBackend implements AuthStorageBackend {
 	}
 }
 
-/**
- * Credential storage backed by a JSON file.
- */
 export class AuthStorage implements CredentialStore {
 	private storage: AuthStorageBackend;
 	private authPath: string | undefined;
@@ -371,9 +360,6 @@ export class AuthStorage implements CredentialStore {
 		this.readState.revision = revision;
 	}
 
-	/**
-	 * Reload credentials from storage.
-	 */
 	reload(): void {
 		let content: string | undefined;
 		let revision: string | undefined;
@@ -385,7 +371,6 @@ export class AuthStorage implements CredentialStore {
 			});
 			this.updateReadState(this.parseStorageData(content), revision);
 		} catch {
-			// Preserve the last valid in-memory snapshot.
 		}
 	}
 
@@ -481,7 +466,6 @@ export class AuthStorage implements CredentialStore {
 		this.updateReadState(latestData);
 	}
 
-	/** List credential metadata without resolving configured key values. */
 	async list(options?: AuthOperationOptions): Promise<readonly CredentialInfo[]> {
 		const entries = Object.entries(await this.readLatestData(options));
 		options?.signal?.throwIfAborted();
@@ -489,10 +473,6 @@ export class AuthStorage implements CredentialStore {
 	}
 }
 
-/**
- * One-off synchronous read of a stored credential from an auth.json file,
- * without instantiating a store or resolving configured key values.
- */
 export function readStoredCredential(
 	providerId: string,
 	authPath: string = join(getAgentDir(), "auth.json"),

@@ -1,10 +1,3 @@
-// Unit tests for the shared provider error-body normalizer.
-//
-// See issues/provider-error-body-passthrough. These cover one synthesized error
-// object per SDK shape (Mistral, openai APIError, @google/genai ApiError, AWS
-// Bedrock ServiceException), plus the non-Error fallback, truncation, the empty
-// parsed-body edge case, and the formatProviderError compose helper.
-
 import { describe, expect, it } from "vitest";
 import { formatProviderError, MAX_PROVIDER_ERROR_BODY_CHARS, normalizeProviderError } from "../src/utils/error-body.ts";
 
@@ -23,8 +16,6 @@ describe("normalizeProviderError", () => {
 	});
 
 	it("reads the parsed body off an openai APIError when the message is opaque", () => {
-		// makeMessage(status, error, message) yields "<status> status code (no body)"
-		// when the parsed body is unparsed, while the body stays on error.error.
 		const error = Object.assign(new Error("403 status code (no body)"), {
 			status: 403,
 			error: { error: "blocked by gateway WAF" },
@@ -86,9 +77,6 @@ describe("normalizeProviderError", () => {
 	});
 
 	it("ignores a class-instance response body without a pipe method instead of serializing it", () => {
-		// Not every SDK response wrapper is a node stream: web ReadableStreams
-		// and SDK-specific wrapper classes have no `pipe`, but serializing them
-		// still yields internals-noise that would replace the real message.
 		class SdkHttpResponseBody {
 			locked = false;
 			state = { storedError: undefined };

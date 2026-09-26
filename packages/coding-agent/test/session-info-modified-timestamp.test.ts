@@ -2,10 +2,9 @@ import { writeFileSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SessionHeader } from "../src/core/session-manager.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 
 function createSessionFile(path: string): void {
 	const header: SessionHeader = {
@@ -17,8 +16,6 @@ function createSessionFile(path: string): void {
 	};
 	writeFileSync(path, `${JSON.stringify(header)}\n`, "utf8");
 
-	// SessionManager only persists once it has seen at least one assistant message.
-	// Add a minimal assistant entry so subsequent appends are persisted.
 	const mgr = SessionManager.open(path);
 	mgr.appendMessage({
 		role: "assistant",
@@ -40,7 +37,6 @@ function createSessionFile(path: string): void {
 }
 
 describe("SessionInfo.modified", () => {
-	beforeAll(() => initTheme("dark"));
 
 	afterEach(() => {
 		vi.restoreAllMocks();
@@ -51,7 +47,6 @@ describe("SessionInfo.modified", () => {
 		createSessionFile(filePath);
 
 		const before = await stat(filePath);
-		// Ensure the file mtime can differ from our message timestamp even on coarse filesystems.
 		await new Promise((r) => setTimeout(r, 10));
 
 		const mgr = SessionManager.open(filePath);

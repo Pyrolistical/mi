@@ -231,7 +231,6 @@ describe("findMostRecentSession", () => {
 		const file2 = join(tempDir, "newer.jsonl");
 
 		writeFileSync(file1, '{"type":"session","id":"old","timestamp":"2025-01-01T00:00:00Z","cwd":"/tmp"}\n');
-		// Small delay to ensure different mtime
 		await new Promise((r) => setTimeout(r, 10));
 		writeFileSync(file2, '{"type":"session","id":"new","timestamp":"2025-01-01T00:00:00Z","cwd":"/tmp"}\n');
 
@@ -373,12 +372,10 @@ describe("SessionManager.setSessionFile with corrupted files", () => {
 
 		const sm = SessionManager.open(emptyFile, tempDir);
 
-		// Should have created a new session with valid header
 		expect(sm.getSessionId()).toBeTruthy();
 		expect(sm.getHeader()).toBeTruthy();
 		expect(sm.getHeader()?.type).toBe("session");
 
-		// File should now contain a valid header
 		const content = readFileSync(emptyFile, "utf-8");
 		const lines = content.trim().split("\n").filter(Boolean);
 		expect(lines.length).toBe(1);
@@ -416,7 +413,6 @@ describe("SessionManager.setSessionFile with corrupted files", () => {
 
 		const sm = SessionManager.open(explicitPath, tempDir);
 
-		// The session file path should be preserved
 		expect(sm.getSessionFile()).toBe(explicitPath);
 	});
 
@@ -452,7 +448,6 @@ describe("SessionManager session file creation", () => {
 		expect(existsSync(session.getSessionFile()!)).toBe(false);
 	});
 
-	// #10000: the first prompt must survive a first turn that never produces an assistant message
 	it("creates the file when the first user message is appended", () => {
 		const session = SessionManager.create(tempDir, tempDir);
 		session.appendModelChange("anthropic", "claude-sonnet-4-5");

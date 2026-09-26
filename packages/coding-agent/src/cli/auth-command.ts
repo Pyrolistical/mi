@@ -2,27 +2,24 @@ import type { AuthResult } from "@earendil-works/pi-ai";
 import { APP_NAME } from "../config.ts";
 import type { Args } from "./args.ts";
 
-export type AuthCommandKind = "check" | "api_key" | "bearer_token";
+export type AuthCommandKind = "check" | "api_key";
 
 export interface AuthCommand {
 	kind: AuthCommandKind;
 	args: string[];
 	json: boolean;
 	credentials: boolean;
-	noRefresh: boolean;
-	minExpiryMs?: number;
 }
 
 export class AuthCommandError extends Error {}
 
 const AUTH_COMMAND_USAGE: Record<AuthCommandKind, string> = {
-	check: `${APP_NAME} auth check --provider <provider> [--json] [--credentials] [--no-refresh]`,
+	check: `${APP_NAME} auth check --provider <provider> [--json] [--credentials]`,
 	api_key: `${APP_NAME} auth print-api-key --provider <provider> [--model <model>]`,
-	bearer_token: `${APP_NAME} auth print-bearer-token --provider <provider> [--model <model>] [--min-expiry <duration>]`,
 };
 
 export function getAuthCommandName(kind: AuthCommandKind): string {
-	return kind === "check" ? "auth check" : kind === "api_key" ? "auth print-api-key" : "auth print-bearer-token";
+	return kind === "check" ? "auth check" : "auth print-api-key";
 }
 
 export function getAuthCommandUsage(kind: AuthCommandKind): string {
@@ -39,60 +36,36 @@ export function isAuthCommandHelp(args: string[]): boolean {
 export function printAuthCommandHelp(): void {
 	console.log(`Usage:
   pi auth print-api-key [--provider <provider>] [--model <model>]
-  pi auth print-bearer-token [--provider <provider>] [--model <model>] [--min-expiry <duration>]
-  pi auth check [--provider <provider>] [--model <model>] [--json] [--credentials] [--no-refresh]
+  pi auth check [--provider <provider>] [--model <model>] [--json] [--credentials]
 
-Auth commands require at least one of --provider or --model. Checks refresh expired OAuth credentials by default; --no-refresh prevents this. --credentials emits the credential, or includes it in JSON output.`);
+Auth commands require at least one of --provider or --model. --credentials emits the credential, or includes it in JSON output.`);
 }
 
 export function parseAuthCommand(args: string[]): AuthCommand | undefined {
 	if (args[0] !== "auth") return undefined;
 
-	const kind =
-		args[1] === "check"
-			? "check"
-			: args[1] === "print-api-key"
-				? "api_key"
-				: args[1] === "print-bearer-token"
-					? "bearer_token"
-					: undefined;
+	const kind = args[1] === "check" ? "check" : args[1] === "print-api-key" ? "api_key" : undefined;
 	if (!kind) {
 		throw new AuthCommandError(
-			`Unknown auth command "${args[1] ?? ""}". Use "${APP_NAME} auth print-api-key", "${APP_NAME} auth print-bearer-token", or "${APP_NAME} auth check".`,
+			`Unknown auth command "${args[1] ?? ""}". Use "${APP_NAME} auth print-api-key" or "${APP_NAME} auth check".`,
 		);
 	}
 
 	const commandArgs: string[] = [];
 	let json = false;
 	let credentials = false;
-	let noRefresh = false;
-	let minExpiryMs: number | undefined;
 	for (let index = 2; index < args.length; index++) {
 		const arg = args[index];
-		if (arg === "--min-expiry") {
-			if (kind !== "bearer_token")
-				throw new AuthCommandError("--min-expiry is only supported by print-bearer-token");
-			const value = args[++index];
-			const match = value ? /^(\d+)(ms|s|m|h)$/iu.exec(value) : undefined;
-			if (!match) throw new AuthCommandError("--min-expiry must use a duration such as 30m or 1h");
-			const amount = Number(match[1]);
-			const unit = match[2];
-			minExpiryMs = amount * (unit === "ms" ? 1 : unit === "s" ? 1_000 : unit === "m" ? 60_000 : 3_600_000);
-			continue;
-		}
-		if (arg === "--json" || arg === "--credentials" || arg === "--no-refresh") {
+		if (arg === "--json" || arg === "--credentials") {
 			if (kind !== "check") throw new AuthCommandError(`${arg} is only supported by auth check`);
 			if (arg === "--json") json = true;
-			else if (arg === "--credentials") credentials = true;
-			else noRefresh = true;
+			else credentials = true;
 			continue;
 		}
 		commandArgs.push(arg);
 	}
 
-	return minExpiryMs === undefined
-		? { kind, args: commandArgs, json, credentials, noRefresh }
-		: { kind, args: commandArgs, json, credentials, noRefresh, minExpiryMs };
+	return { kind, args: commandArgs, json, credentials };
 }
 
 export function validateAuthCommandArgs(args: Args, kind: AuthCommandKind): { provider?: string; model?: string } {

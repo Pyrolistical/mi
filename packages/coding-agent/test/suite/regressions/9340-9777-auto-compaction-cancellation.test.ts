@@ -43,7 +43,6 @@ describe("automatic compaction cancellation regressions", () => {
 		while (harnesses.length > 0) harnesses.pop()?.cleanup();
 	});
 
-	// Regression test for #9340.
 	it("does not start post-run auto-compaction after abort", async () => {
 		const harness = await createHarness({
 			models: [{ id: "faux-1", contextWindow: 200, maxTokens: 50 }],
@@ -74,7 +73,6 @@ describe("automatic compaction cancellation regressions", () => {
 		expect(harness.eventsOfType("compaction_start")).toHaveLength(0);
 	});
 
-	// Regression test for #9777.
 	it("cancels summarization authentication", async () => {
 		const harness = await createHarness({ settings: { compaction: { keepRecentTokens: 1 } } });
 		harnesses.push(harness);
@@ -107,7 +105,6 @@ describe("automatic compaction cancellation regressions", () => {
 		expect(harness.eventsOfType("compaction_end").at(-1)?.aborted).toBe(true);
 	});
 
-	// Regression test for #9777.
 	it("cancels synchronously from compaction_start", async () => {
 		const harness = await createHarness({ settings: { compaction: { keepRecentTokens: 1 } } });
 		harnesses.push(harness);
@@ -122,7 +119,6 @@ describe("automatic compaction cancellation regressions", () => {
 		expect(harness.eventsOfType("compaction_end").at(-1)?.aborted).toBe(true);
 	});
 
-	// Regression test for #9777.
 	it.each([
 		["matching error text", () => new Error("Compaction cancelled")],
 		["an unrelated AbortError", () => Object.assign(new Error("auth failed"), { name: "AbortError" })],

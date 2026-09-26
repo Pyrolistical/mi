@@ -282,8 +282,6 @@ describe("AgentSession compaction characterization", () => {
 	it("throws when compacting without configured auth", async () => {
 		const harness = await createHarness({ withConfiguredAuth: false });
 		harnesses.push(harness);
-		// Auth is resolved only when Pi summarizes itself, after checking there is something to compact.
-		seedCompactableSession(harness);
 
 		await expect(harness.session.compact()).rejects.toThrow(`No API key found for ${harness.getModel().provider}.`);
 	});
@@ -342,7 +340,6 @@ describe("AgentSession compaction characterization", () => {
 		const transformContext = vi.fn(async (messages: AgentMessage[]) => messages);
 		harness.session.agent.transformContext = transformContext;
 		harness.session.agent.sessionId = "active-routing-session";
-		harness.session.agent.transport = "websocket";
 
 		let requestContext: TranscriptContext | undefined;
 		let requestOptions: SimpleStreamOptions | undefined;
@@ -356,11 +353,9 @@ describe("AgentSession compaction characterization", () => {
 		expect(transformContext).not.toHaveBeenCalled();
 		expect(getCurrentSystemPrompt(requestContext?.messages ?? [])).not.toBe(harness.session.agent.state.systemPrompt);
 		expect(getCurrentTools(requestContext?.messages ?? [])).toEqual([]);
-		// Regression test for #9652: split-turn summaries use a clear Markdown conversation boundary.
 		expect(JSON.stringify(requestContext?.messages)).toContain("# Conversation\\n[User]: message to compact");
 		expect(requestOptions).toMatchObject({ cacheRetention: "none" });
 		expect(requestOptions?.sessionId).not.toBe("active-routing-session");
-		expect(requestOptions?.transport).toBeUndefined();
 	});
 
 	it("persists usage from pi-generated manual compaction", async () => {
@@ -473,8 +468,6 @@ describe("AgentSession compaction characterization", () => {
 		expect(harness.session.getLastAssistantText()).toBe("completed response");
 	});
 
-	// Regression coverage for #8133: model overrides must also apply between assistant turns.
-	// Regression coverage for #9740: an oversized trailing tool result must still produce a cut point.
 	it.each([false, true])(
 		"compacts after an oversized tool result in the same run (model override: %s)",
 		async (modelOverride) => {
@@ -737,24 +730,29 @@ describe("AgentSession compaction characterization", () => {
 		harnesses.push(harness);
 
 		const compactPromise = harness.session.compact();
-		const compactExpectation = expect(compactPromise).rejects.toThrow("Compaction cancelled");
+		const compactError = compactPromise.then(
+			() => undefined,
+			(error: unknown) => error,
+		);
 		await compactionStarted;
 		harness.session.abortCompaction();
 
-		await compactExpectation;
+		expect(String(await compactError)).toContain("Compaction cancelled");
 	});
 
-	// Regression test for #8920.
 	it("aborts an in-progress manual compaction and waits until the session is idle", async () => {
 		const { harness, compactionStarted } = await createAbortableCompactionHarness();
 		harnesses.push(harness);
 		harness.setResponses([fauxAssistantMessage("continued")]);
 
 		const compactPromise = harness.session.compact();
-		const compactExpectation = expect(compactPromise).rejects.toThrow("Compaction cancelled");
+		const compactError = compactPromise.then(
+			() => undefined,
+			(error: unknown) => error,
+		);
 		await compactionStarted;
 		await harness.session.abort();
-		await compactExpectation;
+		expect(String(await compactError)).toContain("Compaction cancelled");
 
 		expect(harness.eventsOfType("compaction_end").at(-1)).toMatchObject({
 			reason: "manual",

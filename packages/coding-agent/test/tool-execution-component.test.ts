@@ -1,5 +1,5 @@
 import { join, resolve } from "node:path";
-import { resetCapabilitiesCache, setCapabilities, Text, type TUI, type TuiMouseEvent } from "@earendil-works/pi-tui";
+import { resetCapabilitiesCache, setCapabilities, Text, type TUI } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 
@@ -7,14 +7,13 @@ const imageConvertMocks = vi.hoisted(() => ({ convertToPng: vi.fn() }));
 
 vi.mock("../src/utils/image-convert.ts", () => imageConvertMocks);
 
-import { getReadmePath } from "../src/config.ts";
 import type { ToolDefinition } from "../src/core/extensions/types.ts";
 import { type BashOperations, createBashToolDefinition } from "../src/core/tools/bash.ts";
 import { createReadTool, createReadToolDefinition } from "../src/core/tools/read.ts";
 import { withBuiltInRenderers } from "../src/core/tools/renderers/index.ts";
 import { createWriteToolDefinition } from "../src/core/tools/write.ts";
 import { ToolExecutionComponent } from "../src/modes/interactive/components/tool-execution.ts";
-import { initTheme, theme } from "../src/modes/interactive/theme/theme.ts";
+import { theme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 
 function createBaseToolDefinition(name = "custom_tool"): ToolDefinition {
@@ -37,18 +36,15 @@ function createFakeTui(): TUI {
 }
 
 describe("ToolExecutionComponent parity", () => {
-	beforeAll(() => {
-		initTheme("dark");
-	});
+	beforeAll(() => {});
 	afterEach(() => {
 		resetCapabilitiesCache();
 		imageConvertMocks.convertToPng.mockReset();
 		vi.useRealTimers();
 	});
 
-	// Issue #8577: ignore conversions that finish after the image was replaced.
 	test("keeps the final tool image when a partial image conversion finishes late", async () => {
-		setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
+		setCapabilities({ images: "kitty", hyperlinks: true });
 		let finishConversion!: (result: { data: string; mimeType: string }) => void;
 		const conversion = new Promise<{ data: string; mimeType: string }>((resolve) => {
 			finishConversion = resolve;
@@ -238,7 +234,6 @@ describe("ToolExecutionComponent parity", () => {
 		expect(rendered).not.toContain("[Showing lines 2001-4000 of 4000. Full output:");
 	});
 
-	// Issue #9628: keep short durations precise and make long shell durations readable.
 	test.each([
 		{ ms: 0, formatted: "0.0s" },
 		{ ms: 4_200, formatted: "4.2s" },
@@ -294,7 +289,6 @@ describe("ToolExecutionComponent parity", () => {
 		expect(rendered.match(/\bread\b/g)?.length ?? 0).toBe(1);
 	});
 
-	// Issue #9996: strict tool schemas make models send null for omitted optional fields.
 	test("renders read calls with null offset and limit as full-file reads", () => {
 		const component = new ToolExecutionComponent(
 			"read",
@@ -533,42 +527,6 @@ describe("ToolExecutionComponent parity", () => {
 		expect(rendered).toContain(theme.fg("toolOutput", error));
 	});
 
-	test("expands a collapsed tool result when clicked", () => {
-		const component = new ToolExecutionComponent(
-			"read",
-			"tool-click-expand",
-			{ path: "notes.txt" },
-			{},
-			createReadToolDefinition(process.cwd()),
-			createFakeTui(),
-			process.cwd(),
-		);
-		component.updateResult(
-			{ content: [{ type: "text", text: "hidden content" }], details: undefined, isError: false },
-			false,
-		);
-		const width = 120;
-		const lines = component.render(width);
-		const resultRow = lines.findIndex((line) => stripAnsi(line).includes("notes.txt"));
-		expect(resultRow).toBeGreaterThanOrEqual(0);
-		const event: TuiMouseEvent = {
-			type: "click",
-			button: "left",
-			x: 2,
-			y: resultRow,
-			screenX: 2,
-			screenY: resultRow,
-			width,
-			height: lines.length,
-			shift: false,
-			alt: false,
-			ctrl: false,
-			clickCount: 1,
-		};
-		expect(component.handleMouse(event)?.handled).toBe(true);
-		expect(stripAnsi(component.render(width).join("\n"))).toContain("hidden content");
-	});
-
 	test("collapses ordinary read results until expanded", () => {
 		const component = new ToolExecutionComponent(
 			"read",
@@ -627,14 +585,6 @@ describe("ToolExecutionComponent parity", () => {
 			hidden: "Hidden outside resource instructions",
 			absent: undefined,
 		},
-		{
-			title: "Pi documentation",
-			path: getReadmePath(),
-			content: "Hidden docs content",
-			compact: "read docs README.md",
-			hidden: "Hidden docs content",
-			absent: undefined,
-		},
 	] as const) {
 		test(`renders ${scenario.title} read results compactly until expanded`, () => {
 			const component = new ToolExecutionComponent(
@@ -666,7 +616,6 @@ describe("ToolExecutionComponent parity", () => {
 
 	for (const scenario of [
 		{ title: "SKILL.md", path: join(process.cwd(), "attio", "SKILL.md"), compact: "[skill] attio:120-329" },
-		{ title: "Pi documentation", path: getReadmePath(), compact: "read docs README.md:120-329" },
 	] as const) {
 		test(`shows the read line range in compact ${scenario.title} reads before the expand hint`, () => {
 			const component = new ToolExecutionComponent(

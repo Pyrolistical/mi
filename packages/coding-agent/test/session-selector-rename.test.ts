@@ -3,7 +3,6 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { KeybindingsManager } from "../src/core/keybindings.ts";
 import type { SessionInfo } from "../src/core/session-manager.ts";
 import { SessionSelectorComponent } from "../src/modes/interactive/components/session-selector.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 
 async function flushPromises(): Promise<void> {
 	await new Promise<void>((resolve) => {
@@ -25,16 +24,12 @@ function makeSession(overrides: Partial<SessionInfo> & { id: string }): SessionI
 	};
 }
 
-// Kitty keyboard protocol encoding for Ctrl+R
 const CTRL_R = "\x1b[114;5u";
 
 describe("session selector rename", () => {
-	beforeAll(() => {
-		initTheme("dark");
-	});
+	beforeAll(() => {});
 
 	beforeEach(() => {
-		// Ensure test isolation: keybindings are a global singleton
 		setKeybindings(new KeybindingsManager());
 	});
 
@@ -95,12 +90,10 @@ describe("session selector rename", () => {
 		selector.getSessionList().handleInput(CTRL_R);
 		await flushPromises();
 
-		// Rename mode layout
 		const output = selector.render(120).join("\n");
 		expect(output).toContain("Rename Session");
 		expect(output).not.toContain("Resume Session");
 
-		// Type and submit
 		selector.handleInput("X");
 		selector.handleInput("\r");
 		await flushPromises();

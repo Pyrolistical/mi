@@ -80,7 +80,6 @@ describe("regression #2860: replaced session callbacks", () => {
 					],
 					noSkills: true,
 					noPromptTemplates: true,
-					noThemes: true,
 				},
 			});
 			return {

@@ -1,15 +1,13 @@
-import { mkdirSync, rmSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Agent } from "@earendil-works/pi-agent-core";
 import type { Model } from "@earendil-works/pi-ai";
-import { getModel, streamSimple } from "@earendil-works/pi-ai/compat";
-import { getBuiltinModels, getBuiltinProviders } from "@earendil-works/pi-ai/providers/all";
+import { streamSimple } from "@earendil-works/pi-ai/compat";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { AgentSession } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import {
-	defaultModelPerProvider,
 	findInitialModel,
 	parseModelPattern,
 	resolveCliModel,
@@ -21,7 +19,6 @@ import { SettingsManager } from "../src/core/settings-manager.ts";
 import { createModelRegistry, getModelRuntime } from "./model-runtime-test-utils.ts";
 import { createTestResourceLoader } from "./utilities.ts";
 
-// Mock models for testing
 const mockModels: Model<"anthropic-messages">[] = [
 	{
 		id: "claude-sonnet-4-5",
@@ -38,7 +35,7 @@ const mockModels: Model<"anthropic-messages">[] = [
 	{
 		id: "gpt-4o",
 		name: "GPT-4o",
-		api: "anthropic-messages", // Using same type for simplicity
+		api: "anthropic-messages",
 		provider: "openai",
 		baseUrl: "https://api.openai.com",
 		reasoning: false,
@@ -49,7 +46,6 @@ const mockModels: Model<"anthropic-messages">[] = [
 	},
 ];
 
-// Mock OpenRouter models with colons in IDs
 const mockOpenRouterModels: Model<"anthropic-messages">[] = [
 	{
 		id: "qwen/qwen3-coder:exacto",
@@ -204,7 +200,6 @@ describe("parseModelPattern", () => {
 
 	describe("edge cases", () => {
 		test("empty pattern matches via partial matching", () => {
-			// Empty string is included in all model IDs, so partial matching finds a match
 			const result = parseModelPattern("", allModels);
 			expect(result.model).not.toBeNull();
 			expect(result.thinkingLevel).toBeUndefined();
@@ -212,8 +207,6 @@ describe("parseModelPattern", () => {
 
 		test("pattern ending with colon treats empty suffix as invalid", () => {
 			const result = parseModelPattern("sonnet:", allModels);
-			// Empty string after colon is not a valid thinking level
-			// So it tries to match "sonnet:" which won't match, then tries "sonnet"
 			expect(result.model?.id).toBe("claude-sonnet-4-5");
 			expect(result.warning).toContain("Invalid thinking level");
 		});
@@ -486,8 +479,6 @@ describe("resolveCliModel", () => {
 	});
 
 	test("prefers provider/model split over gateway model with matching id", () => {
-		// When a user writes "zai/glm-5", and both a zai provider model (id: "glm-5")
-		// and a gateway model (id: "zai/glm-5") exist, prefer the zai provider model.
 		const zaiModel: Model<"anthropic-messages"> = {
 			id: "glm-5",
 			name: "GLM-5",
@@ -583,8 +574,6 @@ describe("resolveCliModel", () => {
 	});
 
 	describe("custom model fallback with :thinking suffix (#5552)", () => {
-		// Models for a provider that has registered models but the specific model ID
-		// is not in the registry (triggers buildFallbackModel path).
 		const neuralwattModel: Model<"anthropic-messages"> = {
 			id: "some-base-model",
 			name: "Some Base Model",
@@ -612,7 +601,6 @@ describe("resolveCliModel", () => {
 
 			expect(result.error).toBeUndefined();
 			expect(result.model?.provider).toBe("neuralwatt");
-			// The :high suffix must NOT leak into the model id sent to the API
 			expect(result.model?.id).toBe("zai-org/GLM-5.1-FP8");
 			expect(result.model?.reasoning).toBe(true);
 			expect(result.thinkingLevel).toBe("high");
@@ -663,7 +651,6 @@ describe("resolveCliModel", () => {
 
 			expect(result.error).toBeUndefined();
 			expect(result.model?.provider).toBe("neuralwatt");
-			// Invalid suffix stays in the id (it's not a thinking level)
 			expect(result.model?.id).toBe("zai-org/GLM-5.1-FP8:banana");
 			expect(result.thinkingLevel).toBeUndefined();
 		});
@@ -698,7 +685,6 @@ describe("resolveCliModel", () => {
 
 			expect(result.error).toBeUndefined();
 			expect(result.model?.provider).toBe("neuralwatt");
-			// :high is kept as part of the model id since --thinking was explicit
 			expect(result.model?.id).toBe("zai-org/GLM-5.1-FP8:high");
 			expect(result.thinkingLevel).toBeUndefined();
 		});
@@ -706,65 +692,8 @@ describe("resolveCliModel", () => {
 });
 
 describe("default model selection", () => {
-	test("openai defaults track current models", () => {
-		expect(defaultModelPerProvider.openai).toBe("gpt-5.5");
-		expect(defaultModelPerProvider["openai-codex"]).toBe("gpt-5.5");
-	});
 
-	test("zai, minimax, cerebras, and ant-ling defaults track current models", () => {
-		expect(defaultModelPerProvider.zai).toBe("glm-5.3");
-		expect(defaultModelPerProvider["zai-coding-cn"]).toBe("glm-5.3");
-		expect(defaultModelPerProvider.minimax).toBe("MiniMax-M2.7");
-		expect(defaultModelPerProvider["minimax-cn"]).toBe("MiniMax-M2.7");
-		expect(defaultModelPerProvider.cerebras).toBe("gpt-oss-120b");
-		expect(defaultModelPerProvider["ant-ling"]).toBe("Ring-2.6-1T");
-	});
-
-	test("built-in chat providers have defaults in their generated catalogs", () => {
-		for (const provider of getBuiltinProviders()) {
-			const chatModels = getBuiltinModels(provider);
-			const defaultId = defaultModelPerProvider[provider];
-			if (chatModels.length === 0) {
-				expect(defaultId, `${provider} has no chat models and should have no chat default`).toBeUndefined();
-				continue;
-			}
-			expect(
-				chatModels.some((model) => model.id === defaultId),
-				`${provider} default ${defaultId} should exist in its generated catalog`,
-			).toBe(true);
-		}
-	});
-
-	test("ai-gateway default tracks current model", () => {
-		expect(defaultModelPerProvider["vercel-ai-gateway"]).toBe("zai/glm-5.1");
-	});
-
-	test("xai default tracks current model", () => {
-		expect(defaultModelPerProvider.xai).toBe("grok-4.7");
-	});
-
-	test("qwen token plan individual default tracks current model", () => {
-		expect(defaultModelPerProvider["qwen-token-plan-individual"]).toBe("qwen3.8-max");
-	});
-
-	test("findInitialModel accepts explicit provider custom model ids", async () => {
-		const registry = {
-			getModels: () => allModels,
-		} as unknown as Parameters<typeof findInitialModel>[0]["modelRuntime"];
-
-		const result = await findInitialModel({
-			cliProvider: "openrouter",
-			cliModel: "openrouter/openai/ghost-model",
-			scopedModels: [],
-			isContinuing: false,
-			modelRuntime: registry,
-		});
-
-		expect(result.model?.provider).toBe("openrouter");
-		expect(result.model?.id).toBe("openai/ghost-model");
-	});
-
-	test("findInitialModel selects ai-gateway default when available", async () => {
+	test("findInitialModel selects ai-gateway default when available", () => {
 		const aiGatewayModel: Model<"anthropic-messages"> = {
 			id: "anthropic/claude-opus-4-6",
 			name: "Claude Opus 4.6",
@@ -782,17 +711,13 @@ describe("default model selection", () => {
 			getAvailableSnapshot: () => [aiGatewayModel],
 		} as unknown as Parameters<typeof findInitialModel>[0]["modelRuntime"];
 
-		const result = await findInitialModel({
-			scopedModels: [],
-			isContinuing: false,
-			modelRuntime: registry,
-		});
+		const model = findInitialModel({ modelRuntime: registry });
 
-		expect(result.model?.provider).toBe("vercel-ai-gateway");
-		expect(result.model?.id).toBe("anthropic/claude-opus-4-6");
+		expect(model?.provider).toBe("vercel-ai-gateway");
+		expect(model?.id).toBe("anthropic/claude-opus-4-6");
 	});
 
-	test("findInitialModel ignores an unauthenticated saved default", async () => {
+	test("findInitialModel ignores an unauthenticated saved default", () => {
 		const savedDeepSeekModel: Model<"anthropic-messages"> = {
 			id: "deepseek-v4-flash",
 			name: "DeepSeek V4 Flash",
@@ -819,22 +744,42 @@ describe("default model selection", () => {
 			getAvailableSnapshot: () => [localDeepSeekModel],
 		} as unknown as Parameters<typeof findInitialModel>[0]["modelRuntime"];
 
-		const result = await findInitialModel({
-			scopedModels: [],
-			isContinuing: false,
+		const model = findInitialModel({
 			defaultProvider: "deepseek",
 			defaultModelId: "deepseek-v4-flash",
 			modelRuntime: registry,
 		});
 
-		expect(result.model?.provider).toBe("spark-two");
-		expect(result.model?.id).toBe("deepseek-v4-flash");
+		expect(model?.provider).toBe("spark-two");
+		expect(model?.id).toBe("deepseek-v4-flash");
 	});
 
 	describe("persisted default model scoping", () => {
 		const tempDirs: string[] = [];
-		const sonnet = getModel("anthropic", "claude-sonnet-4-5")!;
-		const opus = getModel("anthropic", "claude-opus-4-8")!;
+		const sonnet: Model<"openai-completions"> = {
+			id: "openai/gpt-5-mini",
+			name: "openai/gpt-5-mini",
+			api: "openai-completions",
+			provider: "openrouter",
+			baseUrl: "https://openrouter.ai/api/v1",
+			reasoning: false,
+			input: ["text"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 128000,
+			maxTokens: 16384,
+		};
+		const opus: Model<"openai-completions"> = {
+			id: "openai/gpt-5.5",
+			name: "openai/gpt-5.5",
+			api: "openai-completions",
+			provider: "openrouter",
+			baseUrl: "https://openrouter.ai/api/v1",
+			reasoning: false,
+			input: ["text"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 128000,
+			maxTokens: 16384,
+		};
 
 		afterEach(() => {
 			for (const dir of tempDirs.splice(0)) {
@@ -852,7 +797,19 @@ describe("default model selection", () => {
 				settingsManager.setEnabledModels(options.persistedScope);
 			}
 
-			const authStorage = AuthStorage.inMemory({ anthropic: { type: "api_key", key: "test-key" } });
+			writeFileSync(
+				join(tempDir, "models.json"),
+				JSON.stringify({
+					providers: {
+						openrouter: {
+							baseUrl: "https://openrouter.ai/api/v1",
+							api: "openai-completions",
+							models: [{ id: "openai/gpt-5-mini" }, { id: "openai/gpt-5.5" }],
+						},
+					},
+				}),
+			);
+			const authStorage = AuthStorage.inMemory({ openrouter: { type: "api_key", key: "test-key" } });
 			const modelRuntime = getModelRuntime(await createModelRegistry(authStorage, join(tempDir, "models.json")));
 			const agent = new Agent({
 				initialState: {

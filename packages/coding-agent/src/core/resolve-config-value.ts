@@ -1,12 +1,5 @@
-/**
- * Resolve configuration values that may be shell commands, environment variables, or literals.
- * Used by auth-storage.ts and model-registry.ts.
- */
+import { execSync } from "child_process";
 
-import { execSync, spawnSync } from "child_process";
-import { getShellConfig } from "../utils/shell.ts";
-
-// Cache for shell command results (persists for process lifetime)
 const commandResultCache = new Map<string, string | undefined>();
 const ENV_VAR_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const ENV_VAR_NAME_PREFIX_RE = /^[A-Za-z_][A-Za-z0-9_]*/;
@@ -112,18 +105,12 @@ function resolveTemplate(parts: TemplatePart[], env?: Record<string, string>): s
 	return resolved;
 }
 
-export function getConfigValueEnvVarName(config: string): string | undefined {
-	const reference = parseConfigValueReference(config);
-	if (reference.type !== "template") return undefined;
-	return reference.parts.length === 1 && reference.parts[0]?.type === "env" ? reference.parts[0].name : undefined;
-}
-
 export function getConfigValueEnvVarNames(config: string): string[] {
 	const reference = parseConfigValueReference(config);
 	return reference.type === "template" ? getTemplateEnvVarNames(reference.parts) : [];
 }
 
-export function getMissingConfigValueEnvVarNames(config: string, env?: Record<string, string>): string[] {
+function getMissingConfigValueEnvVarNames(config: string, env?: Record<string, string>): string[] {
 	return getConfigValueEnvVarNames(config).filter((name) => resolveEnvConfigValue(name, env) === undefined);
 }
 
@@ -135,51 +122,12 @@ export function isConfigValueConfigured(config: string, env?: Record<string, str
 	return getMissingConfigValueEnvVarNames(config, env).length === 0;
 }
 
-/**
- * Resolve a config value (API key, header value, etc.) to an actual value.
- * - If starts with "!", executes the rest as a shell command and uses stdout (cached)
- * - Interpolates "$ENV_VAR" or "${ENV_VAR}" references with the named environment variable
- * - In non-command values, "$$" escapes a literal "$" and "$!" escapes a literal "!"
- * - Otherwise treats the value as a literal
- */
 export function resolveConfigValue(config: string, env?: Record<string, string>): string | undefined {
 	const reference = parseConfigValueReference(config);
 	if (reference.type === "command") {
 		return executeCommand(reference.config);
 	}
 	return resolveTemplate(reference.parts, env);
-}
-
-function executeWithConfiguredShell(command: string): { executed: boolean; value: string | undefined } {
-	try {
-		const { shell, args, commandTransport } = getShellConfig();
-		const commandFromStdin = commandTransport === "stdin";
-		const result = spawnSync(shell, commandFromStdin ? args : [...args, command], {
-			encoding: "utf-8",
-			input: commandFromStdin ? command : undefined,
-			timeout: 10000,
-			stdio: [commandFromStdin ? "pipe" : "ignore", "pipe", "ignore"],
-			shell: false,
-			windowsHide: true,
-		});
-
-		if (result.error) {
-			const error = result.error as NodeJS.ErrnoException;
-			if (error.code === "ENOENT") {
-				return { executed: false, value: undefined };
-			}
-			return { executed: true, value: undefined };
-		}
-
-		if (result.status !== 0) {
-			return { executed: true, value: undefined };
-		}
-
-		const value = (result.stdout ?? "").trim();
-		return { executed: true, value: value || undefined };
-	} catch {
-		return { executed: false, value: undefined };
-	}
 }
 
 function executeWithDefaultShell(command: string): string | undefined {
@@ -197,12 +145,7 @@ function executeWithDefaultShell(command: string): string | undefined {
 
 function executeCommandUncached(commandConfig: string): string | undefined {
 	const command = commandConfig.slice(1);
-	return process.platform === "win32"
-		? (() => {
-				const configuredResult = executeWithConfiguredShell(command);
-				return configuredResult.executed ? configuredResult.value : executeWithDefaultShell(command);
-			})()
-		: executeWithDefaultShell(command);
+	return executeWithDefaultShell(command);
 }
 
 function executeCommand(commandConfig: string): string | undefined {
@@ -215,9 +158,6 @@ function executeCommand(commandConfig: string): string | undefined {
 	return result;
 }
 
-/**
- * Resolve all header values using the same resolution logic as API keys.
- */
 export function resolveConfigValueUncached(config: string, env?: Record<string, string>): string | undefined {
 	const reference = parseConfigValueReference(config);
 	if (reference.type === "command") {
@@ -250,24 +190,6 @@ export function resolveConfigValueOrThrow(config: string, description: string, e
 	throw new Error(`Failed to resolve ${description}`);
 }
 
-/**
- * Resolve all header values using the same resolution logic as API keys.
- */
-export function resolveHeaders(
-	headers: Record<string, string> | undefined,
-	env?: Record<string, string>,
-): Record<string, string> | undefined {
-	if (!headers) return undefined;
-	const resolved: Record<string, string> = {};
-	for (const [key, value] of Object.entries(headers)) {
-		const resolvedValue = resolveConfigValue(value, env);
-		if (resolvedValue) {
-			resolved[key] = resolvedValue;
-		}
-	}
-	return Object.keys(resolved).length > 0 ? resolved : undefined;
-}
-
 export function resolveHeadersOrThrow(
 	headers: Record<string, string> | undefined,
 	description: string,
@@ -281,7 +203,6 @@ export function resolveHeadersOrThrow(
 	return Object.keys(resolved).length > 0 ? resolved : undefined;
 }
 
-/** Clear the config value command cache. Exported for testing. */
 export function clearConfigValueCache(): void {
 	commandResultCache.clear();
 }

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { convertMessages } from "../src/api/openai-completions.ts";
-import { getModel, normalizeContext } from "../src/compat.ts";
+import { normalizeContext } from "../src/compat.ts";
 import type { AssistantMessage, Model, OpenAICompletionsCompat, ToolResultMessage, Usage } from "../src/types.ts";
+import { openaiModel } from "./openai-models.ts";
 
 const emptyUsage: Usage = {
 	input: 0,
@@ -24,13 +25,9 @@ const compat: Omit<Required<OpenAICompletionsCompat>, "thinkingTokenBudgetField"
 	requiresToolResultName: false,
 	requiresAssistantAfterToolResult: false,
 	requiresThinkingAsText: false,
-	requiresReasoningContentOnAssistantMessages: false,
 	thinkingFormat: "openai",
 	openRouterRouting: {},
-	vercelGatewayRouting: {},
 	chatTemplateKwargs: {},
-	chatTemplateArgs: {},
-	zaiToolStream: false,
 	supportsThinkingTokenBudget: false,
 	thinkingTokenBudgetField: undefined,
 	supportsStrictMode: true,
@@ -69,9 +66,8 @@ function buildEmptyToolResult(toolCallId: string, timestamp: number): ToolResult
 }
 
 describe("openai-completions convertMessages", () => {
-	// Regression test for https://github.com/earendil-works/pi/issues/9797
 	it("omits empty text parts from user messages with images", () => {
-		const { compat: _compat, ...baseModel } = getModel("openai", "gpt-4o-mini");
+		const { compat: _compat, ...baseModel } = openaiModel("gpt-4o-mini");
 		const model: Model<"openai-completions"> = {
 			...baseModel,
 			api: "openai-completions",
@@ -99,7 +95,7 @@ describe("openai-completions convertMessages", () => {
 	});
 
 	it("batches tool-result images after consecutive tool results", () => {
-		const { compat: _compat, ...baseModel } = getModel("openai", "gpt-4o-mini");
+		const { compat: _compat, ...baseModel } = openaiModel("gpt-4o-mini");
 		const model: Model<"openai-completions"> = {
 			...baseModel,
 			api: "openai-completions",
@@ -145,7 +141,7 @@ describe("openai-completions convertMessages", () => {
 	});
 
 	it("uses '(no tool output)' placeholder for empty tool results without images", () => {
-		const { compat: _compat, ...baseModel } = getModel("openai", "gpt-4o-mini");
+		const { compat: _compat, ...baseModel } = openaiModel("gpt-4o-mini");
 		const model: Model<"openai-completions"> = {
 			...baseModel,
 			api: "openai-completions",

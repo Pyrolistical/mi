@@ -1,24 +1,14 @@
-import type { AnyModel } from "./types.ts";
+import type { Api, Model } from "./types.ts";
 
 export interface ModelsStoreEntry {
-	/** Persisted models of every type. */
-	models: readonly AnyModel[];
-	/** Unix timestamp from the remote catalog's Last-Modified header. */
-	lastModified?: number;
-	/** Unix timestamp of the last completed remote check. */
+	models: readonly Model<Api>[];
 	checkedAt?: number;
-	/**
-	 * Opaque validator from the remote catalog's ETag header, stored verbatim
-	 * (quotes included) and echoed back as If-None-Match.
-	 */
-	etag?: string;
 }
 
 export interface ModelsStoreOperationOptions {
 	signal?: AbortSignal;
 }
 
-/** Persistent model catalogs keyed by provider ID. */
 export interface ModelsStore {
 	read(providerId: string, options?: ModelsStoreOperationOptions): Promise<ModelsStoreEntry | undefined>;
 	write(providerId: string, entry: ModelsStoreEntry, options?: ModelsStoreOperationOptions): Promise<void>;

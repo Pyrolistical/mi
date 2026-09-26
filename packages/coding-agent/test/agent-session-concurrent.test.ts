@@ -1,20 +1,10 @@
-import { createModelRegistry, getModelRuntime } from "./model-runtime-test-utils.ts";
-/**
- * Tests for AgentSession concurrent prompt guard.
- */
+import { createModelRegistry, getModelRuntime, writeOpenAIModelsJson } from "./model-runtime-test-utils.ts";
 
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Agent } from "@earendil-works/pi-agent-core";
-import {
-	type AssistantMessage,
-	type AssistantMessageEvent,
-	EventStream,
-	getModel,
-	type ImageContent,
-	type TextContent,
-} from "@earendil-works/pi-ai/compat";
+import { type AssistantMessage, type AssistantMessageEvent, EventStream, type ImageContent, type TextContent } from "@earendil-works/pi-ai/compat";
 import { Type } from "typebox";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AgentSession } from "../src/core/agent-session.ts";
@@ -27,8 +17,8 @@ import {
 	normalizeBuildSystemPromptOptions,
 } from "../src/core/system-prompt.ts";
 import { createTestExtensionsResult, createTestResourceLoader } from "./utilities.ts";
+import { openaiModel } from "../../ai/test/openai-models.ts";
 
-// Mock stream that mimics AssistantMessageEventStream
 class MockAssistantStream extends EventStream<AssistantMessageEvent, AssistantMessage> {
 	constructor() {
 		super(
@@ -83,10 +73,9 @@ describe("AgentSession concurrent prompt guard", () => {
 	});
 
 	async function createSession() {
-		const model = getModel("anthropic", "claude-sonnet-4-5")!;
+		const model = openaiModel("gpt-5-mini");
 		let abortSignal: AbortSignal | undefined;
 
-		// Use a stream function that responds to abort
 		const agent = new Agent({
 			getApiKey: () => "test-key",
 			initialState: {
@@ -115,9 +104,8 @@ describe("AgentSession concurrent prompt guard", () => {
 		const sessionManager = SessionManager.inMemory();
 		const settingsManager = SettingsManager.create(tempDir, tempDir);
 		const authStorage = AuthStorage.create(join(tempDir, "auth.json"));
-		const modelRegistry = await createModelRegistry(authStorage, tempDir);
-		// Set a runtime API key so validation passes
-		await authStorage.modify("anthropic", async () => ({ type: "api_key", key: "test-key" }));
+		const modelRegistry = await createModelRegistry(authStorage, writeOpenAIModelsJson(tempDir));
+		await authStorage.modify("openai", async () => ({ type: "api_key", key: "test-key" }));
 
 		session = new AgentSession({
 			agent,
@@ -134,37 +122,29 @@ describe("AgentSession concurrent prompt guard", () => {
 	it("should throw when prompt() called while streaming", async () => {
 		await createSession();
 
-		// Start first prompt (don't await, it will block until abort)
 		const firstPrompt = session.prompt("First message");
 
-		// Wait a tick for isStreaming to be set
 		await new Promise((resolve) => setTimeout(resolve, 10));
 
-		// Verify we're streaming
 		expect(session.isStreaming).toBe(true);
 
-		// Second prompt should reject
 		await expect(session.prompt("Second message")).rejects.toThrow(
 			"Agent is already processing. Specify streamingBehavior ('steer' or 'followUp') to queue the message.",
 		);
 
-		// Cleanup
 		await session.abort();
-		await firstPrompt.catch(() => {}); // Ignore abort error
+		await firstPrompt.catch(() => {});
 	});
 
 	it("should allow steer() while streaming", async () => {
 		await createSession();
 
-		// Start first prompt
 		const firstPrompt = session.prompt("First message");
 		await new Promise((resolve) => setTimeout(resolve, 10));
 
-		// steer should work while streaming
 		await expect(session.steer("Steering message")).resolves.toBe("queued");
 		expect(session.pendingMessageCount).toBe(1);
 
-		// Cleanup
 		await session.abort();
 		await firstPrompt.catch(() => {});
 	});
@@ -172,21 +152,18 @@ describe("AgentSession concurrent prompt guard", () => {
 	it("should allow followUp() while streaming", async () => {
 		await createSession();
 
-		// Start first prompt
 		const firstPrompt = session.prompt("First message");
 		await new Promise((resolve) => setTimeout(resolve, 10));
 
-		// followUp should work while streaming
 		await expect(session.followUp("Follow-up message")).resolves.toBe("queued");
 		expect(session.pendingMessageCount).toBe(1);
 
-		// Cleanup
 		await session.abort();
 		await firstPrompt.catch(() => {});
 	});
 
 	it("should queue extension-origin steering messages while streaming", async () => {
-		const model = getModel("anthropic", "claude-sonnet-4-5")!;
+		const model = openaiModel("gpt-5-mini");
 		let abortSignal: AbortSignal | undefined;
 		let sawSteeringMessage = false;
 		let lastInputSource: string | undefined;
@@ -240,8 +217,8 @@ describe("AgentSession concurrent prompt guard", () => {
 		const sessionManager = SessionManager.inMemory();
 		const settingsManager = SettingsManager.create(tempDir, tempDir);
 		const authStorage = AuthStorage.create(join(tempDir, "auth.json"));
-		const modelRegistry = await createModelRegistry(authStorage, tempDir);
-		await authStorage.modify("anthropic", async () => ({ type: "api_key", key: "test-key" }));
+		const modelRegistry = await createModelRegistry(authStorage, writeOpenAIModelsJson(tempDir));
+		await authStorage.modify("openai", async () => ({ type: "api_key", key: "test-key" }));
 
 		const extensionsResult = await createTestExtensionsResult([
 			(pi) => {
@@ -296,8 +273,7 @@ describe("AgentSession concurrent prompt guard", () => {
 	});
 
 	it("should allow prompt() after previous completes", async () => {
-		// Create session with a stream that completes immediately
-		const model = getModel("anthropic", "claude-sonnet-4-5")!;
+		const model = openaiModel("gpt-5-mini");
 		const agent = new Agent({
 			getApiKey: () => "test-key",
 			initialState: {
@@ -318,8 +294,8 @@ describe("AgentSession concurrent prompt guard", () => {
 		const sessionManager = SessionManager.inMemory();
 		const settingsManager = SettingsManager.create(tempDir, tempDir);
 		const authStorage = AuthStorage.create(join(tempDir, "auth.json"));
-		const modelRegistry = await createModelRegistry(authStorage, tempDir);
-		await authStorage.modify("anthropic", async () => ({ type: "api_key", key: "test-key" }));
+		const modelRegistry = await createModelRegistry(authStorage, writeOpenAIModelsJson(tempDir));
+		await authStorage.modify("openai", async () => ({ type: "api_key", key: "test-key" }));
 
 		session = new AgentSession({
 			agent,
@@ -330,18 +306,15 @@ describe("AgentSession concurrent prompt guard", () => {
 			resourceLoader: createTestResourceLoader(),
 		});
 
-		// First prompt completes
 		await session.prompt("First message");
 
-		// Should not be streaming anymore
 		expect(session.isStreaming).toBe(false);
 
-		// Second prompt should work
-		await expect(session.prompt("Second message")).resolves.not.toThrow();
+		await session.prompt("Second message");
 	});
 
 	it("should wait for queued agent events before emitting tool_call", async () => {
-		const model = getModel("anthropic", "claude-sonnet-4-5")!;
+		const model = openaiModel("gpt-5-mini");
 		const tool = {
 			name: "dummy",
 			description: "Dummy tool",
@@ -424,8 +397,8 @@ describe("AgentSession concurrent prompt guard", () => {
 		const sessionManager = SessionManager.inMemory();
 		const settingsManager = SettingsManager.create(tempDir, tempDir);
 		const authStorage = AuthStorage.create(join(tempDir, "auth.json"));
-		const modelRegistry = await createModelRegistry(authStorage, tempDir);
-		await authStorage.modify("anthropic", async () => ({ type: "api_key", key: "test-key" }));
+		const modelRegistry = await createModelRegistry(authStorage, writeOpenAIModelsJson(tempDir));
+		await authStorage.modify("openai", async () => ({ type: "api_key", key: "test-key" }));
 
 		session = new AgentSession({
 			agent,
@@ -447,7 +420,7 @@ describe("AgentSession concurrent prompt guard", () => {
 				emitInput: (
 					text: string,
 					images: unknown,
-					source: "interactive" | "rpc" | "extension",
+					source: "interactive" | "extension",
 					streamingBehavior?: "steer" | "followUp",
 				) => Promise<{ action: "continue" }>;
 				emitBeforeAgentStart: (
@@ -489,7 +462,7 @@ describe("AgentSession concurrent prompt guard", () => {
 	});
 
 	it("should persist message_end events in order with slow extension handlers", async () => {
-		const model = getModel("anthropic", "claude-sonnet-4-5")!;
+		const model = openaiModel("gpt-5-mini");
 		const tool = {
 			name: "dummy",
 			description: "Dummy tool",
@@ -573,8 +546,8 @@ describe("AgentSession concurrent prompt guard", () => {
 		const sessionManager = SessionManager.inMemory();
 		const settingsManager = SettingsManager.create(tempDir, tempDir);
 		const authStorage = AuthStorage.create(join(tempDir, "auth.json"));
-		const modelRegistry = await createModelRegistry(authStorage, tempDir);
-		await authStorage.modify("anthropic", async () => ({ type: "api_key", key: "test-key" }));
+		const modelRegistry = await createModelRegistry(authStorage, writeOpenAIModelsJson(tempDir));
+		await authStorage.modify("openai", async () => ({ type: "api_key", key: "test-key" }));
 
 		session = new AgentSession({
 			agent,
@@ -594,7 +567,7 @@ describe("AgentSession concurrent prompt guard", () => {
 				emitInput: (
 					text: string,
 					images: unknown,
-					source: "interactive" | "rpc" | "extension",
+					source: "interactive" | "extension",
 					streamingBehavior?: "steer" | "followUp",
 				) => Promise<{ action: "continue" }>;
 				emitBeforeAgentStart: (

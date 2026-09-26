@@ -1,35 +1,23 @@
 import {
-	type AnyModel,
 	type Api,
 	type ApiKeyAuth,
 	type AssistantMessageEventStream,
 	type AuthContext,
-	type AuthInteraction,
 	type AuthResult,
-	type ClassifierApi,
 	type Credential,
-	type ImageApi,
-	isModelType,
 	lazyStream,
 	type Model,
 	type ModelAuth,
-	type OAuthAuth,
-	type OAuthCredentials,
-	type OAuthLoginCallbacks,
 	type Provider,
-	type ProviderClassifier,
 	type ProviderHeaders,
-	type ProviderImages,
 	type RefreshModelsContext,
 	type SimpleStreamOptions,
 	type StreamOptions,
 	type TranscriptContext,
 } from "@earendil-works/pi-ai";
 import { getApiProvider } from "@earendil-works/pi-ai/compat";
-import { classifierErrorResult, imageErrorResult } from "@earendil-works/pi-ai/utils/model-operations";
 import type { ModelConfig, ModelsJsonModel, ModelsJsonModelOverride, ModelsJsonProvider } from "./model-config.ts";
 import {
-	clearConfigValueCache,
 	getConfigValueEnvVarNames,
 	isCommandConfigValue,
 	isConfigValueConfigured,
@@ -37,31 +25,17 @@ import {
 	resolveHeadersOrThrow,
 } from "./resolve-config-value.ts";
 
-export interface ExtensionOAuthConfig {
-	name: string;
-	/** Whether access through this auth method is backed by a provider subscription. */
-	isSubscription?: boolean;
-	/** @deprecated Retained for extension source compatibility; ignored by canonical auth flows. */
-	usesCallbackServer?: boolean;
-	login(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials>;
-	refreshToken(credentials: OAuthCredentials, signal: AbortSignal): Promise<OAuthCredentials>;
-	getApiKey(credentials: OAuthCredentials): string;
-	modifyModels?(models: Model<Api>[], credentials: OAuthCredentials): Model<Api>[];
-}
-
 interface ProviderModelConfigBase {
 	id: string;
 	name: string;
 	api?: string;
 	baseUrl?: string;
 	input: ("text" | "image")[];
-	inputLimits?: AnyModel["inputLimits"];
-	cost: AnyModel["cost"];
+	cost: Model<Api>["cost"];
 	headers?: Record<string, string>;
 }
 
-export interface ProviderChatModelConfig extends ProviderModelConfigBase {
-	type?: "chat";
+interface ProviderChatModelConfig extends ProviderModelConfigBase {
 	api?: Api;
 	reasoning: boolean;
 	thinkingLevelMap?: Model<Api>["thinkingLevelMap"];
@@ -72,21 +46,8 @@ export interface ProviderChatModelConfig extends ProviderModelConfigBase {
 	compat?: Model<Api>["compat"];
 }
 
-export interface ProviderImageModelConfig extends ProviderModelConfigBase {
-	type: "image";
-	api?: ImageApi;
-	output: ("text" | "image")[];
-}
+type ProviderModelConfig = ProviderChatModelConfig;
 
-export interface ProviderClassifierModelConfig extends ProviderModelConfigBase {
-	type: "classifier";
-	api?: ClassifierApi;
-	contextWindow: number;
-}
-
-export type ProviderModelConfig = ProviderChatModelConfig | ProviderImageModelConfig | ProviderClassifierModelConfig;
-
-/** Input type for the extension registerProvider API. */
 export interface ProviderConfigInput {
 	name?: string;
 	baseUrl?: string;
@@ -97,11 +58,8 @@ export interface ProviderConfigInput {
 		context: TranscriptContext,
 		options?: SimpleStreamOptions,
 	) => AssistantMessageEventStream;
-	images?: Partial<Record<ImageApi, ProviderImages>>;
-	classifiers?: Partial<Record<ClassifierApi, ProviderClassifier>>;
 	headers?: Record<string, string>;
 	authHeader?: boolean;
-	oauth?: ExtensionOAuthConfig;
 	models?: ProviderModelConfig[];
 	refreshModels?(context: RefreshModelsContext): Promise<ProviderModelConfig[]>;
 }
@@ -112,12 +70,6 @@ export type AuthStatus = {
 	label?: string;
 };
 
-export const clearApiKeyCache = clearConfigValueCache;
-
-function getAllProviderModels(provider: Provider | undefined): readonly AnyModel[] {
-	return provider ? (provider.getAllModels?.() ?? provider.getModels()) : [];
-}
-
 function mergeCompat(
 	base: Model<Api>["compat"],
 	override: Model<Api>["compat"] | ModelsJsonModelOverride["compat"],
@@ -127,7 +79,7 @@ function mergeCompat(
 	const baseNested = base as Record<string, unknown> | undefined;
 	const overrideNested = override as Record<string, unknown>;
 	const mergedNested = merged as Record<string, unknown>;
-	for (const key of ["openRouterRouting", "vercelGatewayRouting", "chatTemplateKwargs", "chatTemplateArgs"] as const) {
+	for (const key of ["openRouterRouting", "chatTemplateKwargs"] as const) {
 		const baseValue = baseNested?.[key];
 		const overrideValue = overrideNested[key];
 		if (
@@ -140,26 +92,6 @@ function mergeCompat(
 	return merged;
 }
 
-function mergeInputLimits(
-	base: Model<Api>["inputLimits"],
-	override: ModelsJsonModelOverride["inputLimits"],
-): Model<Api>["inputLimits"] {
-	if (!override) return base;
-	return {
-		...base,
-		...override,
-		images: override.images
-			? {
-					...base?.images,
-					...override.images,
-					resize: override.images.resize
-						? { ...base?.images?.resize, ...override.images.resize }
-						: base?.images?.resize,
-				}
-			: base?.images,
-	};
-}
-
 function applyModelOverride(model: Model<Api>, override: ModelsJsonModelOverride): Model<Api> {
 	return {
 		...model,
@@ -169,7 +101,6 @@ function applyModelOverride(model: Model<Api>, override: ModelsJsonModelOverride
 			? { ...model.thinkingLevelMap, ...override.thinkingLevelMap }
 			: model.thinkingLevelMap,
 		input: (override.input as ("text" | "image")[] | undefined) ?? model.input,
-		inputLimits: mergeInputLimits(model.inputLimits, override.inputLimits),
 		cost: override.cost
 			? {
 					input: override.cost.input ?? model.cost.input,
@@ -218,7 +149,6 @@ function modelFromJson(
 		reasoning: definition.reasoning ?? false,
 		thinkingLevelMap: definition.thinkingLevelMap,
 		input: (definition.input ?? ["text"]) as ("text" | "image")[],
-		inputLimits: definition.inputLimits,
 		cost: definition.cost ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 		promptCache: definition.promptCache,
 		contextWindow: definition.contextWindow ?? 128000,
@@ -229,64 +159,39 @@ function modelFromJson(
 	};
 }
 
-function findModelDefaults(models: readonly AnyModel[], modelId: string, api?: Api): Model<Api> | undefined {
-	const chatModels = models.filter((model) => isModelType(model, "chat"));
+function findModelDefaults(models: readonly Model<Api>[], modelId: string, api?: Api): Model<Api> | undefined {
 	return (
-		chatModels.find((model) => model.id === modelId) ??
-		(api ? chatModels.find((model) => model.api === api) : undefined) ??
-		chatModels.find((model) => model.api === "openai-completions") ??
-		chatModels[0]
-	);
-}
-
-function findExtensionModelDefaults(
-	models: readonly AnyModel[],
-	definition: ProviderModelConfig,
-): AnyModel | undefined {
-	const type = definition.type ?? "chat";
-	const candidates = models.filter((model) => isModelType(model, type));
-	return (
-		candidates.find((model) => model.id === definition.id) ??
-		(definition.api ? candidates.find((model) => model.api === definition.api) : undefined) ??
-		(type === "chat" ? candidates.find((model) => model.api === "openai-completions") : undefined) ??
-		candidates[0]
+		models.find((model) => model.id === modelId) ??
+		(api ? models.find((model) => model.api === api) : undefined) ??
+		models.find((model) => model.api === "openai-completions") ??
+		models[0]
 	);
 }
 
 function extensionModelFromDefinition(
 	providerId: string,
-	models: readonly AnyModel[],
+	models: readonly Model<Api>[],
 	config: ProviderConfigInput,
 	definition: ProviderModelConfig,
-): AnyModel {
-	const type = definition.type ?? "chat";
-	const defaults = findExtensionModelDefaults(models, definition);
-	const api = definition.api ?? (type === "chat" ? config.api : undefined) ?? defaults?.api;
+): Model<Api> {
+	const defaults = findModelDefaults(models, definition.id, definition.api);
+	const api = definition.api ?? config.api ?? defaults?.api;
 	if (!api) {
 		throw new Error(
-			`Provider ${providerId}, model ${definition.id}: no "api" specified. Set it at model level${type === "chat" ? " or provider level" : ""}.`,
+			`Provider ${providerId}, model ${definition.id}: no "api" specified. Set it at model level or provider level.`,
 		);
 	}
 	const baseUrl = definition.baseUrl ?? config.baseUrl ?? defaults?.baseUrl;
 	if (!baseUrl) throw new Error(`Provider ${providerId}: "baseUrl" is required when defining custom models.`);
-	if (definition.type === "image") {
-		return { ...definition, api: api as ImageApi, provider: providerId, baseUrl, headers: undefined };
-	}
-	if (definition.type === "classifier") {
-		return { ...definition, api: api as ClassifierApi, provider: providerId, baseUrl, headers: undefined };
-	}
 	return { ...definition, api: api as Api, provider: providerId, baseUrl, headers: undefined };
 }
 
 function applyModelsJson(
 	providerId: string,
-	baseModels: readonly AnyModel[],
+	baseModels: readonly Model<Api>[],
 	config: ModelsJsonProvider | undefined,
-): AnyModel[] {
+): Model<Api>[] {
 	if (!config) return [...baseModels];
-	if (config.oauth && !config.baseUrl) {
-		throw new Error(`Provider ${providerId}: "baseUrl" is required when "oauth" is set.`);
-	}
 	const hasOverrides = config.modelOverrides && Object.keys(config.modelOverrides).length > 0;
 	if (
 		!config.models?.length &&
@@ -295,7 +200,6 @@ function applyModelsJson(
 		!config.compat &&
 		!hasOverrides &&
 		!config.apiKey &&
-		!config.oauth &&
 		config.authHeader === undefined
 	) {
 		throw new Error(
@@ -303,14 +207,13 @@ function applyModelsJson(
 		);
 	}
 
-	const models: AnyModel[] = baseModels.map((model) => {
-		const baseUrl = config.oauth === "radius" ? model.baseUrl : (config.baseUrl ?? model.baseUrl);
-		return isModelType(model, "chat")
-			? { ...model, baseUrl, compat: mergeCompat(model.compat, config.compat) }
-			: { ...model, baseUrl };
-	});
+	const models: Model<Api>[] = baseModels.map((model) => ({
+		...model,
+		baseUrl: config.baseUrl ?? model.baseUrl,
+		compat: mergeCompat(model.compat, config.compat),
+	}));
 	for (const definition of config.models ?? []) {
-		const existingIndex = models.findIndex((model) => isModelType(model, "chat") && model.id === definition.id);
+		const existingIndex = models.findIndex((model) => model.id === definition.id);
 		const defaults = findModelDefaults(models, definition.id, definition.api ?? config.api);
 		const model = modelFromJson(providerId, definition, config, defaults);
 		if (existingIndex >= 0) models[existingIndex] = model;
@@ -321,35 +224,14 @@ function applyModelsJson(
 
 function applyExtension(
 	providerId: string,
-	models: readonly AnyModel[],
+	models: readonly Model<Api>[],
 	config: ProviderConfigInput | undefined,
-): AnyModel[] {
+): Model<Api>[] {
 	if (!config) return [...models];
 	if (!config.models) {
 		return config.baseUrl ? models.map((model) => ({ ...model, baseUrl: config.baseUrl! })) : [...models];
 	}
 	return config.models.map((definition) => extensionModelFromDefinition(providerId, models, config, definition));
-}
-
-function adaptOAuth(config: ExtensionOAuthConfig): OAuthAuth {
-	return {
-		name: config.name,
-		isSubscription: config.isSubscription,
-		login: async (callbacks) => {
-			const credential = await config.login({
-				onAuth: (info) => callbacks.notify({ type: "auth_url", ...info }),
-				onDeviceCode: (info) => callbacks.notify({ type: "device_code", ...info }),
-				onPrompt: (prompt) => callbacks.prompt({ type: "text", ...prompt }),
-				onProgress: (message) => callbacks.notify({ type: "progress", message }),
-				onManualCodeInput: () => callbacks.prompt({ type: "manual_code", message: "Paste the authorization code" }),
-				onSelect: (prompt) => callbacks.prompt({ type: "select", ...prompt }),
-				signal: callbacks.signal,
-			});
-			return { ...credential, type: "oauth" };
-		},
-		refresh: async (credential, signal) => ({ ...(await config.refreshToken(credential, signal)), type: "oauth" }),
-		toAuth: async (credential) => ({ apiKey: config.getApiKey(credential) }),
-	};
 }
 
 function withConfiguredAuth(
@@ -400,22 +282,13 @@ function composeApiKeyAuth(
 	base: Provider | undefined,
 	config: ModelsJsonProvider | undefined,
 	extension: ProviderConfigInput | undefined,
-): ApiKeyAuth | undefined {
+): ApiKeyAuth {
 	const inherited = base?.auth.apiKey;
 	const rawKey = configuredApiKey(config, extension);
-	const oauth = extension?.oauth ?? base?.auth.oauth;
-	// OAuth-only providers get no fabricated API-key login method.
-	if (!inherited && rawKey === undefined && oauth) return undefined;
 	const rawHeaders = configuredHeaders(config, extension);
 	const authHeader = extension?.authHeader ?? config?.authHeader ?? false;
 	return {
 		name: inherited?.name ?? "API key",
-		login:
-			inherited?.login ??
-			(async (interaction: AuthInteraction) => ({
-				type: "api_key",
-				key: await interaction.prompt({ type: "secret", message: "Enter API key" }),
-			})),
 		check: async (input) => {
 			if (input.credential) {
 				if (inherited?.check) return inherited.check(input);
@@ -461,46 +334,15 @@ function composeApiKeyAuth(
 	};
 }
 
-function composeOAuthAuth(
-	providerId: string,
-	base: Provider | undefined,
-	config: ModelsJsonProvider | undefined,
-	extension: ProviderConfigInput | undefined,
-): OAuthAuth | undefined {
-	const oauth = extension?.oauth ? adaptOAuth(extension.oauth) : base?.auth.oauth;
-	if (!oauth) return undefined;
-	const rawHeaders = configuredHeaders(config, extension);
-	const authHeader = extension?.authHeader ?? config?.authHeader ?? false;
-	return {
-		...oauth,
-		toAuth: async (credential) => {
-			const auth = await oauth.toAuth(credential);
-			const env = credential.env;
-			const headers = resolveHeadersOrThrow(
-				rawHeaders,
-				`provider "${providerId}"`,
-				typeof env === "object" && env !== null ? (env as Record<string, string>) : undefined,
-			);
-			return withConfiguredAuth(auth, headers, authHeader);
-		},
-	};
-}
-
 function rawModelHeaders(
-	model: AnyModel,
+	model: Model<Api>,
 	config: ModelsJsonProvider | undefined,
 	extension: ProviderConfigInput | undefined,
 ): Record<string, string> | undefined {
-	// models.json definitions and overrides are chat-only. Extension definitions
-	// are matched by operation and id so colliding models cannot share headers.
-	const chatDefinition = isModelType(model, "chat")
-		? config?.models?.find((entry) => entry.id === model.id)
-		: undefined;
-	const extensionModel = extension?.models?.find(
-		(entry) => (entry.type ?? "chat") === (model.type ?? "chat") && entry.id === model.id,
-	);
+	const chatDefinition = config?.models?.find((entry) => entry.id === model.id);
+	const extensionModel = extension?.models?.find((entry) => entry.id === model.id);
 	const headers = {
-		...(isModelType(model, "chat") ? config?.modelOverrides?.[model.id]?.headers : undefined),
+		...config?.modelOverrides?.[model.id]?.headers,
 		...chatDefinition?.headers,
 		...extensionModel?.headers,
 	};
@@ -509,17 +351,15 @@ function rawModelHeaders(
 
 export function validateExtensionProvider(
 	providerId: string,
-	base: Provider | undefined,
 	modelsConfig: ModelsJsonProvider | undefined,
 	extension: ProviderConfigInput,
 ): void {
 	if (extension.streamSimple && !extension.api) {
 		throw new Error(`Provider ${providerId}: "api" is required when registering streamSimple.`);
 	}
-	applyExtension(providerId, applyModelsJson(providerId, getAllProviderModels(base), modelsConfig), extension);
+	applyExtension(providerId, applyModelsJson(providerId, [], modelsConfig), extension);
 }
 
-/** Compose built-in, models.json, and extension layers without reading credentials. */
 export function composeModelProvider(
 	providerId: string,
 	base: Provider | undefined,
@@ -527,38 +367,22 @@ export function composeModelProvider(
 	extension: ProviderConfigInput | undefined,
 ): Provider {
 	const config = modelConfig.getProvider(providerId);
-	let extensionOAuthCredential: OAuthCredentials | undefined;
 	let refreshedExtensionModels: ProviderConfigInput["models"];
 	const currentExtension = (): ProviderConfigInput | undefined =>
 		extension && refreshedExtensionModels ? { ...extension, models: refreshedExtensionModels } : extension;
-	// models.json modelOverrides are the topmost user-config layer: they apply once,
-	// after custom-model upserts, extension model replacement, and legacy OAuth projection.
-	const getAllModels = (): AnyModel[] => {
+	const getModels = (): Model<Api>[] => {
 		let models = applyExtension(
 			providerId,
-			applyModelsJson(providerId, getAllProviderModels(base), config),
+			applyModelsJson(providerId, base?.getModels() ?? [], config),
 			currentExtension(),
 		);
-		if (extensionOAuthCredential && extension?.oauth?.modifyModels) {
-			// The extension hook is chat-only; other model types pass through untouched.
-			models = [
-				...extension.oauth.modifyModels(
-					models.filter((model) => isModelType(model, "chat")),
-					extensionOAuthCredential,
-				),
-				...models.filter((model) => !isModelType(model, "chat")),
-			];
-		}
 		return models.map((model) => {
 			const override = config?.modelOverrides?.[model.id];
-			return override && isModelType(model, "chat") ? applyModelOverride(model, override) : model;
+			return override ? applyModelOverride(model, override) : model;
 		});
 	};
-	// Validate eagerly so registration/reload reports structural errors immediately.
-	getAllModels();
+	getModels();
 	const apiKey = composeApiKeyAuth(providerId, base, config, extension);
-	const oauth = composeOAuthAuth(providerId, base, config, extension);
-	if (!apiKey && !oauth) throw new Error(`Provider ${providerId}: no authentication method configured.`);
 
 	const supportsBaseApi = (model: Model<Api>) => base?.getModels().some((entry) => entry.api === model.api) ?? false;
 	const streamWith = (
@@ -585,31 +409,27 @@ export function composeModelProvider(
 
 	const provider: Provider = {
 		id: providerId,
-		name: extension?.name ?? config?.name ?? base?.name ?? extension?.oauth?.name ?? providerId,
+		name: extension?.name ?? config?.name ?? base?.name ?? providerId,
 		baseUrl: extension?.baseUrl ?? config?.baseUrl ?? base?.baseUrl,
 		headers: base?.headers,
-		auth: { ...(apiKey ? { apiKey } : {}), ...(oauth ? { oauth } : {}) },
-		getModels: () => getAllModels().filter((model) => isModelType(model, "chat")),
-		getAllModels,
+		auth: { apiKey },
+		getModels,
 		refreshModels:
-			base?.refreshModels || extension?.refreshModels || extension?.oauth?.modifyModels
+			base?.refreshModels || extension?.refreshModels
 				? async (context) => {
 						await base?.refreshModels?.(context);
 						let refreshed: NonNullable<ProviderConfigInput["models"]> | undefined;
 						if (extension?.refreshModels) refreshed = await extension.refreshModels(context);
 						if (context.signal.aborted) return;
-						const oauthCredential = context.credential?.type === "oauth" ? context.credential : undefined;
 						await context.publish({
 							update: () => {
 								if (refreshed) {
-									// Validate before publishing the new synchronous list.
-									applyExtension(providerId, applyModelsJson(providerId, getAllProviderModels(base), config), {
+									applyExtension(providerId, applyModelsJson(providerId, (base?.getModels() ?? []), config), {
 										...extension,
 										models: refreshed,
 									});
 									refreshedExtensionModels = refreshed;
 								}
-								extensionOAuthCredential = oauthCredential;
 							},
 						});
 					}
@@ -617,54 +437,15 @@ export function composeModelProvider(
 		filterModels: base?.filterModels
 			? (models, credential: Credential | undefined) => base.filterModels!(models, credential)
 			: undefined,
-		filterAllModels: base?.filterAllModels
-			? (models, credential: Credential | undefined) => base.filterAllModels!(models, credential)
-			: undefined,
 		stream: (model, context, options) => streamWith(model, context, options, false),
 		streamSimple: (model, context, options) => streamWith(model, context, options, true),
 	};
-
-	const fetchDeferred = base?.fetchDeferred;
-	if (fetchDeferred) {
-		provider.fetchDeferred = (model, handle, options) => fetchDeferred(model, handle, options);
-	}
-	const cancelDeferred = base?.cancelDeferred;
-	if (cancelDeferred) {
-		provider.cancelDeferred = (model, handle, options) => cancelDeferred(model, handle, options);
-	}
-	const extensionImages = extension?.images;
-	const generateImages = base?.generateImages;
-	if (generateImages || Object.keys(extensionImages ?? {}).length > 0) {
-		provider.generateImages = (model, context, options) => {
-			const implementation = extensionImages?.[model.api];
-			if (implementation) return implementation.generateImages(model, context, options);
-			if (generateImages) return generateImages(model, context, options);
-			return Promise.resolve(
-				imageErrorResult(model, new Error(`Provider ${providerId} has no image implementation for "${model.api}"`)),
-			);
-		};
-	}
-	const extensionClassifiers = extension?.classifiers;
-	const classify = base?.classify;
-	if (classify || Object.keys(extensionClassifiers ?? {}).length > 0) {
-		provider.classify = (model, context, options) => {
-			const implementation = extensionClassifiers?.[model.api];
-			if (implementation) return implementation.classify(model, context, options);
-			if (classify) return classify(model, context, options);
-			return Promise.resolve(
-				classifierErrorResult(
-					model,
-					new Error(`Provider ${providerId} has no classifier implementation for "${model.api}"`),
-				),
-			);
-		};
-	}
 
 	return provider;
 }
 
 export function resolveConfiguredModelHeaders(
-	model: AnyModel,
+	model: Model<Api>,
 	config: ModelsJsonProvider | undefined,
 	extension: ProviderConfigInput | undefined,
 	env?: Record<string, string>,
@@ -682,7 +463,7 @@ export interface CompatibilityRequestConfig {
 }
 
 export function resolveCompatibilityRequestConfig(
-	model: AnyModel,
+	model: Model<Api>,
 	config: ModelsJsonProvider | undefined,
 	extension: ProviderConfigInput | undefined,
 ): CompatibilityRequestConfig {

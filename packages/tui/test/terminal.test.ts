@@ -1,12 +1,7 @@
 import assert from "node:assert";
 import { describe, it, mock } from "node:test";
 import { setKittyProtocolActive } from "../src/keys.ts";
-import {
-	normalizeAppleTerminalInput,
-	normalizeNativeShiftEnterInput,
-	ProcessTerminal,
-	resolveEscapeTimeoutMs,
-} from "../src/terminal.ts";
+import { ProcessTerminal, resolveEscapeTimeoutMs } from "../src/terminal.ts";
 
 describe("resolveEscapeTimeoutMs", () => {
 	it("uses PI_TUI_ESC_TIMEOUT when configured", () => {
@@ -28,44 +23,6 @@ describe("resolveEscapeTimeoutMs", () => {
 
 	it("defaults to 10ms otherwise", () => {
 		assert.equal(resolveEscapeTimeoutMs({}), 10);
-	});
-});
-
-describe("normalizeNativeShiftEnterInput", () => {
-	it("rewrites Return to CSI-u Shift+Enter when native Shift detection is enabled and Shift is pressed", () => {
-		assert.equal(normalizeNativeShiftEnterInput("\r", true, true), "\x1b[13;2u");
-	});
-
-	it("leaves Return unchanged when native Shift detection is disabled", () => {
-		assert.equal(normalizeNativeShiftEnterInput("\r", false, true), "\r");
-	});
-
-	it("leaves Return unchanged when Shift is not pressed", () => {
-		assert.equal(normalizeNativeShiftEnterInput("\r", true, false), "\r");
-	});
-
-	it("leaves non-Return input unchanged", () => {
-		assert.equal(normalizeNativeShiftEnterInput("\x1b[13;2u", true, true), "\x1b[13;2u");
-		assert.equal(normalizeNativeShiftEnterInput("a", true, true), "a");
-	});
-});
-
-describe("normalizeAppleTerminalInput", () => {
-	it("rewrites Apple Terminal Return to CSI-u Shift+Enter when Shift is pressed", () => {
-		assert.equal(normalizeAppleTerminalInput("\r", true, true), "\x1b[13;2u");
-	});
-
-	it("leaves Apple Terminal Return unchanged when Shift is not pressed", () => {
-		assert.equal(normalizeAppleTerminalInput("\r", true, false), "\r");
-	});
-
-	it("leaves non-Apple Terminal Return unchanged when Shift is pressed", () => {
-		assert.equal(normalizeAppleTerminalInput("\r", false, true), "\r");
-	});
-
-	it("leaves non-Return input unchanged", () => {
-		assert.equal(normalizeAppleTerminalInput("\x1b[13;2u", true, true), "\x1b[13;2u");
-		assert.equal(normalizeAppleTerminalInput("a", true, true), "a");
 	});
 });
 
@@ -187,21 +144,6 @@ describe("ProcessTerminal Kitty keyboard protocol negotiation", () => {
 		}
 	});
 
-	it("forwards device attributes replies that answer other queries", () => {
-		const harness = setupNegotiation();
-		try {
-			harness.send("\x1b[?7u");
-			harness.send("\x1b[?62;4;52c");
-			assert.equal(harness.getInput(), undefined);
-
-			// The TUI's color query uses DA1 as its own sentinel.
-			harness.send("\x1b[?62;4;52c");
-			assert.equal(harness.getInput(), "\x1b[?62;4;52c");
-		} finally {
-			harness.cleanup();
-		}
-	});
-
 	it("forwards normal input while waiting for Kitty response", () => {
 		const harness = setupNegotiation();
 		try {
@@ -238,7 +180,7 @@ describe("ProcessTerminal Kitty keyboard protocol negotiation", () => {
 		const harness = setupNegotiation();
 		try {
 			harness.send("\x1b[");
-			mock.timers.tick(50); // StdinBuffer sequence timeout, not the lone-ESC timeout
+			mock.timers.tick(50);
 
 			assert.equal(harness.getInput(), undefined);
 

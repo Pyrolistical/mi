@@ -201,12 +201,10 @@ describe("SessionManager append and tree traversal", () => {
 		it("returns tree with branches after branch", () => {
 			const session = SessionManager.inMemory();
 
-			// Build: 1 -> 2 -> 3
 			const id1 = session.appendMessage(userMsg("1"));
 			const id2 = session.appendMessage(assistantMsg("2"));
 			const id3 = session.appendMessage(userMsg("3"));
 
-			// Branch from id2, add new path: 2 -> 4
 			session.branch(id2);
 			const id4 = session.appendMessage(userMsg("4-branch"));
 
@@ -219,7 +217,7 @@ describe("SessionManager append and tree traversal", () => {
 
 			const node2 = root.children[0];
 			expect(node2.entry.id).toBe(id2);
-			expect(node2.children).toHaveLength(2); // id3 and id4 are siblings
+			expect(node2.children).toHaveLength(2);
 
 			const childIds = node2.children.map((c) => c.entry.id).sort();
 			expect(childIds).toEqual([id3, id4].sort());
@@ -231,15 +229,12 @@ describe("SessionManager append and tree traversal", () => {
 			const _id1 = session.appendMessage(userMsg("root"));
 			const id2 = session.appendMessage(assistantMsg("response"));
 
-			// Branch A
 			session.branch(id2);
 			const idA = session.appendMessage(userMsg("branch-A"));
 
-			// Branch B
 			session.branch(id2);
 			const idB = session.appendMessage(userMsg("branch-B"));
 
-			// Branch C
 			session.branch(id2);
 			const idC = session.appendMessage(userMsg("branch-C"));
 
@@ -255,32 +250,28 @@ describe("SessionManager append and tree traversal", () => {
 		it("handles deep branching", () => {
 			const session = SessionManager.inMemory();
 
-			// Main path: 1 -> 2 -> 3 -> 4
 			const _id1 = session.appendMessage(userMsg("1"));
 			const id2 = session.appendMessage(assistantMsg("2"));
 			const id3 = session.appendMessage(userMsg("3"));
 			const _id4 = session.appendMessage(assistantMsg("4"));
 
-			// Branch from 2: 2 -> 5 -> 6
 			session.branch(id2);
 			const id5 = session.appendMessage(userMsg("5"));
 			const _id6 = session.appendMessage(assistantMsg("6"));
 
-			// Branch from 5: 5 -> 7
 			session.branch(id5);
 			const _id7 = session.appendMessage(userMsg("7"));
 
 			const tree = session.getTree();
 
-			// Verify structure
 			const node2 = tree[0].children[0];
-			expect(node2.children).toHaveLength(2); // id3 and id5
+			expect(node2.children).toHaveLength(2);
 
 			const node5 = node2.children.find((c) => c.entry.id === id5)!;
-			expect(node5.children).toHaveLength(2); // id6 and id7
+			expect(node5.children).toHaveLength(2);
 
 			const node3 = node2.children.find((c) => c.entry.id === id3)!;
-			expect(node3.children).toHaveLength(1); // id4
+			expect(node3.children).toHaveLength(1);
 		});
 	});
 
@@ -316,7 +307,7 @@ describe("SessionManager append and tree traversal", () => {
 
 			const entries = session.getEntries();
 			const branchedEntry = entries.find((e) => e.id === id3)!;
-			expect(branchedEntry.parentId).toBe(id1); // sibling of id2
+			expect(branchedEntry.parentId).toBe(id1);
 		});
 	});
 
@@ -408,17 +399,15 @@ describe("SessionManager append and tree traversal", () => {
 		it("returns messages from current branch only", () => {
 			const session = SessionManager.inMemory();
 
-			// Main: 1 -> 2 -> 3
 			session.appendMessage(userMsg("msg1"));
 			const id2 = session.appendMessage(assistantMsg("msg2"));
 			session.appendMessage(userMsg("msg3"));
 
-			// Branch from 2: 2 -> 4
 			session.branch(id2);
 			session.appendMessage(assistantMsg("msg4-branch"));
 
 			const ctx = session.buildSessionContext();
-			expect(ctx.messages).toHaveLength(3); // msg1, msg2, msg4-branch (not msg3)
+			expect(ctx.messages).toHaveLength(3);
 
 			expect((ctx.messages[0] as any).content).toBe("msg1");
 			expect((ctx.messages[1] as any).content[0].text).toBe("msg2");
@@ -438,21 +427,17 @@ describe("createBranchedSession", () => {
 	it("creates new session with path to specified leaf (in-memory)", () => {
 		const session = SessionManager.inMemory();
 
-		// Build: 1 -> 2 -> 3 -> 4
 		const id1 = session.appendMessage(userMsg("1"));
 		const id2 = session.appendMessage(assistantMsg("2"));
 		const id3 = session.appendMessage(userMsg("3"));
 		session.appendMessage(assistantMsg("4"));
 
-		// Branch from 3: 3 -> 5
 		session.branch(id3);
 		const _id5 = session.appendMessage(userMsg("5"));
 
-		// Create branched session from id2 (should only have 1 -> 2)
 		const result = session.createBranchedSession(id2);
-		expect(result).toBeUndefined(); // in-memory returns null
+		expect(result).toBeUndefined();
 
-		// Session should now only have entries 1 and 2
 		const entries = session.getEntries();
 		expect(entries).toHaveLength(2);
 		expect(entries[0].id).toBe(id1);
@@ -462,17 +447,14 @@ describe("createBranchedSession", () => {
 	it("extracts correct path from branched tree", () => {
 		const session = SessionManager.inMemory();
 
-		// Build: 1 -> 2 -> 3
 		const id1 = session.appendMessage(userMsg("1"));
 		const id2 = session.appendMessage(assistantMsg("2"));
 		session.appendMessage(userMsg("3"));
 
-		// Branch from 2: 2 -> 4 -> 5
 		session.branch(id2);
 		const id4 = session.appendMessage(userMsg("4"));
 		const id5 = session.appendMessage(assistantMsg("5"));
 
-		// Create branched session from id5 (should have 1 -> 2 -> 4 -> 5)
 		session.createBranchedSession(id5);
 
 		const entries = session.getEntries();
@@ -485,27 +467,22 @@ describe("createBranchedSession", () => {
 		mkdirSync(tempDir, { recursive: true });
 
 		try {
-			// Create a persisted session with a couple of turns
 			const session = SessionManager.create(tempDir, tempDir);
 			const modelChangeId = session.appendModelChange("anthropic", "claude-sonnet-4-5");
 			session.appendMessage(userMsg("first question"));
 			session.appendMessage(assistantMsg("first answer"));
 
-			// Fork from a setup entry (no user or assistant message in the branched path)
 			const newFile = session.createBranchedSession(modelChangeId);
 			expect(newFile).toBeDefined();
 
-			// Nothing to save yet, so the file is created later by the first user message
 			expect(existsSync(newFile!)).toBe(false);
 
 			session.appendMessage(userMsg("new question"));
 			expect(existsSync(newFile!)).toBe(true);
 
-			// Simulate extension adding entry before assistant (like preset on turn_start)
 			session.appendCustomEntry("preset-state", { name: "plan" });
 			session.appendMessage(assistantMsg("new answer"));
 
-			// Exactly one header and each entry written once
 			expect(readSessionFileRoles(newFile!)).toEqual(["session", "model_change", "user", "custom", "assistant"]);
 		} finally {
 			rmSync(tempDir, { recursive: true, force: true });

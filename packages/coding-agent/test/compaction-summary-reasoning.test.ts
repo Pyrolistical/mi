@@ -21,23 +21,18 @@ vi.mock("@earendil-works/pi-ai/compat", async (importOriginal) => {
 	};
 });
 
-function createModel(
-	reasoning: boolean,
-	maxTokens = 8192,
-	compat?: Model<"anthropic-messages">["compat"],
-): Model<"anthropic-messages"> {
+function createModel(reasoning: boolean, maxTokens = 8192): Model<"openai-completions"> {
 	return {
 		id: reasoning ? "reasoning-model" : "non-reasoning-model",
 		name: reasoning ? "Reasoning Model" : "Non-reasoning Model",
-		api: "anthropic-messages",
-		provider: "anthropic",
-		baseUrl: "https://api.anthropic.com",
+		api: "openai-completions",
+		provider: "openai",
+		baseUrl: "https://api.openai.com/v1",
 		reasoning,
 		input: ["text"],
 		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 		contextWindow: 200000,
 		maxTokens,
-		...(compat ? { compat } : {}),
 	};
 }
 
@@ -146,7 +141,6 @@ describe("generateSummary reasoning options", () => {
 		expect(result.summary).toContain("previous checkpoint");
 		const requestContext = completeSimpleMock.mock.calls[0][1] as TranscriptContext;
 		const prompt = JSON.stringify(requestContext.messages);
-		// Regression test for #9652: clear boundaries and continuation wording avoid the reasoning-extraction false positive.
 		expect(prompt).toContain("# Conversation\\n[User]: Summarize this.");
 		expect(prompt).toContain("# Instructions\\nThe messages above are earlier context from an ongoing conversation.");
 	});
@@ -249,32 +243,7 @@ describe("generateSummary reasoning options", () => {
 		expect(completeSimpleMock.mock.calls[0][2]).not.toHaveProperty("reasoning");
 	});
 
-	it("leaves Anthropic refusal fallback handling to pi-ai model metadata", async () => {
-		await generateSummary(
-			messages,
-			createModel(true, 8192, {
-				allowedFallbackModels: [
-					{
-						provider: "anthropic",
-						model: "claude-opus-4-8",
-						cost: { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
-					},
-				],
-			}),
-			2000,
-			"test-key",
-		);
 
-		expect(completeSimpleMock).toHaveBeenCalledTimes(1);
-		expect(completeSimpleMock.mock.calls[0][2]).not.toHaveProperty("refusalFallbacks");
-	});
-
-	it("does not set Anthropic refusal fallback for models without allowed fallback targets", async () => {
-		await generateSummary(messages, createModel(true), 2000, "test-key");
-
-		expect(completeSimpleMock).toHaveBeenCalledTimes(1);
-		expect(completeSimpleMock.mock.calls[0][2]).not.toHaveProperty("refusalFallbacks");
-	});
 
 	it("clamps compaction summary maxTokens to the model output cap", async () => {
 		const preparation: CompactionPreparation = {

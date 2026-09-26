@@ -1,7 +1,6 @@
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getModel } from "@earendil-works/pi-ai/compat";
 import { Type } from "typebox";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createAgentSessionFromServices, createAgentSessionServices } from "../src/core/agent-session-services.ts";
@@ -9,6 +8,7 @@ import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
 import { type CreateAgentSessionOptions, createAgentSession, type InlineExtension } from "../src/core/sdk.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
+import { openaiModel } from "../../ai/test/openai-models.ts";
 
 type ToolOptions = Pick<CreateAgentSessionOptions, "tools" | "excludeTools" | "noTools" | "customTools">;
 
@@ -46,7 +46,7 @@ describe("defaultTools setting", () => {
 			await createAgentSession({
 				cwd: tempDir,
 				agentDir,
-				model: getModel("anthropic", "claude-sonnet-4-5")!,
+				model: openaiModel("gpt-5-mini"),
 				settingsManager,
 				sessionManager: SessionManager.inMemory(tempDir),
 				resourceLoader,
@@ -56,32 +56,23 @@ describe("defaultTools setting", () => {
 	}
 
 	it("uses the configured list as the initial built-in selection", async () => {
-		const session = await createSession(["grep", "find"]);
+		const session = await createSession(["write", "edit"]);
 
 		expect(
 			session
 				.getAllTools()
 				.map((tool) => tool.name)
 				.sort(),
-		).toEqual(["bash", "edit", "find", "grep", "ls", "powershell", "read", "write"]);
-		expect(session.getActiveToolNames()).toEqual(["grep", "find"]);
-		expect(session.systemPrompt).toContain("- grep:");
+		).toEqual(["bash", "edit", "read", "write"]);
+		expect(session.getActiveToolNames()).toEqual(["write", "edit"]);
+		expect(session.systemPrompt).toContain("- write:");
 		expect(session.systemPrompt).not.toContain("- read:");
-		session.dispose();
-	});
-
-	it("can select powershell instead of bash", async () => {
-		const session = await createSession(["read", "powershell", "edit", "write"]);
-
-		expect(session.getActiveToolNames()).toEqual(["read", "powershell", "edit", "write"]);
-		expect(session.systemPrompt).toContain("- powershell: Execute PowerShell commands");
-		expect(session.systemPrompt).not.toContain("- bash:");
 		session.dispose();
 	});
 
 	it("keeps extension and SDK custom tools enabled", async () => {
 		const session = await createSession(
-			["grep"],
+			["write"],
 			{
 				customTools: [
 					{
@@ -116,7 +107,7 @@ describe("defaultTools setting", () => {
 		);
 		await session.bindExtensions({});
 
-		expect(session.getActiveToolNames().sort()).toEqual(["dynamic_tool", "grep", "sdk_tool", "static_tool"]);
+		expect(session.getActiveToolNames().sort()).toEqual(["dynamic_tool", "sdk_tool", "static_tool", "write"]);
 		expect(session.getAllTools().map((tool) => tool.name)).toEqual(
 			expect.arrayContaining(["read", "dynamic_tool", "sdk_tool", "static_tool"]),
 		);
@@ -124,12 +115,12 @@ describe("defaultTools setting", () => {
 	});
 
 	it("preserves explicit tool option precedence", async () => {
-		const allowlistedSession = await createSession(["grep"], { tools: ["read"] });
+		const allowlistedSession = await createSession(["write"], { tools: ["read"] });
 		expect(allowlistedSession.getActiveToolNames()).toEqual(["read"]);
 		allowlistedSession.dispose();
 
-		const excludedSession = await createSession(["read", "grep"], { excludeTools: ["read"] });
-		expect(excludedSession.getActiveToolNames()).toEqual(["grep"]);
+		const excludedSession = await createSession(["read", "write"], { excludeTools: ["read"] });
+		expect(excludedSession.getActiveToolNames()).toEqual(["write"]);
 		excludedSession.dispose();
 
 		const toolLessSession = await createSession(["read"], { noTools: "all" });
@@ -139,12 +130,12 @@ describe("defaultTools setting", () => {
 	});
 
 	it("applies through service-based session creation", async () => {
-		const settingsManager = SettingsManager.inMemory({ defaultTools: ["ls"] });
+		const settingsManager = SettingsManager.inMemory({ defaultTools: ["edit"] });
 		const services = await createAgentSessionServices({ cwd: tempDir, agentDir, settingsManager });
 		const { session } = await createAgentSessionFromServices({
 			services,
 			sessionManager: SessionManager.inMemory(tempDir),
-			model: getModel("anthropic", "claude-sonnet-4-5")!,
+			model: openaiModel("gpt-5-mini"),
 		});
 
 		expect(
@@ -152,8 +143,8 @@ describe("defaultTools setting", () => {
 				.getAllTools()
 				.map((tool) => tool.name)
 				.sort(),
-		).toEqual(["bash", "edit", "find", "grep", "ls", "powershell", "read", "write"]);
-		expect(session.getActiveToolNames()).toEqual(["ls"]);
+		).toEqual(["bash", "edit", "read", "write"]);
+		expect(session.getActiveToolNames()).toEqual(["edit"]);
 		session.dispose();
 	});
 });

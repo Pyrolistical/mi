@@ -1,12 +1,3 @@
-/**
- * The Message types require `content` to always be present, but untyped JS
- * extension tools, hand-built histories, and old or hand-edited session files
- * can violate that contract. We are intentionally lax at the ingestion
- * boundaries and normalize null/missing content to an empty array so it never
- * reaches rendering, compaction, or provider request conversion
- * (issues #6259, #6276).
- */
-
 import type { AgentMessage, AgentToolResult } from "@earendil-works/pi-agent-core";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
@@ -34,7 +25,6 @@ describe("lax message content handling", () => {
 					label: "Web Search",
 					description: "Custom tool that returns a result without content",
 					parameters: Type.Object({}),
-					// Simulate an untyped JS extension tool that omits content.
 					execute: async () => ({ details: {} }) as unknown as AgentToolResult<unknown>,
 				});
 			},
@@ -52,7 +42,6 @@ describe("lax message content handling", () => {
 			const toolResults = harness.session.messages.filter((message) => message.role === "toolResult");
 			expect(toolResults).toHaveLength(1);
 			expect(toolResults[0].content).toEqual([]);
-			// The follow-up turn consumed the normalized tool result without crashing.
 			expect(harness.getPendingResponseCount()).toBe(0);
 		} finally {
 			harness.cleanup();
@@ -64,7 +53,6 @@ describe("lax message content handling", () => {
 			(pi) => {
 				pi.on("message_end", async (event) => {
 					if (event.message.role !== "assistant") return undefined;
-					// Simulate an untyped JS extension replacing a message without content.
 					return { message: { ...event.message, content: null } as unknown as AgentMessage };
 				});
 			},

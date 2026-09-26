@@ -1,12 +1,4 @@
 import { createInMemoryModelRegistry, getModelRuntime } from "./model-runtime-test-utils.ts";
-/**
- * Test harness for AgentSession runtime testing.
- *
- * Provides:
- * - A faux stream function with declarative response sequencing
- * - A one-call factory for a fully wired AgentSession with real in-memory dependencies
- * - Event capture for assertions
- */
 
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -40,15 +32,11 @@ import {
 	createTestResourceLoader,
 } from "./utilities.ts";
 
-// ============================================================================
-// Faux model
-// ============================================================================
-
 const FAUX_PROVIDER = "faux";
 const FAUX_MODEL_ID = "faux-1";
 const FAUX_API = "anthropic-messages" as const;
 
-export const fauxModel: Model<typeof FAUX_API> = {
+const fauxModel: Model<typeof FAUX_API> = {
 	id: FAUX_MODEL_ID,
 	name: "Faux Model",
 	api: FAUX_API,
@@ -61,35 +49,18 @@ export const fauxModel: Model<typeof FAUX_API> = {
 	maxTokens: 16384,
 };
 
-// ============================================================================
-// Response description
-// ============================================================================
-
-export interface FauxResponse {
-	/** Text content blocks. String shorthand becomes a single text block. */
+interface FauxResponse {
 	text?: string;
-	/** Tool calls to include in the response. */
 	toolCalls?: Array<{ id?: string; name: string; args: JsonObject }>;
-	/** Thinking content. */
 	thinking?: string;
-	/** Stop reason. Defaults to "stop", or "toolUse" if toolCalls are present, or "error" if error is set. */
 	stopReason?: StopReason;
-	/** Error message. Sets stopReason to "error" if not explicitly set. */
 	error?: string;
-	/** Usage numbers. Merged with defaults (input: 100, output: 50). */
 	usage?: Partial<Usage>;
-	/** Delay in ms before the response starts. */
 	delayMs?: number;
-	/** Model overrides (provider, model id) for responses that should look like they came from a different model. */
 	model?: { provider?: string; id?: string };
 }
 
-/** Shorthand: a string becomes a simple text response. */
-export type FauxResponseInput = FauxResponse | string;
-
-// ============================================================================
-// Faux stream function
-// ============================================================================
+type FauxResponseInput = FauxResponse | string;
 
 function normalizeResponse(input: FauxResponseInput): FauxResponse {
 	if (typeof input === "string") {
@@ -135,7 +106,6 @@ function buildAssistantMessage(resp: FauxResponse): AssistantMessage {
 		}
 	}
 
-	// If no content was added at all, add empty text
 	if (content.length === 0 && !resp.error) {
 		content.push({ type: "text", text: "" });
 	}
@@ -164,28 +134,18 @@ function buildAssistantMessage(resp: FauxResponse): AssistantMessage {
 	};
 }
 
-// ============================================================================
-// Token-level streaming
-// ============================================================================
-
-/** Split a string into chunks of varying size (3-5 chars) for simulating token-by-token streaming. */
 function chunkString(text: string): string[] {
 	const chunks: string[] = [];
 	let i = 0;
 	while (i < text.length) {
-		const size = 3 + Math.floor(Math.random() * 3); // 3, 4, or 5
+		const size = 3 + Math.floor(Math.random() * 3);
 		chunks.push(text.slice(i, i + size));
 		i += size;
 	}
 	return chunks.length > 0 ? chunks : [""];
 }
 
-/**
- * Stream a complete AssistantMessage through an EventStream with realistic
- * intermediate delta events for each content block.
- */
 function streamWithDeltas(stream: AssistantMessageEventStream, message: AssistantMessage): void {
-	// Build partial progressively as we stream content blocks
 	const partial: AssistantMessage = { ...message, content: [], stopReason: "pending" };
 	stream.push({ type: "start", partial: { ...partial } });
 
@@ -231,7 +191,6 @@ function streamWithDeltas(stream: AssistantMessageEventStream, message: Assistan
 				stream.push(makeEvent("toolcall_delta", i, chunk, partial));
 			}
 
-			// Final toolcall has the real parsed arguments
 			(partial.content[i] as ToolCall).arguments = block.arguments;
 			stream.push({
 				type: "toolcall_end",
@@ -267,26 +226,12 @@ function makeEvent(
 	return { type, contentIndex, delta, partial: { ...partial } };
 }
 
-// ============================================================================
-// Stream function factory
-// ============================================================================
-
-export interface FauxStreamFnState {
-	/** Number of times the stream function has been called. */
+interface FauxStreamFnState {
 	callCount: number;
-	/** The context passed to each call, in order. */
 	contexts: TranscriptContext[];
 }
 
-/**
- * Create a faux stream function from a sequence of response descriptions.
- *
- * The function cycles through responses in order. If more calls are made than
- * responses provided, it wraps around.
- *
- * Returns the stream function and a state object for inspection.
- */
-export function createFauxStreamFn(responses: FauxResponseInput[]): {
+function createFauxStreamFn(responses: FauxResponseInput[]): {
 	streamFn: (
 		model: Model<any>,
 		context: TranscriptContext,
@@ -325,28 +270,15 @@ export function createFauxStreamFn(responses: FauxResponseInput[]): {
 	return { streamFn, state };
 }
 
-// ============================================================================
-// Session harness
-// ============================================================================
-
 export interface HarnessOptions {
-	/** Response sequence for the faux provider. Default: single "ok" response. */
 	responses?: FauxResponseInput[];
-	/** Model to use. Default: fauxModel. */
 	model?: Model<any>;
-	/** Context window override (applied to the model). */
 	contextWindow?: number;
-	/** Settings overrides (retry, compaction, etc.). */
 	settings?: Partial<Settings>;
-	/** System prompt. Default: "You are a test assistant." */
 	systemPrompt?: string;
-	/** Custom tools to register on the agent. */
 	tools?: AgentTool[];
-	/** Base tools override (replaces built-in read/bash/edit/write). */
 	baseToolsOverride?: Record<string, AgentTool>;
-	/** Optional resource loader override. */
 	resourceLoader?: ResourceLoader;
-	/** Inline extensions to load into the session resource loader. */
 	extensionFactories?: Array<InlineExtension | CreateTestExtensionsResultInput>;
 }
 
@@ -355,15 +287,10 @@ export interface Harness {
 	agent: Agent;
 	sessionManager: SessionManager;
 	settingsManager: SettingsManager;
-	/** Faux stream function state (call count, captured contexts). */
 	faux: FauxStreamFnState;
-	/** All events emitted by the session, in order. */
 	events: AgentSessionEvent[];
-	/** Filter captured events by type. */
 	eventsOfType<T extends AgentSessionEvent["type"]>(type: T): Extract<AgentSessionEvent, { type: T }>[];
-	/** Temp directory (cleaned up by cleanup()). */
 	tempDir: string;
-	/** Dispose session and remove temp directory. */
 	cleanup: () => void;
 }
 

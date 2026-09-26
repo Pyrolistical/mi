@@ -1,7 +1,6 @@
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getModel } from "@earendil-works/pi-ai/compat";
 import { Type } from "typebox";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
@@ -9,6 +8,7 @@ import { createAgentSession } from "../src/core/sdk.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import { createBashTool } from "../src/core/tools/bash.ts";
+import { openaiModel } from "../../ai/test/openai-models.ts";
 
 describe("AgentSession dynamic tool registration", () => {
 	let tempDir: string;
@@ -61,7 +61,7 @@ describe("AgentSession dynamic tool registration", () => {
 		});
 		await resourceLoader.reload();
 
-		const model = getModel("anthropic", "claude-sonnet-4-5")!;
+		const model = openaiModel("gpt-5-mini");
 		const { session } = await createAgentSession({
 			cwd: tempDir,
 			agentDir,
@@ -128,7 +128,7 @@ describe("AgentSession dynamic tool registration", () => {
 		const { session } = await createAgentSession({
 			cwd: tempDir,
 			agentDir,
-			model: getModel("anthropic", "claude-sonnet-4-5")!,
+			model: openaiModel("gpt-5-mini"),
 			settingsManager,
 			sessionManager,
 			resourceLoader,
@@ -150,13 +150,11 @@ describe("AgentSession dynamic tool registration", () => {
 			path: "<inline:1>",
 			source: "inline",
 			scope: "temporary",
-			origin: "top-level",
 		});
 		expect(readTool?.sourceInfo).toMatchObject({
 			path: "<builtin:read>",
 			source: "builtin",
 			scope: "temporary",
-			origin: "top-level",
 		});
 		expect(session.getActiveToolNames()).toContain("dynamic_tool");
 		expect(session.systemPrompt).toContain("- dynamic_tool: Run dynamic test behavior");
@@ -178,7 +176,7 @@ describe("AgentSession dynamic tool registration", () => {
 		const { session } = await createAgentSession({
 			cwd: tempDir,
 			agentDir,
-			model: getModel("anthropic", "claude-sonnet-4-5")!,
+			model: openaiModel("gpt-5-mini"),
 			settingsManager,
 			sessionManager,
 			resourceLoader,
@@ -201,7 +199,6 @@ describe("AgentSession dynamic tool registration", () => {
 			path: "<sdk:sdk_tool>",
 			source: "sdk",
 			scope: "temporary",
-			origin: "top-level",
 		});
 		expect(session.getActiveToolNames()).toContain("sdk_tool");
 
@@ -238,7 +235,7 @@ describe("AgentSession dynamic tool registration", () => {
 		const { session } = await createAgentSession({
 			cwd: tempDir,
 			agentDir,
-			model: getModel("anthropic", "claude-sonnet-4-5")!,
+			model: openaiModel("gpt-5-mini"),
 			settingsManager,
 			sessionManager,
 			resourceLoader,

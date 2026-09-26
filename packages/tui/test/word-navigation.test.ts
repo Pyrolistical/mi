@@ -27,7 +27,6 @@ describe("findWordBackward", () => {
 		const text = "path/to/file";
 		assert.strictEqual(findWordBackward(text, 12), 8);
 		assert.strictEqual(findWordBackward(text, 8), 7);
-		// "/to" is one word-like segment with "/" as punctuation boundary
 		assert.strictEqual(findWordBackward(text, 7), 5);
 		assert.strictEqual(findWordBackward(text, 5), 4);
 		assert.strictEqual(findWordBackward(text, 4), 0);
@@ -36,7 +35,6 @@ describe("findWordBackward", () => {
 	it("CJK mixed", () => {
 		const text = "你好世界 test";
 		assert.strictEqual(findWordBackward(text, text.length), 5);
-		// Intl.Segmenter treats each CJK char as a separate word-like segment
 		assert.strictEqual(findWordBackward(text, 5), 2);
 		assert.strictEqual(findWordBackward(text, 2), 0);
 	});
@@ -94,7 +92,6 @@ describe("findWordForward", () => {
 		const firstEnd = findWordForward(text, 0);
 		assert.ok(firstEnd > 0);
 		assert.ok(firstEnd <= 4);
-		// Walk to end
 		let pos = 0;
 		while (pos < text.length) {
 			const next = findWordForward(text, pos);
@@ -127,11 +124,9 @@ describe("atomic segments", () => {
 	const text = `hello ${marker} world`;
 	const isAtomic = (s: string) => s === marker;
 
-	// The functions slice text before calling segment(), so we map each expected
-	// substring to its pre-split segments.
 	const segmentMap = new Map<string, Intl.SegmentData[]>([
 		[
-			text, // full text (not used but for clarity)
+			text,
 			[
 				{ segment: "hello", index: 0, input: text, isWordLike: true },
 				{ segment: " ", index: 5, input: text, isWordLike: false },
@@ -141,7 +136,6 @@ describe("atomic segments", () => {
 			],
 		],
 		[
-			// backward from end: slice(0, 31) = full text
 			text.slice(0, text.length),
 			[
 				{ segment: "hello", index: 0, input: text, isWordLike: true },
@@ -152,7 +146,6 @@ describe("atomic segments", () => {
 			],
 		],
 		[
-			// backward from 26: slice(0, 26) = "hello [paste #1 +5 lines] "
 			text.slice(0, 26),
 			[
 				{ segment: "hello", index: 0, input: text, isWordLike: true },
@@ -162,7 +155,6 @@ describe("atomic segments", () => {
 			],
 		],
 		[
-			// forward from 6: slice(6) = "[paste #1 +5 lines] world"
 			text.slice(6),
 			[
 				{ segment: marker, index: 0, input: text, isWordLike: true },

@@ -1,11 +1,6 @@
 import { type KeyId, matchesKey } from "./keys.ts";
 
-/**
- * Global keybinding registry.
- * Downstream packages can add keybindings via declaration merging.
- */
 export interface Keybindings {
-	// Editor navigation and editing
 	"tui.editor.cursorUp": true;
 	"tui.editor.cursorDown": true;
 	"tui.editor.historyPrevious": true;
@@ -29,33 +24,16 @@ export interface Keybindings {
 	"tui.editor.yank": true;
 	"tui.editor.yankPop": true;
 	"tui.editor.undo": true;
-	// Generic input actions
 	"tui.input.newLine": true;
 	"tui.input.submit": true;
 	"tui.input.tab": true;
 	"tui.input.copy": true;
-	// Generic selection actions
 	"tui.select.up": true;
 	"tui.select.down": true;
 	"tui.select.pageUp": true;
 	"tui.select.pageDown": true;
 	"tui.select.confirm": true;
 	"tui.select.cancel": true;
-	// Alternate-screen viewport navigation
-	"tui.altScreen.pageUp": true;
-	"tui.altScreen.pageDown": true;
-	"tui.altScreen.halfPageUp": true;
-	"tui.altScreen.halfPageDown": true;
-	"tui.altScreen.lineUp": true;
-	"tui.altScreen.lineDown": true;
-	"tui.altScreen.previousPrompt": true;
-	"tui.altScreen.nextPrompt": true;
-	"tui.altScreen.search": true;
-	"tui.altScreen.searchNext": true;
-	"tui.altScreen.searchPrevious": true;
-	"tui.altScreen.searchClose": true;
-	"tui.altScreen.top": true;
-	"tui.altScreen.bottom": true;
 }
 
 export type Keybinding = keyof Keybindings;
@@ -156,57 +134,6 @@ export const TUI_KEYBINDINGS = {
 		defaultKeys: ["escape", "ctrl+c"],
 		description: "Cancel selection",
 	},
-	// These intentionally shadow the unmodified editor bindings in fullscreen mode.
-	"tui.altScreen.pageUp": {
-		defaultKeys: "pageUp",
-		description: "Scroll viewport up one page",
-	},
-	"tui.altScreen.pageDown": {
-		defaultKeys: "pageDown",
-		description: "Scroll viewport down one page",
-	},
-	"tui.altScreen.halfPageUp": {
-		defaultKeys: [],
-		description: "Scroll viewport up half a page",
-	},
-	"tui.altScreen.halfPageDown": {
-		defaultKeys: [],
-		description: "Scroll viewport down half a page",
-	},
-	"tui.altScreen.lineUp": {
-		defaultKeys: [],
-		description: "Scroll viewport up one line",
-	},
-	"tui.altScreen.lineDown": {
-		defaultKeys: [],
-		description: "Scroll viewport down one line",
-	},
-	"tui.altScreen.previousPrompt": {
-		defaultKeys: ["ctrl+shift+up", "ctrl+up"],
-		description: "Jump to previous semantic prompt",
-	},
-	"tui.altScreen.nextPrompt": {
-		defaultKeys: ["ctrl+shift+down", "ctrl+down"],
-		description: "Jump to next semantic prompt",
-	},
-	"tui.altScreen.search": {
-		defaultKeys: "ctrl+shift+f",
-		description: "Search the primary scroll view",
-	},
-	"tui.altScreen.searchNext": {
-		defaultKeys: ["enter", "ctrl+g"],
-		description: "Select the next search match",
-	},
-	"tui.altScreen.searchPrevious": {
-		defaultKeys: ["shift+enter", "ctrl+shift+g"],
-		description: "Select the previous search match",
-	},
-	"tui.altScreen.searchClose": {
-		defaultKeys: "escape",
-		description: "Close transcript search",
-	},
-	"tui.altScreen.top": { defaultKeys: "home", description: "Scroll viewport to top" },
-	"tui.altScreen.bottom": { defaultKeys: "end", description: "Scroll viewport to bottom" },
 } as const satisfies KeybindingDefinitions;
 
 export interface KeybindingConflict {

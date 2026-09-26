@@ -5,7 +5,6 @@ import { SettingsManager } from "../src/core/settings-manager.ts";
 import type { StatusIndicator } from "../src/modes/interactive/components/status-indicator.ts";
 import type { TreeSelectorComponent } from "../src/modes/interactive/components/tree-selector.ts";
 import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import { assistantMsg, userMsg } from "./utilities.ts";
 
 const busyMessage = "Wait for the current compaction or tree navigation to finish before navigating the session tree.";
@@ -43,7 +42,6 @@ function createTreeUI() {
 			selector = create(vi.fn()).component;
 		},
 		showExtensionSelector: vi.fn(async () => "No summary"),
-		// Dispose newly created indicators so a failing regression cannot leak spinner timers.
 		showStatusIndicator: vi.fn((indicator: StatusIndicator) => indicator.dispose()),
 		clearStatusIndicator: vi.fn(),
 		restoreQueuedMessagesToEditor: vi.fn(),
@@ -67,14 +65,10 @@ function createTreeUI() {
 }
 
 describe("InteractiveMode tree navigation availability", () => {
-	beforeEach(() => initTheme("dark"));
-
-	// Regression for #9178 / PR #9179: rejection must not replace the active operation's UI.
 	it.each(["Summarize", "No summary"])("preserves operation UI when choosing %s while busy", async (choice) => {
 		const { ui, onEscape, select } = createTreeUI();
 		const originalLeafId = ui.sessionManager.getLeafId();
 		ui.showExtensionSelector.mockImplementation(async () => {
-			// Compaction or another navigation can start while the dialog is open.
 			ui.session.isCompacting = true;
 			return choice;
 		});

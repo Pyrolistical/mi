@@ -2,7 +2,6 @@ import { setKeybindings, type TUI } from "@earendil-works/pi-tui";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { KeybindingsManager } from "../../../src/core/keybindings.ts";
 import { ModelSelectorComponent } from "../../../src/modes/interactive/components/model-selector.ts";
-import { initTheme } from "../../../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../../../src/utils/ansi.ts";
 import { createHarness, type Harness } from "../harness.ts";
 
@@ -10,7 +9,6 @@ function createFakeTui(): TUI {
 	return { requestRender: () => {} } as unknown as TUI;
 }
 
-/** Return the model id of the highlighted (→) row in the rendered selector. */
 function selectedModelId(rendered: string): string | undefined {
 	const line = rendered.split("\n").find((l) => l.startsWith("→ "));
 	if (!line) return undefined;
@@ -22,9 +20,7 @@ function selectedModelId(rendered: string): string | undefined {
 describe("model selector filter resets selection to top", () => {
 	const harnesses: Harness[] = [];
 
-	beforeAll(() => {
-		initTheme("dark");
-	});
+	beforeAll(() => {});
 
 	beforeEach(() => {
 		setKeybindings(new KeybindingsManager());
@@ -62,23 +58,18 @@ describe("model selector filter resets selection to top", () => {
 			expect(rendered).toContain("Model catalogs refreshed.");
 		});
 
-		// Current model (alpha-1) is sorted first, so selection starts on row 0.
 		expect(selectedModelId(stripAnsi(selector.render(120).join("\n")))).toBe("alpha-1");
 
-		// Move selection down two rows to alpha-3.
 		selector.handleInput("\x1b[B");
 		selector.handleInput("\x1b[B");
 		expect(selectedModelId(stripAnsi(selector.render(120).join("\n")))).toBe("alpha-3");
 
-		// Type a query that matches the three alpha models. The selection must
-		// move back to the top row (alpha-1), not stay clamped at index 2.
 		for (const char of "alpha") {
 			selector.handleInput(char);
 		}
 
 		const rendered = stripAnsi(selector.render(120).join("\n"));
 		expect(selectedModelId(rendered)).toBe("alpha-1");
-		// Sanity: the filter actually narrowed the list.
 		expect(rendered).not.toContain("beta-1");
 	});
 
@@ -96,8 +87,6 @@ describe("model selector filter resets selection to top", () => {
 		const alpha2 = harness.getModel("alpha-2")!;
 		const alpha3 = harness.getModel("alpha-3")!;
 
-		// Scoped list is intentionally not in current-model-first order; the
-		// current model (alpha-1) sits at index 2.
 		const selector = new ModelSelectorComponent(
 			createFakeTui(),
 			alpha1,
@@ -112,11 +101,8 @@ describe("model selector filter resets selection to top", () => {
 			expect(rendered).toContain("Model catalogs refreshed.");
 		});
 
-		// Selection starts on the current model (alpha-1), which is row 2 here.
 		expect(selectedModelId(stripAnsi(selector.render(120).join("\n")))).toBe("alpha-1");
 
-		// Type a query matching all three scoped models. Selection must move to
-		// the top row (alpha-2), not stay clamped at index 2 (alpha-1).
 		for (const char of "alpha") {
 			selector.handleInput(char);
 		}

@@ -10,7 +10,6 @@ import {
 	getSystemMessageText,
 	type TranscriptContext,
 } from "@earendil-works/pi-ai";
-import { getModel } from "@earendil-works/pi-ai/compat";
 import { Type } from "typebox";
 import { describe, expect, test } from "vitest";
 import { createAgentSession } from "../src/core/sdk.ts";
@@ -23,6 +22,7 @@ import {
 } from "../src/core/system-prompt.ts";
 import type { ExtensionFactory } from "../src/index.ts";
 import { createHarness } from "./suite/harness.ts";
+import { openaiModel } from "../../ai/test/openai-models.ts";
 
 describe("system prompt updates", () => {
 	test("declares the prompt and tools once and reuses them across resume", async () => {
@@ -45,7 +45,7 @@ describe("system prompt updates", () => {
 			const head = harness.session.messages[0];
 			if (head?.role !== "system") throw new Error("expected system message");
 			expect(head.content).toBe("");
-			expect(Object.keys(head.sections ?? {})).toEqual(["preamble", "tools", "rules", "docs", "cwd"]);
+			expect(Object.keys(head.sections ?? {})).toEqual(["preamble", "tools", "rules", "cwd"]);
 			expect(head.toolsAdded?.map((tool) => tool.name)).toEqual(["read", "bash", "edit", "write"]);
 			expect(getSystemMessageText(head)).toBe(harness.session.systemPrompt);
 		} finally {
@@ -61,13 +61,12 @@ describe("system prompt updates", () => {
 			const created = await createAgentSession({
 				cwd: tempDir,
 				agentDir: join(tempDir, "agent"),
-				model: getModel("anthropic", "claude-sonnet-4-5")!,
+				model: openaiModel("gpt-5-mini"),
 				settingsManager: SettingsManager.inMemory(),
 				sessionManager,
 				noTools: "all",
 			});
 			try {
-				// Nothing is synthesized or persisted until a request needs it.
 				expect(created.session.messages.map((message) => message.role)).toEqual(["user"]);
 				expect(sessionManager.buildSessionContext().messages.map((message) => message.role)).toEqual(["user"]);
 				expect(getCurrentSystemMessage(created.session.messages)).toBeUndefined();
@@ -130,8 +129,6 @@ describe("system prompt updates", () => {
 			const systemMessages = requests.map((request) =>
 				request.messages.filter((message) => message.role === "system"),
 			);
-			// Forced turns collapse to one leading message; the unforced fourth turn passes the
-			// recorded head and both plan_mode patches through.
 			expect(systemMessages.map((messages) => messages.length)).toEqual([1, 1, 1, 3]);
 
 			const forced = systemMessages[1]?.at(-1);
@@ -152,7 +149,6 @@ describe("system prompt updates", () => {
 				"user",
 			]);
 
-			// The transcript only records the structured sections, never the forced text.
 			const recorded = harness.session.messages.flatMap((message) =>
 				message.role === "system" ? [message.sections] : [],
 			);
@@ -183,7 +179,6 @@ describe("system prompt updates", () => {
 		};
 		const harness = await createHarness({ extensionFactories: [extension], initialActiveToolNames: ["first"] });
 		try {
-			// Faux response callbacks swallow thrown assertions, so capture and assert afterwards.
 			const requests: TranscriptContext[] = [];
 			harness.setResponses([
 				(providerContext) => {
@@ -292,7 +287,6 @@ describe("system prompt updates", () => {
 			expect(Object.hasOwn(declaration, "constrainedSampling")).toBe(false);
 			expect(Object.hasOwn(declaration, "execute")).toBe(false);
 
-			// Simulate a resume: the persisted JSON must replay to the same declarations.
 			harness.session.agent.state.messages = JSON.parse(JSON.stringify(harness.session.messages));
 			await harness.session.prompt("two");
 			expect(harness.session.messages.filter((message) => message.role === "system")).toHaveLength(1);

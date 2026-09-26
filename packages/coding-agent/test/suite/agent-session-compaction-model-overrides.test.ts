@@ -25,7 +25,6 @@ function seedHistory(harness: Harness, totalTokens = 650): string {
 	return recentUserId;
 }
 
-// Regression coverage for #8133.
 describe("AgentSession compaction model overrides", () => {
 	const harnesses: Harness[] = [];
 	afterEach(() => {
@@ -163,7 +162,6 @@ describe("AgentSession compaction model overrides", () => {
 		harness.setResponses([fauxAssistantMessage("small response"), fauxAssistantMessage("big response")]);
 		await harness.session.prompt("continue on small");
 		expect(harness.eventsOfType("compaction_start")).toHaveLength(0);
-		// Retain usage from the small model: the next check must use the active big model's policy.
 		seedHistory(harness, 2500);
 		await harness.session.setModel(harness.getModel("big")!);
 		await harness.session.prompt("continue on big");
@@ -191,7 +189,7 @@ describe("AgentSession compaction model overrides", () => {
 		const getAuth = harness.session.modelRuntime.getAuth.bind(harness.session.modelRuntime);
 		vi.spyOn(harness.session.modelRuntime, "getAuth").mockImplementation(async (model, ...args) => {
 			harness.session.agent.state.model = harness.getModel("second")!;
-			return getAuth(model, ...args);
+			return typeof model === "string" ? getAuth(model, ...args) : getAuth(model, ...args);
 		});
 		const requests: Array<{ id: string; maxTokens: number | undefined }> = [];
 		harness.setResponses([

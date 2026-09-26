@@ -1,17 +1,6 @@
 import type { AssistantMessage, ImageContent, Message, TextContent, TranscriptContext, Usage } from "../types.ts";
 import { getSystemMessageText } from "./text.ts";
 
-export interface ContextUsageEstimate {
-	/** Estimated total context tokens. */
-	tokens: number;
-	/** Tokens reported by the most recent applicable assistant usage block. */
-	usageTokens: number;
-	/** Estimated tokens after the most recent applicable assistant usage block. */
-	trailingTokens: number;
-	/** Index of the applicable message that provided usage, or null when none exists. */
-	lastUsageIndex: number | null;
-}
-
 const CHARS_PER_TOKEN = 4;
 const ESTIMATED_IMAGE_CHARS = 4800;
 
@@ -76,8 +65,6 @@ function getLastAssistantUsageInfo(messages: readonly Message[]): { usage: Usage
 		const message = messages[i];
 		if (message.role === "assistant") {
 			const assistant = message as AssistantMessage;
-			// A newer prefix message was inserted after this response (for example, a
-			// compaction summary), so its usage cannot describe the current prefix.
 			const usageAppliesToPrefix = assistant.timestamp >= latestPrefixTimestamp;
 			if (
 				usageAppliesToPrefix &&
@@ -94,7 +81,7 @@ function getLastAssistantUsageInfo(messages: readonly Message[]): { usage: Usage
 	return usageInfo;
 }
 
-export function estimateContextTokens(context: TranscriptContext | readonly Message[]): ContextUsageEstimate {
+export function estimateContextTokens(context: TranscriptContext | readonly Message[]): number {
 	const messages = "messages" in context ? context.messages : context;
 	const usageInfo = getLastAssistantUsageInfo(messages);
 	if (usageInfo) {
@@ -103,12 +90,12 @@ export function estimateContextTokens(context: TranscriptContext | readonly Mess
 		for (let i = usageInfo.index + 1; i < messages.length; i++) {
 			trailingTokens += estimateMessageTokens(messages[i]);
 		}
-		return { tokens: usageTokens + trailingTokens, usageTokens, trailingTokens, lastUsageIndex: usageInfo.index };
+		return usageTokens + trailingTokens;
 	}
 
 	let tokens = 0;
 	for (const message of messages) tokens += estimateMessageTokens(message);
-	return { tokens, usageTokens: 0, trailingTokens: tokens, lastUsageIndex: null };
+	return tokens;
 }
 
 function estimateToolsTokens(tools: readonly unknown[] | undefined): number {

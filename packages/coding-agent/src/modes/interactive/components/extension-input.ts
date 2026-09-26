@@ -1,7 +1,3 @@
-/**
- * Simple text input component for extensions.
- */
-
 import { Container, type Focusable, getKeybindings, Input, Spacer, Text, type TUI } from "@earendil-works/pi-tui";
 import { theme } from "../theme/theme.ts";
 import { CountdownTimer } from "./countdown-timer.ts";
@@ -23,7 +19,6 @@ export class ExtensionInputComponent extends Container implements Focusable {
 	private baseTitle: string;
 	private countdown: CountdownTimer | undefined;
 
-	// Focusable implementation - propagate to input for IME cursor positioning
 	private _focused = false;
 	get focused(): boolean {
 		return this._focused;

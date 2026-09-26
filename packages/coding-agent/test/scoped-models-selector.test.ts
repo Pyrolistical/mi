@@ -2,7 +2,6 @@ import { setKeybindings } from "@earendil-works/pi-tui";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { KeybindingsManager } from "../src/core/keybindings.ts";
 import { ScopedModelsSelectorComponent } from "../src/modes/interactive/components/scoped-models-selector.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 import { createHarness, type Harness } from "./suite/harness.ts";
 
@@ -24,9 +23,7 @@ function getMarkerStates(selector: ScopedModelsSelectorComponent, models: ModelS
 describe("scoped models selector", () => {
 	let harness: Harness | undefined;
 
-	beforeAll(() => {
-		initTheme("dark");
-	});
+	beforeAll(() => {});
 
 	beforeEach(() => {
 		setKeybindings(new KeybindingsManager());
@@ -113,11 +110,11 @@ describe("scoped models selector", () => {
 		];
 		const selector = await createSelector(models);
 
-		selector.handleInput("\x01"); // enable all -> null
-		selector.handleInput("\r"); // disable model-a; enabled models re-sort first: [b, c, a]
+		selector.handleInput("\x01");
+		selector.handleInput("\r");
 		selector.handleInput("\x1b[B");
-		selector.handleInput("\x1b[B"); // move selection back to model-a
-		selector.handleInput("\r"); // re-enable model-a
+		selector.handleInput("\x1b[B");
+		selector.handleInput("\r");
 
 		expect(models.map((model) => model.enabled)).toEqual([true, true, true]);
 		expect(getMarkerStates(selector, models)).toEqual([true, true, true]);

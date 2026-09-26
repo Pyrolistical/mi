@@ -34,13 +34,9 @@ interface DefaultModelReference {
 
 type ModelScope = "all" | "scoped";
 
-/**
- * Component that renders a model selector with search
- */
 export class ModelSelectorComponent extends Container implements Focusable {
 	private searchInput: Input;
 
-	// Focusable implementation - propagate to searchInput for IME cursor positioning
 	private _focused = false;
 	get focused(): boolean {
 		return this._focused;
@@ -96,29 +92,25 @@ export class ModelSelectorComponent extends Container implements Focusable {
 		this.onSelectAsDefaultCallback = onSelectAsDefault;
 		this.onCancelCallback = onCancel;
 
-		// Add top border
 		this.addChild(new DynamicBorder());
 		this.addChild(new Spacer(1));
 
-		// Add hint about model filtering
 		if (scopedModels.length > 0) {
 			this.scopeText = new Text(this.getScopeText(), 0, 0);
 			this.addChild(this.scopeText);
 			this.scopeHintText = new Text(this.getScopeHintText(), 0, 0);
 			this.addChild(this.scopeHintText);
 		} else {
-			const hintText = "Only showing models from configured providers. Use /login to add providers.";
+			const hintText = "Only showing models from configured providers. Add API keys to auth.json or the environment.";
 			this.addChild(new Text(theme.fg("warning", hintText), 0, 0));
 		}
 		this.addChild(new Spacer(1));
 
-		// Create search input
 		this.searchInput = new Input();
 		if (initialSearchInput) {
 			this.searchInput.setValue(initialSearchInput);
 		}
 		this.searchInput.onSubmit = () => {
-			// Enter on search input selects the first filtered item
 			if (this.filteredModels[this.selectedIndex]) {
 				this.handleSelect(this.filteredModels[this.selectedIndex].model);
 			}
@@ -127,13 +119,11 @@ export class ModelSelectorComponent extends Container implements Focusable {
 
 		this.addChild(new Spacer(1));
 
-		// Create list container
 		this.listContainer = new Container();
 		this.addChild(this.listContainer);
 
 		this.addChild(new Spacer(1));
 
-		// Hint
 		if (this.onSelectAsDefaultCallback) {
 			this.addChild(
 				new Text(
@@ -147,10 +137,8 @@ export class ModelSelectorComponent extends Container implements Focusable {
 			);
 		}
 
-		// Add bottom border
 		this.addChild(new DynamicBorder());
 
-		// Render the current snapshot immediately, then refresh in the background.
 		this.loadModelsFromSnapshot();
 		if (initialSearchInput) this.filterModels(initialSearchInput);
 		else this.updateList();
@@ -230,7 +218,6 @@ export class ModelSelectorComponent extends Container implements Focusable {
 
 	private sortModels(models: ModelItem[]): ModelItem[] {
 		const sorted = [...models];
-		// Sort: current model first, default model second, then by provider.
 		sorted.sort((a, b) => {
 			const aIsCurrent = modelsAreEqual(this.currentModel, a.model);
 			const bIsCurrent = modelsAreEqual(this.currentModel, b.model);
@@ -295,9 +282,6 @@ export class ModelSelectorComponent extends Container implements Focusable {
 		} else {
 			this.filteredModels = this.activeModels;
 		}
-		// When filtering by a query, move the selector to the top row so the best
-		// match is highlighted. When the query is cleared, keep the current position
-		// clamped to the (restored) list length.
 		this.selectedIndex = query ? 0 : Math.min(this.selectedIndex, Math.max(0, this.filteredModels.length - 1));
 		this.updateList();
 	}
@@ -312,7 +296,6 @@ export class ModelSelectorComponent extends Container implements Focusable {
 		);
 		const endIndex = Math.min(startIndex + maxVisible, this.filteredModels.length);
 
-		// Show visible slice of filtered models
 		for (let i = startIndex; i < endIndex; i++) {
 			const item = this.filteredModels[i];
 			if (!item) continue;
@@ -331,15 +314,12 @@ export class ModelSelectorComponent extends Container implements Focusable {
 			this.listContainer.addChild(new Text(line, 0, 0));
 		}
 
-		// Add scroll indicator if needed
 		if (startIndex > 0 || endIndex < this.filteredModels.length) {
 			const scrollInfo = theme.fg("muted", `  (${this.selectedIndex + 1}/${this.filteredModels.length})`);
 			this.listContainer.addChild(new Text(scrollInfo, 0, 0));
 		}
 
-		// Show error message or "no results" if empty
 		if (this.errorMessage) {
-			// Show error in red
 			const errorLines = this.errorMessage.split("\n");
 			for (const line of errorLines) {
 				this.listContainer.addChild(new Text(theme.fg("error", line), 0, 0));
@@ -371,31 +351,26 @@ export class ModelSelectorComponent extends Container implements Focusable {
 			}
 			return;
 		}
-		// Up arrow - wrap to bottom when at top
 		if (kb.matches(keyData, "tui.select.up")) {
 			if (this.filteredModels.length === 0) return;
 			this.selectedIndex = this.selectedIndex === 0 ? this.filteredModels.length - 1 : this.selectedIndex - 1;
 			this.updateList();
 		}
-		// Down arrow - wrap to top when at bottom
 		else if (kb.matches(keyData, "tui.select.down")) {
 			if (this.filteredModels.length === 0) return;
 			this.selectedIndex = this.selectedIndex === this.filteredModels.length - 1 ? 0 : this.selectedIndex + 1;
 			this.updateList();
 		}
-		// Enter
 		else if (kb.matches(keyData, "tui.select.confirm")) {
 			const selectedModel = this.filteredModels[this.selectedIndex];
 			if (selectedModel) {
 				this.handleSelect(selectedModel.model);
 			}
 		}
-		// Escape or Ctrl+C
 		else if (kb.matches(keyData, "tui.select.cancel")) {
 			this.dispose();
 			this.onCancelCallback();
 		}
-		// Select and save as default
 		else if (kb.matches(keyData, "app.models.save") && this.onSelectAsDefaultCallback) {
 			const selectedModel = this.filteredModels[this.selectedIndex];
 			if (selectedModel) {
@@ -403,7 +378,6 @@ export class ModelSelectorComponent extends Container implements Focusable {
 				this.onSelectAsDefaultCallback(selectedModel.model);
 			}
 		}
-		// Pass everything else to search input
 		else {
 			this.searchInput.handleInput(keyData);
 			this.filterModels(this.searchInput.getValue());

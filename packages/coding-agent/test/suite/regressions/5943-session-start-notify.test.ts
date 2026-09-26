@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { AgentSessionEvent } from "../../../src/core/agent-session.ts";
 import type { ExtensionUIContext } from "../../../src/core/extensions/index.ts";
 import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
-import { initTheme, type Theme, theme } from "../../../src/modes/interactive/theme/theme.ts";
+import { theme } from "../../../src/modes/interactive/theme/theme.ts";
 import { createHarness } from "../harness.ts";
 
 function createUiContext(
@@ -36,9 +36,6 @@ function createUiContext(
 		get theme() {
 			return theme;
 		},
-		getAllThemes: () => [],
-		getTheme: () => undefined,
-		setTheme: (_theme: string | Theme) => ({ success: false, error: "Theme switching not available in tests" }),
 		getToolsExpanded: () => false,
 		setToolsExpanded: () => {},
 	};
@@ -60,7 +57,6 @@ type LoadedResourcesContext = {
 			getAppendSystemPromptSources: () => Array<{ path: string }>;
 			getSkills: () => LoadedResourcesResult<{ skills: [] }>;
 			getPrompts: () => LoadedResourcesResult<{ prompts: [] }>;
-			getThemes: () => LoadedResourcesResult<{ themes: [] }>;
 			getExtensions: () => { extensions: []; errors: [] };
 		};
 		extensionRunner: {
@@ -92,7 +88,7 @@ type ReloadCommandContext = {
 		isStreaming: boolean;
 		isCompacting: boolean;
 		reload: (options?: { beforeSessionStart?: () => void | Promise<void> }) => Promise<void>;
-		resourceLoader: { getThemes: () => { themes: [] } };
+		resourceLoader: object;
 		extensionRunner: unknown;
 		modelRegistry: { getError: () => string | undefined };
 	};
@@ -163,7 +159,7 @@ function createReloadCommandContext(overrides: ReloadCommandContextOverrides = {
 			reload: async (options) => {
 				await options?.beforeSessionStart?.();
 			},
-			resourceLoader: { getThemes: () => ({ themes: [] }) },
+			resourceLoader: {},
 			extensionRunner: {},
 			modelRegistry: { getError: () => undefined },
 			...overrides.session,
@@ -236,7 +232,6 @@ function createLoadedResourcesContext(): LoadedResourcesContext {
 				getAppendSystemPromptSources: () => [],
 				getSkills: () => ({ skills: [], diagnostics: [] }),
 				getPrompts: () => ({ prompts: [], diagnostics: [] }),
-				getThemes: () => ({ themes: [], diagnostics: [] }),
 				getExtensions: () => ({ extensions: [], errors: [] }),
 			},
 			extensionRunner: {
@@ -254,7 +249,6 @@ function createLoadedResourcesContext(): LoadedResourcesContext {
 
 describe("regression #5943: session_start transient UI", () => {
 	it("renders loaded resources before restored messages without stale entries", () => {
-		initTheme("dark", false);
 		const context = createLoadedResourcesContext();
 		const root = new Container();
 		root.addChild(context.loadedResourcesContainer);
@@ -293,7 +287,6 @@ describe("regression #5943: session_start transient UI", () => {
 					events.push("bind");
 					await harness.session.bindExtensions({
 						uiContext: createUiContext((message) => events.push(`notify:${message}`)),
-						mode: "tui",
 					});
 				},
 				subscribeToAgent: () => events.push("subscribe"),
@@ -334,7 +327,6 @@ describe("regression #5943: session_start transient UI", () => {
 					events.push("bind");
 					await harness.session.bindExtensions({
 						uiContext: createUiContext(() => {}),
-						mode: "tui",
 					});
 				},
 				subscribeToAgent: () => {
@@ -386,7 +378,6 @@ describe("regression #5943: session_start transient UI", () => {
 					events.push("bind");
 					await harness.session.bindExtensions({
 						uiContext: createUiContext(() => {}),
-						mode: "tui",
 					});
 				},
 				subscribeToAgent: () => {
@@ -434,7 +425,6 @@ describe("regression #5943: session_start transient UI", () => {
 		try {
 			await harness.session.bindExtensions({
 				uiContext: createUiContext((message) => events.push(message)),
-				mode: "tui",
 			});
 			expect(events).toEqual(["start:startup", "notify:startup"]);
 
@@ -449,7 +439,6 @@ describe("regression #5943: session_start transient UI", () => {
 	});
 
 	it("refreshes hideThinkingBlock before rebuilding chat during reload", async () => {
-		initTheme("dark", false);
 		const events: string[] = [];
 		let context: ReloadCommandContext;
 		context = createReloadCommandContext({
@@ -473,7 +462,6 @@ describe("regression #5943: session_start transient UI", () => {
 	});
 
 	it("keeps the reload blocker focused until async reload completes", async () => {
-		initTheme("dark", false);
 		const editor = {};
 		let focused: unknown;
 		let chatRestored = false;

@@ -7,8 +7,7 @@ import { afterEach, beforeEach, describe, it, test } from "node:test";
 import { CombinedAutocompleteProvider } from "../src/autocomplete.ts";
 
 const resolveFdPath = (): string | null => {
-	const command = process.platform === "win32" ? "where" : "which";
-	const result = spawnSync(command, ["fd"], { encoding: "utf-8" });
+	const result = spawnSync("which", ["fd"], { encoding: "utf-8" });
 	if (result.status !== 0 || !result.stdout) {
 		return null;
 	}
@@ -60,7 +59,7 @@ describe("CombinedAutocompleteProvider", () => {
 			const provider = new CombinedAutocompleteProvider([], "/tmp");
 			const lines = ["hey /"];
 			const cursorLine = 0;
-			const cursorCol = 5; // After the "/"
+			const cursorCol = 5;
 
 			const result = await getSuggestions(provider, lines, cursorLine, cursorCol, true);
 
@@ -74,13 +73,11 @@ describe("CombinedAutocompleteProvider", () => {
 			const provider = new CombinedAutocompleteProvider([], "/tmp");
 			const lines = ["/A"];
 			const cursorLine = 0;
-			const cursorCol = 2; // After the "A"
+			const cursorCol = 2;
 
 			const result = await getSuggestions(provider, lines, cursorLine, cursorCol, true);
 
 			console.log("Result:", result);
-			// This might return null if /A doesn't match anything, which is fine
-			// We're mainly testing that the prefix extraction works
 			if (result) {
 				assert.strictEqual(result.prefix, "/A", "Prefix should be '/A'");
 			}
@@ -90,7 +87,7 @@ describe("CombinedAutocompleteProvider", () => {
 			const provider = new CombinedAutocompleteProvider([], "/tmp");
 			const lines = ["/model"];
 			const cursorLine = 0;
-			const cursorCol = 6; // After "model"
+			const cursorCol = 6;
 
 			const result = await getSuggestions(provider, lines, cursorLine, cursorCol, true);
 
@@ -102,7 +99,7 @@ describe("CombinedAutocompleteProvider", () => {
 			const provider = new CombinedAutocompleteProvider([], "/tmp");
 			const lines = ["/command /"];
 			const cursorLine = 0;
-			const cursorCol = 10; // After the second "/"
+			const cursorCol = 10;
 
 			const result = await getSuggestions(provider, lines, cursorLine, cursorCol, true);
 
@@ -571,10 +568,8 @@ describe("CombinedAutocompleteProvider", () => {
 				{ prefix: "文", value: "文档/" },
 				{ prefix: "文档/说", value: "文档/说明.md" },
 				{ prefix: "./文档/说", value: "./文档/说明.md" },
+				{ prefix: `${baseDir}/文档/说`, value: `${baseDir}/文档/说明.md` },
 			];
-			if (process.platform !== "win32") {
-				completions.push({ prefix: `${baseDir}/文档/说`, value: `${baseDir}/文档/说明.md` });
-			}
 			for (const separator of " \t\u3000\u00a0，：；。！？（「《") {
 				for (const { prefix, value } of completions) {
 					const before = `查看𠮷${separator}`;

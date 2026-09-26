@@ -3,25 +3,17 @@ import type {
 	AssistantMessage,
 	AssistantMessageEventStream,
 	AuthResult,
-	ClassifierApi,
-	ClassifierContext,
-	ClassifierModel,
-	ClassifierResult,
 	Context,
 	Model,
 	ModelsApiStreamOptions,
-	ModelsClassifierOptions,
 	ModelsRefreshOptions,
 	ModelsRefreshResult,
 	ModelsSimpleStreamOptions,
-	ModelType,
-	ModelTypeMap,
 	Provider,
 	ProviderHeaders,
 } from "@earendil-works/pi-ai";
 import type { ModelRuntime } from "./model-runtime.ts";
 import type { AuthStatus, ProviderConfigInput } from "./provider-composer.ts";
-import type { VirtualModelDefinition } from "./virtual-models.ts";
 
 export type { ProviderConfigInput } from "./provider-composer.ts";
 export type ResolvedRequestAuth =
@@ -33,12 +25,7 @@ export type ResolvedRequestAuth =
 			env?: Record<string, string>;
 	  }
 	| { ok: false; error: string };
-export { clearApiKeyCache } from "./provider-composer.ts";
 
-/**
- * Synchronous compatibility facade exposed to extensions.
- * Coding-agent internals use ModelRuntime directly.
- */
 export class ModelRegistry {
 	private readonly runtime: ModelRuntime;
 
@@ -46,7 +33,6 @@ export class ModelRegistry {
 		this.runtime = runtime;
 	}
 
-	/** Reload models.json asynchronously. Await before making synchronous registry reads. */
 	refresh(options?: ModelsRefreshOptions): Promise<ModelsRefreshResult> {
 		return this.runtime.refresh(options);
 	}
@@ -65,15 +51,6 @@ export class ModelRegistry {
 
 	find(provider: string, modelId: string): Model<Api> | undefined {
 		return this.runtime.getModel(provider, modelId);
-	}
-
-	/** Find a model of a non-chat type, e.g. `findOfType("classifier", "typesafe", "jev-latest")`. */
-	findOfType<TType extends ModelType>(
-		type: TType,
-		provider: string,
-		modelId: string,
-	): ModelTypeMap[TType] | undefined {
-		return this.runtime.getModelOfType(type, provider, modelId);
 	}
 
 	hasConfiguredAuth(model: Model<Api>): boolean {
@@ -119,7 +96,6 @@ export class ModelRegistry {
 		return this.runtime.getProvider(provider);
 	}
 
-	/** Stream through the configured provider with request-time authentication. */
 	stream<TApi extends Api>(
 		model: Model<TApi>,
 		context: Context,
@@ -128,7 +104,6 @@ export class ModelRegistry {
 		return this.runtime.stream(model, context, options);
 	}
 
-	/** Stream with provider-neutral options and request-time authentication. */
 	streamSimple(model: Model<Api>, context: Context, options?: ModelsSimpleStreamOptions): AssistantMessageEventStream {
 		return this.runtime.streamSimple(model, context, options);
 	}
@@ -139,15 +114,6 @@ export class ModelRegistry {
 		options?: ModelsApiStreamOptions<TApi>,
 	): Promise<AssistantMessage> {
 		return this.runtime.complete(model, context, options);
-	}
-
-	/** Classify structured state with request-time authentication. Never rejects. */
-	classify(
-		model: ClassifierModel<ClassifierApi>,
-		context: ClassifierContext,
-		options?: ModelsClassifierOptions,
-	): Promise<ClassifierResult> {
-		return this.runtime.classify(model, context, options);
 	}
 
 	getProviderDisplayName(provider: string): string {
@@ -166,10 +132,6 @@ export class ModelRegistry {
 		}
 	}
 
-	isUsingOAuth(model: Model<Api>): boolean {
-		return this.runtime.isUsingOAuth(model.provider);
-	}
-
 	registerProvider(provider: Provider): void;
 	registerProvider(providerName: string, config: ProviderConfigInput): void;
 	registerProvider(providerOrName: Provider | string, config?: ProviderConfigInput): void {
@@ -183,14 +145,6 @@ export class ModelRegistry {
 
 	unregisterProvider(providerName: string): void {
 		this.runtime.unregisterProvider(providerName);
-	}
-
-	registerVirtualModel(definition: VirtualModelDefinition): void {
-		this.runtime.registerVirtualModel(definition);
-	}
-
-	unregisterVirtualModel(providerName: string, id: string): void {
-		this.runtime.unregisterVirtualModel(providerName, id);
 	}
 
 	getRegisteredProviderConfig(providerName: string): ProviderConfigInput | undefined {

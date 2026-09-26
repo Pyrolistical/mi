@@ -1,11 +1,5 @@
 import { Agent } from "@earendil-works/pi-agent-core";
-import {
-	type AssistantMessage,
-	getModel,
-	streamSimple,
-	type ToolResultMessage,
-	type Usage,
-} from "@earendil-works/pi-ai/compat";
+import { type AssistantMessage, streamSimple, type ToolResultMessage, type Usage } from "@earendil-works/pi-ai/compat";
 import { describe, expect, it } from "vitest";
 import { AgentSession } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
@@ -14,8 +8,9 @@ import { SettingsManager } from "../src/core/settings-manager.ts";
 import { getUsageCostBreakdown } from "../src/core/usage-totals.ts";
 import { createInMemoryModelRegistry, getModelRuntime } from "./model-runtime-test-utils.ts";
 import { createTestResourceLoader } from "./utilities.ts";
+import { openaiModel } from "../../ai/test/openai-models.ts";
 
-const model = getModel("anthropic", "claude-sonnet-4-5")!;
+const model = openaiModel("gpt-5-mini");
 
 function createUsage(totalTokens: number): Usage {
 	return {
@@ -71,7 +66,7 @@ async function createSession() {
 	const settingsManager = SettingsManager.inMemory();
 	const sessionManager = SessionManager.inMemory();
 	const authStorage = AuthStorage.inMemory();
-	await authStorage.modify("anthropic", async () => ({ type: "api_key", key: "test-key" }));
+	await authStorage.modify("openai", async () => ({ type: "api_key", key: "test-key" }));
 	const session = new AgentSession({
 		agent: new Agent({
 			getApiKey: () => "test-key",
@@ -129,7 +124,6 @@ describe("AgentSession.getSessionStats", () => {
 			syncAgentMessages(session, sessionManager);
 
 			const stats = session.getSessionStats();
-			// Totals cover ALL entries, including history compacted away (180k + 195k).
 			expect(stats.tokens.input).toBe(375_000);
 			expect(stats.contextUsage).toBeDefined();
 			expect(stats.contextUsage?.tokens).toBeNull();
@@ -153,7 +147,6 @@ describe("AgentSession.getSessionStats", () => {
 			syncAgentMessages(session, sessionManager);
 
 			const stats = session.getSessionStats();
-			// Totals cover ALL entries, including history compacted away (180k + 195k + 25k).
 			expect(stats.tokens.input).toBe(400_000);
 			expect(stats.contextUsage).toBeDefined();
 			expect(stats.contextUsage?.tokens).toBe(25_000);

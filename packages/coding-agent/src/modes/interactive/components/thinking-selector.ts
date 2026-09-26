@@ -30,9 +30,6 @@ const LEVEL_DESCRIPTIONS: Record<ThinkingLevel, string> = {
 	max: "Maximum reasoning",
 };
 
-/**
- * Component that renders a thinking level selector with borders
- */
 export class ThinkingSelectorComponent extends Container implements Focusable {
 	private searchInput: Input;
 	private selectList: SelectList;
@@ -72,7 +69,6 @@ export class ThinkingSelectorComponent extends Container implements Focusable {
 				level === defaultThinkingLevel ? `${LEVEL_DESCRIPTIONS[level]} · default` : LEVEL_DESCRIPTIONS[level],
 		}));
 
-		// Add top border
 		this.addChild(new DynamicBorder());
 		this.addChild(new Spacer(1));
 		this.addChild(new Text("Thinking Level", 0, 0));
@@ -85,7 +81,6 @@ export class ThinkingSelectorComponent extends Container implements Focusable {
 		this.addChild(this.searchInput);
 		this.addChild(new Spacer(1));
 
-		// Create selector
 		this.selectList = this.buildSelectList(this.allItems, currentLevel);
 		this.selectListChildIndex = this.children.length;
 		this.addChild(this.selectList);
@@ -101,7 +96,6 @@ export class ThinkingSelectorComponent extends Container implements Focusable {
 			),
 		);
 
-		// Add bottom border
 		this.addChild(new DynamicBorder());
 	}
 

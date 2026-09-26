@@ -1,61 +1,43 @@
 import { eastAsianWidth } from "get-east-asian-width";
 
-// segmenters (shared instance)
 const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 const wordSegmenter = new Intl.Segmenter(undefined, { granularity: "word" });
 
-/**
- * Get the shared grapheme segmenter instance.
- */
 export function getGraphemeSegmenter(): Intl.Segmenter {
 	return graphemeSegmenter;
 }
 
-/**
- * Get the shared word segmenter instance.
- */
 export function getWordSegmenter(): Intl.Segmenter {
 	return wordSegmenter;
 }
 
-/**
- * Check if a grapheme cluster (after segmentation) could possibly be an RGI emoji.
- * This is a fast heuristic to avoid the expensive rgiEmojiRegex test.
- * The tested Unicode blocks are deliberately broad to account for future
- * Unicode additions.
- */
 function couldBeEmoji(segment: string): boolean {
 	const cp = segment.codePointAt(0)!;
 	return (
-		(cp >= 0x1f000 && cp <= 0x1fbff) || // Emoji and Pictograph
-		(cp >= 0x2300 && cp <= 0x23ff) || // Misc technical
-		(cp >= 0x2600 && cp <= 0x27bf) || // Misc symbols, dingbats
-		(cp >= 0x2b50 && cp <= 0x2b55) || // Specific stars/circles
-		segment.includes("\uFE0F") || // Contains VS16 (emoji presentation selector)
-		segment.length > 2 // Multi-codepoint sequences (ZWJ, skin tones, etc.)
+		(cp >= 0x1f000 && cp <= 0x1fbff) ||
+		(cp >= 0x2300 && cp <= 0x23ff) ||
+		(cp >= 0x2600 && cp <= 0x27bf) ||
+		(cp >= 0x2b50 && cp <= 0x2b55) ||
+		segment.includes("\uFE0F") ||
+		segment.length > 2
 	);
 }
 
-// Regexes for character classification (same as string-width library)
 const zeroWidthRegex = /^(?:\p{Default_Ignorable_Code_Point}|\p{Control}|\p{Mark}|\p{Surrogate})+$/v;
 const leadingNonPrintingRegex = /^[\p{Default_Ignorable_Code_Point}\p{Control}\p{Format}\p{Mark}\p{Surrogate}]+/v;
 const nonPrintingCharRegex = /^(?:\p{Default_Ignorable_Code_Point}|\p{Control}|\p{Format}|\p{Mark}|\p{Surrogate})$/v;
 const markCharRegex = /^\p{Mark}$/v;
-// Marks that terminals allocate cells for when attached to a base character.
-// This includes Unicode spacing marks and non-spacing exceptions in legacy wcwidth tables.
 const terminalSpacingMarkRegex =
 	/^(?:[\p{Spacing_Mark}--[\u1734\u302E\u302F]]|[\u065F\u0F7F\u102B\u102C\u1031\u1033-\u1035\u1038\u103A-\u103E])+$/v;
 const rgiEmojiRegex = /^\p{RGI_Emoji}$/v;
 
-// Cache for non-ASCII strings
 const WIDTH_CACHE_SIZE = 512;
 const widthCache = new Map<string, number>();
 
 export const cjkBreakRegex =
 	/[\p{Script_Extensions=Han}\p{Script_Extensions=Hiragana}\p{Script_Extensions=Katakana}\p{Script_Extensions=Hangul}\p{Script_Extensions=Bopomofo}]/u;
 
-// CJK letters remain part of words and paths; only punctuation can separate prose from completions.
-export const cjkPunctuationRegex = new RegExp(
+const cjkPunctuationRegex = new RegExp(
 	`(?:(?=\\p{Punctuation})${cjkBreakRegex.source}|[，．：；！？（）［］｛｝“”‘’…—])`,
 	"u",
 );
@@ -174,51 +156,35 @@ function finalizeTruncatedResult(
 	return pad ? result + " ".repeat(Math.max(0, maxWidth - visibleWidth)) : result;
 }
 
-/**
- * Calculate the terminal width of a single grapheme cluster.
- * Based on code from the string-width library, but includes a possible-emoji
- * check to avoid running the RGI_Emoji regex unnecessarily.
- */
 function graphemeWidth(segment: string): number {
 	if (segment === "\t") {
 		return 3;
 	}
 
-	// Some marks occupy cells even without a base character.
 	if (terminalSpacingMarkRegex.test(segment)) {
 		return [...segment].length;
 	}
 
-	// Zero-width clusters
 	if (zeroWidthRegex.test(segment)) {
 		return 0;
 	}
 
-	// Emoji check with pre-filter
 	if (couldBeEmoji(segment) && rgiEmojiRegex.test(segment)) {
 		return 2;
 	}
 
-	// Get base visible codepoint
 	const base = segment.replace(leadingNonPrintingRegex, "");
 	const cp = base.codePointAt(0);
 	if (cp === undefined) {
 		return 0;
 	}
 
-	// Regional indicator symbols (U+1F1E6..U+1F1FF) are often rendered as
-	// full-width emoji in terminals, even when isolated during streaming.
-	// Keep width conservative (2) to avoid terminal auto-wrap drift artifacts.
 	if (cp >= 0x1f1e6 && cp <= 0x1f1ff) {
 		return 2;
 	}
 
 	let width = eastAsianWidth(cp);
 
-	// Intl.Segmenter can group multiple terminal-spacing code points into one
-	// grapheme. Count trailing visible code points that terminals may allocate
-	// cells for: Indic consonants after marks, halfwidth/fullwidth forms, and
-	// Thai/Lao AM vowels.
 	let followsMark = false;
 	const chars = [...base];
 	for (const char of chars.slice(1)) {
@@ -230,7 +196,6 @@ function graphemeWidth(segment: string): number {
 		} else if (!nonPrintingCharRegex.test(char)) {
 			const c = char.codePointAt(0)!;
 			if (followsMark || (c >= 0xff00 && c <= 0xffef)) {
-				// halfwidth + fullwidth forms
 				width += eastAsianWidth(c);
 			} else if (c === 0x0e33 || c === 0x0eb3) {
 				width += 1;
@@ -242,34 +207,25 @@ function graphemeWidth(segment: string): number {
 	return width;
 }
 
-/**
- * Calculate the visible width of a string in terminal columns.
- */
 export function visibleWidth(str: string): number {
 	if (str.length === 0) {
 		return 0;
 	}
 
-	// Fast path: pure ASCII printable
 	if (isPrintableAscii(str)) {
 		return str.length;
 	}
 
-	// Check cache
 	const cached = widthCache.get(str);
 	if (cached !== undefined) {
 		return cached;
 	}
 
-	// Normalize: tabs to 3 spaces, strip ANSI escape codes
 	let clean = str;
 	if (str.includes("\t")) {
 		clean = clean.replace(/\t/g, "   ");
 	}
 	if (clean.includes("\x1b")) {
-		// Strip supported ANSI/OSC/APC escape sequences in one pass.
-		// This covers CSI styling/cursor codes, OSC hyperlinks and prompt markers,
-		// and APC sequences like CURSOR_MARKER.
 		let stripped = "";
 		let i = 0;
 		while (i < clean.length) {
@@ -284,13 +240,11 @@ export function visibleWidth(str: string): number {
 		clean = stripped;
 	}
 
-	// Calculate width
 	let width = 0;
 	for (const { segment } of graphemeSegmenter.segment(clean)) {
 		width += graphemeWidth(segment);
 	}
 
-	// Cache result
 	if (widthCache.size >= WIDTH_CACHE_SIZE) {
 		const firstKey = widthCache.keys().next().value;
 		if (firstKey !== undefined) {
@@ -302,7 +256,6 @@ export function visibleWidth(str: string): number {
 	return width;
 }
 
-/** Remove ANSI, OSC, and APC control sequences while preserving visible text. */
 export function stripTerminalSequences(str: string): string {
 	if (!str.includes("\x1b")) return str;
 	let result = "";
@@ -319,68 +272,6 @@ export function stripTerminalSequences(str: string): string {
 	return result;
 }
 
-interface GraphemeCellRange {
-	start: number;
-	end: number;
-}
-
-/** Return the terminal-cell range occupied by the grapheme at a visible column. */
-export function getGraphemeCellRange(line: string, column: number): GraphemeCellRange | undefined {
-	let currentCol = 0;
-	let i = 0;
-	while (i < line.length) {
-		const ansi = extractAnsiCode(line, i);
-		if (ansi) {
-			i += ansi.length;
-			continue;
-		}
-		let textEnd = i;
-		while (textEnd < line.length && !extractAnsiCode(line, textEnd)) textEnd++;
-		for (const { segment } of graphemeSegmenter.segment(line.slice(i, textEnd))) {
-			const width = graphemeWidth(segment);
-			if (width > 0 && column >= currentCol && column < currentCol + width) {
-				return { start: currentCol, end: currentCol + width };
-			}
-			currentCol += width;
-		}
-		i = textEnd;
-	}
-	return undefined;
-}
-
-/** Return the OSC 8 hyperlink covering a visible terminal column. */
-export function getOsc8LinkAtColumn(line: string, column: number): string | undefined {
-	let activeUrl: string | undefined;
-	let currentCol = 0;
-	let i = 0;
-	while (i < line.length) {
-		const ansi = extractAnsiCode(line, i);
-		if (ansi) {
-			const hyperlink = /^\x1b\]8;[^;]*;([^\x07\x1b]*)(?:\x07|\x1b\\)$/.exec(ansi.code);
-			if (hyperlink) activeUrl = hyperlink[1] || undefined;
-			i += ansi.length;
-			continue;
-		}
-		let textEnd = i;
-		while (textEnd < line.length && !extractAnsiCode(line, textEnd)) textEnd++;
-		for (const { segment } of graphemeSegmenter.segment(line.slice(i, textEnd))) {
-			const width = segment === "\t" ? 3 : graphemeWidth(segment);
-			if (column >= currentCol && column < currentCol + width) return activeUrl;
-			currentCol += width;
-		}
-		i = textEnd;
-	}
-	return undefined;
-}
-
-/**
- * Normalize text for terminal output without changing logical editor content.
- * Some terminals render precomposed Thai/Lao AM vowels inconsistently during
- * differential repaint. Their compatibility decompositions have the same cell
- * width but avoid stale-cell artifacts in terminal renderers. Visible tabs are
- * expanded to the fixed width used by layout so terminal tab stops cannot wrap
- * a logical line, while tabs inside terminal string sequences stay untouched.
- */
 const THAI_LAO_AM_REGEX = /[\u0e33\u0eb3]/;
 const THAI_LAO_AM_GLOBAL_REGEX = /[\u0e33\u0eb3]/g;
 
@@ -408,15 +299,11 @@ export function normalizeTerminalOutput(str: string): string {
 	return result;
 }
 
-/**
- * Extract ANSI escape sequences from a string at the given position.
- */
-export function extractAnsiCode(str: string, pos: number): { code: string; length: number } | null {
+function extractAnsiCode(str: string, pos: number): { code: string; length: number } | null {
 	if (pos >= str.length || str[pos] !== "\x1b") return null;
 
 	const next = str[pos + 1];
 
-	// CSI sequence: ESC [ ... m/G/K/H/J
 	if (next === "[") {
 		let j = pos + 2;
 		while (j < str.length && !/[mGKHJ]/.test(str[j]!)) j++;
@@ -424,8 +311,6 @@ export function extractAnsiCode(str: string, pos: number): { code: string; lengt
 		return null;
 	}
 
-	// OSC sequence: ESC ] ... BEL or ESC ] ... ST (ESC \)
-	// Used for hyperlinks (OSC 8), window titles, etc.
 	if (next === "]") {
 		let j = pos + 2;
 		while (j < str.length) {
@@ -436,8 +321,6 @@ export function extractAnsiCode(str: string, pos: number): { code: string; lengt
 		return null;
 	}
 
-	// APC sequence: ESC _ ... BEL or ESC _ ... ST (ESC \)
-	// Used for cursor marker and application-specific commands
 	if (next === "_") {
 		let j = pos + 2;
 		while (j < str.length) {
@@ -509,11 +392,7 @@ function getActiveOsc8Close(prefix: string): string {
 	return activeHyperlink ? formatOsc8Close(activeHyperlink.terminator) : "";
 }
 
-/**
- * Track active ANSI SGR codes to preserve styling across line breaks.
- */
 class AnsiCodeTracker {
-	// Track individual attributes separately so we can reset them specifically
 	private bold = false;
 	private dim = false;
 	private italic = false;
@@ -522,15 +401,11 @@ class AnsiCodeTracker {
 	private inverse = false;
 	private hidden = false;
 	private strikethrough = false;
-	private fgColor: string | null = null; // Stores the full code like "31" or "38;5;240"
-	private bgColor: string | null = null; // Stores the full code like "41" or "48;5;240"
+	private fgColor: string | null = null;
+	private bgColor: string | null = null;
 	private activeHyperlink: ActiveHyperlink | null = null;
 
 	process(ansiCode: string): void {
-		// OSC 8 hyperlink: \x1b]8;;<url>\x1b\\ (open) or \x1b]8;;\x1b\\ (close).
-		// Preserve the original terminator because some terminals only make BEL-terminated
-		// links clickable. OAuth login URLs use BEL, so reopening wrapped lines with ST
-		// made only the first physical line clickable in those terminals.
 		const hyperlink = parseOsc8Hyperlink(ansiCode);
 		if (hyperlink !== undefined) {
 			this.activeHyperlink = hyperlink;
@@ -541,29 +416,22 @@ class AnsiCodeTracker {
 			return;
 		}
 
-		// Extract the parameters between \x1b[ and m
 		const match = ansiCode.match(/\x1b\[([\d;]*)m/);
 		if (!match) return;
 
 		const params = match[1];
 		if (params === "" || params === "0") {
-			// Full reset
 			this.reset();
 			return;
 		}
 
-		// Parse parameters (can be semicolon-separated)
 		const parts = params.split(";");
 		let i = 0;
 		while (i < parts.length) {
 			const code = Number.parseInt(parts[i], 10);
 
-			// Handle 256-color and RGB codes which consume multiple parameters
 			if (code === 38 || code === 48) {
-				// 38;5;N (256 color fg) or 38;2;R;G;B (RGB fg)
-				// 48;5;N (256 color bg) or 48;2;R;G;B (RGB bg)
 				if (parts[i + 1] === "5" && parts[i + 2] !== undefined) {
-					// 256 color: 38;5;N or 48;5;N
 					const colorCode = `${parts[i]};${parts[i + 1]};${parts[i + 2]}`;
 					if (code === 38) {
 						this.fgColor = colorCode;
@@ -573,7 +441,6 @@ class AnsiCodeTracker {
 					i += 3;
 					continue;
 				} else if (parts[i + 1] === "2" && parts[i + 4] !== undefined) {
-					// RGB color: 38;2;R;G;B or 48;2;R;G;B
 					const colorCode = `${parts[i]};${parts[i + 1]};${parts[i + 2]};${parts[i + 3]};${parts[i + 4]}`;
 					if (code === 38) {
 						this.fgColor = colorCode;
@@ -585,7 +452,6 @@ class AnsiCodeTracker {
 				}
 			}
 
-			// Standard SGR codes
 			switch (code) {
 				case 0:
 					this.reset();
@@ -616,7 +482,7 @@ class AnsiCodeTracker {
 					break;
 				case 21:
 					this.bold = false;
-					break; // Some terminals
+					break;
 				case 22:
 					this.bold = false;
 					this.dim = false;
@@ -641,16 +507,14 @@ class AnsiCodeTracker {
 					break;
 				case 39:
 					this.fgColor = null;
-					break; // Default fg
+					break;
 				case 49:
 					this.bgColor = null;
-					break; // Default bg
+					break;
 				default:
-					// Standard foreground colors 30-37, 90-97
 					if ((code >= 30 && code <= 37) || (code >= 90 && code <= 97)) {
 						this.fgColor = String(code);
 					}
-					// Standard background colors 40-47, 100-107
 					else if ((code >= 40 && code <= 47) || (code >= 100 && code <= 107)) {
 						this.bgColor = String(code);
 					}
@@ -671,10 +535,8 @@ class AnsiCodeTracker {
 		this.strikethrough = false;
 		this.fgColor = null;
 		this.bgColor = null;
-		// SGR reset does not affect OSC 8 hyperlink state
 	}
 
-	/** Clear all state for reuse. */
 	clear(): void {
 		this.reset();
 		this.activeHyperlink = null;
@@ -700,39 +562,13 @@ class AnsiCodeTracker {
 		return result;
 	}
 
-	getActiveBackgroundCode(): string {
-		return this.bgColor ? `\x1b[${this.bgColor}m` : "";
-	}
-
-	hasActiveCodes(): boolean {
-		return (
-			this.bold ||
-			this.dim ||
-			this.italic ||
-			this.underline ||
-			this.blink ||
-			this.inverse ||
-			this.hidden ||
-			this.strikethrough ||
-			this.fgColor !== null ||
-			this.bgColor !== null ||
-			this.activeHyperlink !== null
-		);
-	}
-
-	/**
-	 * Get reset codes for attributes that need to be turned off at line end.
-	 * Underline must be closed to prevent bleeding into padding.
-	 * Active OSC 8 hyperlinks must be closed and re-opened on the next line.
-	 * Returns empty string if no attributes need closing.
-	 */
 	getLineEndReset(): string {
 		let result = "";
 		if (this.underline) {
-			result += "\x1b[24m"; // Underline off only
+			result += "\x1b[24m";
 		}
 		if (this.activeHyperlink) {
-			result += formatOsc8Close(this.activeHyperlink.terminator); // Re-opened at line start via getActiveCodes()
+			result += formatOsc8Close(this.activeHyperlink.terminator);
 		}
 		return result;
 	}
@@ -751,20 +587,10 @@ function updateTrackerFromText(text: string, tracker: AnsiCodeTracker): void {
 	}
 }
 
-/** Return only the background color active at the end of an ANSI-styled string. */
-export function getActiveBackgroundAnsi(text: string): string {
-	const tracker = new AnsiCodeTracker();
-	updateTrackerFromText(text, tracker);
-	return tracker.getActiveBackgroundCode();
-}
-
-/**
- * Split text into words while keeping ANSI codes attached.
- */
 function splitIntoTokensWithAnsi(text: string): string[] {
 	const tokens: string[] = [];
 	let current = "";
-	let pendingAnsi = ""; // ANSI codes waiting to be attached to next visible content
+	let pendingAnsi = "";
 	let currentKind: "space" | "word" | null = null;
 	let i = 0;
 
@@ -780,7 +606,6 @@ function splitIntoTokensWithAnsi(text: string): string[] {
 	while (i < text.length) {
 		const ansiResult = extractAnsiCode(text, i);
 		if (ansiResult) {
-			// Hold ANSI codes separately - they'll be attached to the next visible char
 			pendingAnsi += ansiResult.code;
 			i += ansiResult.length;
 			continue;
@@ -806,7 +631,6 @@ function splitIntoTokensWithAnsi(text: string): string[] {
 				flushCurrent();
 			}
 
-			// Attach any pending ANSI codes to this visible character
 			if (pendingAnsi) {
 				current += pendingAnsi;
 				pendingAnsi = "";
@@ -819,7 +643,6 @@ function splitIntoTokensWithAnsi(text: string): string[] {
 		i = end;
 	}
 
-	// Handle any remaining pending ANSI codes (attach to last token)
 	if (pendingAnsi) {
 		if (current) {
 			current += pendingAnsi;
@@ -837,36 +660,21 @@ function splitIntoTokensWithAnsi(text: string): string[] {
 	return tokens;
 }
 
-/**
- * Wrap text with ANSI codes preserved.
- *
- * ONLY does word wrapping - NO padding, NO background colors.
- * Returns lines where each line is <= width visible chars.
- * Active ANSI codes are preserved across line breaks.
- *
- * @param text - Text to wrap (may contain ANSI codes and newlines)
- * @param width - Maximum visible width per line
- * @returns Array of wrapped lines (NOT padded to width)
- */
 export function wrapTextWithAnsi(text: string, width: number): string[] {
 	if (!text) {
 		return [""];
 	}
 
-	// Handle newlines by processing each line separately
-	// Track ANSI state across lines so styles carry over after literal newlines
 	const inputLines = text.split(/\r\n|\r|\n/);
 	const result: string[] = [];
 	const tracker = new AnsiCodeTracker();
 
 	for (const inputLine of inputLines) {
-		// Prepend active ANSI codes from previous lines (except for first line)
 		const prefix = result.length > 0 ? tracker.getActiveCodes() : "";
 		const wrappedLines = wrapSingleLine(prefix + inputLine, width);
 		for (const wrappedLine of wrappedLines) {
 			result.push(wrappedLine);
 		}
-		// Update tracker with codes from this line for next iteration
 		updateTrackerFromText(inputLine, tracker);
 	}
 
@@ -894,10 +702,8 @@ function wrapSingleLine(line: string, width: number): string[] {
 		const tokenVisibleLength = visibleWidth(token);
 		const isWhitespace = token.trim() === "";
 
-		// Token itself is too long - break it character by character
 		if (tokenVisibleLength > width && !isWhitespace) {
 			if (currentLine) {
-				// Add specific reset for underline only (preserves background)
 				const lineEndReset = tracker.getLineEndReset();
 				if (lineEndReset) {
 					currentLine += lineEndReset;
@@ -907,7 +713,6 @@ function wrapSingleLine(line: string, width: number): string[] {
 				currentVisibleLength = 0;
 			}
 
-			// Break long token - breakLongWord handles its own resets
 			const broken = breakLongWord(token, width, tracker);
 			for (let i = 0; i < broken.length - 1; i++) {
 				wrapped.push(broken[i]!);
@@ -917,11 +722,9 @@ function wrapSingleLine(line: string, width: number): string[] {
 			continue;
 		}
 
-		// Check if adding this token would exceed width
 		const totalNeeded = currentVisibleLength + tokenVisibleLength;
 
 		if (totalNeeded > width && currentVisibleLength > 0) {
-			// Trim trailing whitespace, then add underline reset (not full reset, to preserve background)
 			let lineToWrap = currentLine.trimEnd();
 			const lineEndReset = tracker.getLineEndReset();
 			if (lineEndReset) {
@@ -929,7 +732,6 @@ function wrapSingleLine(line: string, width: number): string[] {
 			}
 			wrapped.push(lineToWrap);
 			if (isWhitespace) {
-				// Don't start new line with whitespace
 				currentLine = tracker.getActiveCodes();
 				currentVisibleLength = 0;
 			} else {
@@ -937,7 +739,6 @@ function wrapSingleLine(line: string, width: number): string[] {
 				currentVisibleLength = tokenVisibleLength;
 			}
 		} else {
-			// Add to current line
 			currentLine += token;
 			currentVisibleLength += tokenVisibleLength;
 		}
@@ -946,28 +747,16 @@ function wrapSingleLine(line: string, width: number): string[] {
 	}
 
 	if (currentLine) {
-		// No reset at end of final line - let caller handle it
 		wrapped.push(currentLine);
 	}
 
-	// Trailing whitespace can cause lines to exceed the requested width
 	return wrapped.length > 0 ? wrapped.map((line) => line.trimEnd()) : [""];
 }
 
 export const PUNCTUATION_REGEX = /[(){}[\]<>.,;:'"!?+\-=*/\\|&%^$#@~`]/;
 
-/**
- * Check if a character is whitespace.
- */
 export function isWhitespaceChar(char: string): boolean {
 	return /\s/.test(char);
-}
-
-/**
- * Check if a character is punctuation.
- */
-export function isPunctuationChar(char: string): boolean {
-	return PUNCTUATION_REGEX.test(char);
 }
 
 function breakLongWord(word: string, width: number, tracker: AnsiCodeTracker): string[] {
@@ -975,8 +764,6 @@ function breakLongWord(word: string, width: number, tracker: AnsiCodeTracker): s
 	let currentLine = tracker.getActiveCodes();
 	let currentWidth = 0;
 
-	// First, separate ANSI codes from visible content
-	// We need to handle ANSI codes specially since they're not graphemes
 	let i = 0;
 	const segments: Array<{ type: "ansi" | "grapheme"; value: string }> = [];
 
@@ -986,14 +773,12 @@ function breakLongWord(word: string, width: number, tracker: AnsiCodeTracker): s
 			segments.push({ type: "ansi", value: ansiResult.code });
 			i += ansiResult.length;
 		} else {
-			// Find the next ANSI code or end of string
 			let end = i;
 			while (end < word.length) {
 				const nextAnsi = extractAnsiCode(word, end);
 				if (nextAnsi) break;
 				end++;
 			}
-			// Segment this non-ANSI portion into graphemes
 			const textPortion = word.slice(i, end);
 			for (const seg of graphemeSegmenter.segment(textPortion)) {
 				segments.push({ type: "grapheme", value: seg.segment });
@@ -1002,7 +787,6 @@ function breakLongWord(word: string, width: number, tracker: AnsiCodeTracker): s
 		}
 	}
 
-	// Now process segments
 	for (const seg of segments) {
 		if (seg.type === "ansi") {
 			currentLine += seg.value;
@@ -1011,13 +795,11 @@ function breakLongWord(word: string, width: number, tracker: AnsiCodeTracker): s
 		}
 
 		const grapheme = seg.value;
-		// Skip empty graphemes to avoid issues with string-width calculation
 		if (!grapheme) continue;
 
 		const graphemeWidth = visibleWidth(grapheme);
 
 		if (currentWidth + graphemeWidth > width) {
-			// Add specific reset for underline only (preserves background)
 			const lineEndReset = tracker.getLineEndReset();
 			if (lineEndReset) {
 				currentLine += lineEndReset;
@@ -1032,43 +814,21 @@ function breakLongWord(word: string, width: number, tracker: AnsiCodeTracker): s
 	}
 
 	if (currentLine) {
-		// No reset at end of final segment - caller handles continuation
 		lines.push(currentLine);
 	}
 
 	return lines.length > 0 ? lines : [""];
 }
 
-/**
- * Apply background color to a line, padding to full width.
- *
- * @param line - Line of text (may contain ANSI codes)
- * @param width - Total width to pad to
- * @param bgFn - Background color function
- * @returns Line with background applied and padded to width
- */
 export function applyBackgroundToLine(line: string, width: number, bgFn: (text: string) => string): string {
-	// Calculate padding needed
 	const visibleLen = visibleWidth(line);
 	const paddingNeeded = Math.max(0, width - visibleLen);
 	const padding = " ".repeat(paddingNeeded);
 
-	// Apply background to content + padding
 	const withPadding = line + padding;
 	return bgFn(withPadding);
 }
 
-/**
- * Truncate text to fit within a maximum visible width, adding ellipsis if needed.
- * Optionally pad with spaces to reach exactly maxWidth.
- * Properly handles ANSI escape codes (they don't count toward width).
- *
- * @param text - Text to truncate (may contain ANSI codes)
- * @param maxWidth - Maximum visible width
- * @param ellipsis - Ellipsis string to append when truncating (default: "...")
- * @param pad - If true, pad result with spaces to exactly maxWidth (default: false)
- * @returns Truncated text, optionally padded to exactly maxWidth
- */
 export function truncateToWidth(
 	text: string,
 	maxWidth: number,
@@ -1207,15 +967,10 @@ export function truncateToWidth(
 	return finalizeTruncatedResult(result, keptWidth, ellipsis, ellipsisWidth, maxWidth, pad);
 }
 
-/**
- * Extract a range of visible columns from a line. Handles ANSI codes and wide chars.
- * @param strict - If true, exclude wide chars at boundary that would extend past the range
- */
 export function sliceByColumn(line: string, startCol: number, length: number, strict = false): string {
 	return sliceWithWidth(line, startCol, length, strict).text;
 }
 
-/** Like sliceByColumn but also returns the actual visible width of the result. */
 export function sliceWithWidth(
 	line: string,
 	startCol: number,
@@ -1263,14 +1018,8 @@ export function sliceWithWidth(
 	return { text: result, width: resultWidth };
 }
 
-// Pooled tracker instance for extractSegments (avoids allocation per call)
 const pooledStyleTracker = new AnsiCodeTracker();
 
-/**
- * Extract "before" and "after" segments from a line in a single pass.
- * Used for overlay compositing where we need content before and after the overlay region.
- * Preserves styling from before the overlay that should affect content after it.
- */
 export function extractSegments(
 	line: string,
 	beforeEnd: number,
@@ -1288,19 +1037,15 @@ export function extractSegments(
 	let afterStarted = false;
 	const afterEnd = afterStart + afterLen;
 
-	// Track styling state so "after" inherits styling from before the overlay
 	pooledStyleTracker.clear();
 
 	while (i < line.length) {
 		const ansi = extractAnsiCode(line, i);
 		if (ansi) {
-			// Track all SGR codes to know styling state at afterStart
 			pooledStyleTracker.process(ansi.code);
-			// Include ANSI codes in their respective segments
 			if (currentCol < beforeEnd) {
 				pendingAnsiBefore += ansi.code;
 			} else if (currentCol >= afterStart && currentCol < afterEnd && afterStarted) {
-				// Only include after we've started "after" (styling already prepended)
 				after += ansi.code;
 			}
 			i += ansi.length;
@@ -1323,7 +1068,6 @@ export function extractSegments(
 			} else if (currentCol >= afterStart && currentCol < afterEnd) {
 				const fits = !strictAfter || currentCol + w <= afterEnd;
 				if (fits) {
-					// On first "after" grapheme, prepend inherited styling from before overlay
 					if (!afterStarted) {
 						after += pooledStyleTracker.getActiveCodes();
 						afterStarted = true;
@@ -1334,7 +1078,6 @@ export function extractSegments(
 			}
 
 			currentCol += w;
-			// Early exit: done with "before" only, or done with both segments
 			if (afterLen <= 0 ? currentCol >= beforeEnd : currentCol >= afterEnd) break;
 		}
 		i = textEnd;

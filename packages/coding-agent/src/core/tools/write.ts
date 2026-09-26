@@ -20,14 +20,8 @@ export const writeToolSystemPromptContribution = {
 
 export type WriteToolInput = Static<typeof writeSchema>;
 
-/**
- * Pluggable operations for the write tool.
- * Override these to delegate file writing to remote systems (for example SSH).
- */
 export interface WriteOperations {
-	/** Write content to a file */
 	writeFile: (absolutePath: string, content: string) => Promise<void>;
-	/** Create directory recursively */
 	mkdir: (dir: string) => Promise<void>;
 }
 
@@ -37,7 +31,6 @@ const defaultWriteOperations: WriteOperations = {
 };
 
 export interface WriteToolOptions {
-	/** Custom operations for file writing. Default: local filesystem */
 	operations?: WriteOperations;
 }
 
@@ -65,20 +58,14 @@ export function createWriteToolDefinition(
 			const absolutePath = resolveToCwd(path, ctx?.cwd || cwd);
 			const dir = dirname(absolutePath);
 			return withFileMutationQueue(absolutePath, async () => {
-				// Do not reject from an abort event listener here: that would release the
-				// mutation queue while an in-flight filesystem operation may still finish.
-				// Checking signal.aborted after each await observes the same aborts while
-				// keeping the queue locked until the current operation has settled.
 				const throwIfAborted = (): void => {
 					if (signal?.aborted) throw new Error("Operation aborted");
 				};
 
 				throwIfAborted();
-				// Create parent directories if needed.
 				await ops.mkdir(dir);
 				throwIfAborted();
 
-				// Write the file contents.
 				await ops.writeFile(absolutePath, content);
 				throwIfAborted();
 

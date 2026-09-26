@@ -5,17 +5,15 @@ export type SortMode = "threaded" | "recent" | "relevance";
 
 export type NameFilter = "all" | "named";
 
-export interface ParsedSearchQuery {
+interface ParsedSearchQuery {
 	mode: "tokens" | "regex";
 	tokens: { kind: "fuzzy" | "phrase"; value: string }[];
 	regex: RegExp | null;
-	/** If set, parsing failed and we should treat query as non-matching. */
 	error?: string;
 }
 
-export interface MatchResult {
+interface MatchResult {
 	matches: boolean;
-	/** Lower is better; only meaningful when matches === true */
 	score: number;
 }
 
@@ -36,13 +34,12 @@ function matchesNameFilter(session: SessionInfo, filter: NameFilter): boolean {
 	return hasSessionName(session);
 }
 
-export function parseSearchQuery(query: string): ParsedSearchQuery {
+function parseSearchQuery(query: string): ParsedSearchQuery {
 	const trimmed = query.trim();
 	if (!trimmed) {
 		return { mode: "tokens", tokens: [], regex: null };
 	}
 
-	// Regex mode: re:<pattern>
 	if (trimmed.startsWith("re:")) {
 		const pattern = trimmed.slice(3).trim();
 		if (!pattern) {
@@ -56,8 +53,6 @@ export function parseSearchQuery(query: string): ParsedSearchQuery {
 		}
 	}
 
-	// Token mode with quote support.
-	// Example: foo "node cve" bar
 	const tokens: { kind: "fuzzy" | "phrase"; value: string }[] = [];
 	let buf = "";
 	let inQuote = false;
@@ -95,7 +90,6 @@ export function parseSearchQuery(query: string): ParsedSearchQuery {
 		hadUnclosedQuote = true;
 	}
 
-	// If quotes were unbalanced, fall back to plain whitespace tokenization.
 	if (hadUnclosedQuote) {
 		return {
 			mode: "tokens",
@@ -113,7 +107,7 @@ export function parseSearchQuery(query: string): ParsedSearchQuery {
 	return { mode: "tokens", tokens, regex: null };
 }
 
-export function matchSession(session: SessionInfo, parsed: ParsedSearchQuery): MatchResult {
+function matchSession(session: SessionInfo, parsed: ParsedSearchQuery): MatchResult {
 	const text = getSessionSearchText(session);
 
 	if (parsed.mode === "regex") {
@@ -167,7 +161,6 @@ export function filterAndSortSessions(
 	const parsed = parseSearchQuery(query);
 	if (parsed.error) return [];
 
-	// Recent mode: filter only, keep incoming order.
 	if (sortMode === "recent") {
 		const filtered: SessionInfo[] = [];
 		for (const s of nameFiltered) {
@@ -177,7 +170,6 @@ export function filterAndSortSessions(
 		return filtered;
 	}
 
-	// Relevance mode: sort by score, tie-break by modified desc.
 	const scored: { session: SessionInfo; score: number }[] = [];
 	for (const s of nameFiltered) {
 		const res = matchSession(s, parsed);

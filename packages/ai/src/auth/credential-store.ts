@@ -1,16 +1,10 @@
 import { operationSignal, raceWithAbortSignal } from "../utils/abort.ts";
 import type { AuthOperationOptions, Credential, CredentialInfo, CredentialStore } from "./types.ts";
 
-/**
- * Default in-memory credential store. Apps inject persistent stores.
- * Keyed by `Provider.id`, one credential per provider; see `CredentialStore`.
- * Writes are serialized per provider through a promise chain.
- */
 export class InMemoryCredentialStore implements CredentialStore {
 	private credentials = new Map<string, Credential>();
 	private chains = new Map<string, Promise<unknown>>();
 
-	/** Serialize tasks per provider id without releasing the chain before active work settles. */
 	private enqueue<T>(providerId: string, task: () => Promise<T>, options?: AuthOperationOptions): Promise<T> {
 		const signal = operationSignal(options?.signal);
 		const previous = this.chains.get(providerId) ?? Promise.resolve();

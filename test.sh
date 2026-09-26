@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Isolate user resources, credentials, temporary files, and tool configuration.
 temp_parent="${TMPDIR:-/tmp}"
 temp_parent="${temp_parent%/}"
 test_root="$(mktemp -d "$temp_parent/pi-test.XXXXXX")"
@@ -9,10 +8,8 @@ git_askpass="$(type -P false)"
 readonly temp_parent test_root git_askpass
 
 mkdir -p "$test_root/home/.config" "$test_root/tmp" "$test_root/cache/npm"
-# Mark the generated root so cleanup can verify ownership before deleting it.
 touch "$test_root/.pi-test-owned" "$test_root/npm-userconfig" "$test_root/npm-globalconfig"
 
-# Only remove the marked directory created above, never an unverified path.
 cleanup() {
 	local status=$?
 	trap - EXIT
@@ -36,7 +33,6 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Start from an empty environment and allow only required platform and test settings.
 test_env=(
 	"PATH=$PATH"
 	"PWD=$PWD"
@@ -63,13 +59,11 @@ test_env=(
 	"AWS_EC2_METADATA_DISABLED=true"
 )
 
-# Native Windows needs these inherited values to launch child processes.
 for name in SystemRoot SYSTEMROOT WINDIR COMSPEC PATHEXT; do
 	value="${!name-}"
 	[[ -z "$value" ]] || test_env+=("$name=$value")
 done
 
-# Preserve CI detection only for runner behavior and test reporting.
 for name in CI GITHUB_ACTIONS; do
 	value="${!name-}"
 	[[ -z "$value" ]] || test_env+=("$name=$value")

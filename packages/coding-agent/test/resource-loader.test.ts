@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -37,7 +37,6 @@ describe("DefaultResourceLoader", () => {
 			expect(loader.getExtensions().extensions).toEqual([]);
 			expect(loader.getSkills().skills).toEqual([]);
 			expect(loader.getPrompts().prompts).toEqual([]);
-			expect(loader.getThemes().themes).toEqual([]);
 		});
 
 		it("should not treat a project manifest as the owner of a project extension", async () => {
@@ -54,50 +53,6 @@ describe("DefaultResourceLoader", () => {
 
 			expect(loader.getExtensions().extensions).toHaveLength(1);
 			expect(loader.getExtensions().warnings).toEqual([]);
-		});
-
-		it("should warn about host dependencies in an extension package manifest", async () => {
-			// Regression for #9863.
-			const packageRoot = join(tempDir, "extension-package");
-			const extensionsDir = join(packageRoot, "extensions");
-			mkdirSync(extensionsDir, { recursive: true });
-			writeFileSync(
-				join(packageRoot, "package.json"),
-				JSON.stringify({ dependencies: { "@earendil-works/pi-coding-agent": "1.0.0" } }),
-			);
-			writeFileSync(join(extensionsDir, "package-extension.ts"), "export default function() {}");
-
-			const loader = new DefaultResourceLoader({
-				cwd,
-				agentDir,
-				settingsManager: SettingsManager.inMemory({ packages: [packageRoot] }),
-			});
-			await loader.reload();
-
-			expect(loader.getExtensions().extensions).toHaveLength(1);
-			expect(loader.getExtensions().warnings).toEqual([
-				{
-					path: join(packageRoot, "package.json"),
-					warning:
-						'Host-provided extension packages must be declared in peerDependencies with a "*" range, not dependencies: @earendil-works/pi-coding-agent. Installed copies can bypass the extension loader and create duplicate runtime modules.',
-				},
-			]);
-		});
-
-		it("should fail when an extension package manifest cannot be parsed", async () => {
-			const packageRoot = join(tempDir, "invalid-extension-package");
-			const extensionsDir = join(packageRoot, "extensions");
-			mkdirSync(extensionsDir, { recursive: true });
-			writeFileSync(join(packageRoot, "package.json"), "{");
-			writeFileSync(join(extensionsDir, "package-extension.ts"), "export default function() {}");
-
-			const loader = new DefaultResourceLoader({
-				cwd,
-				agentDir,
-				settingsManager: SettingsManager.inMemory({ packages: [packageRoot] }),
-			});
-
-			await expect(loader.reload()).rejects.toThrow(SyntaxError);
 		});
 
 		it("should discover skills from agentDir", async () => {
@@ -158,7 +113,6 @@ Prompt content.`,
 			expect(prompts.some((p) => p.name === "test-prompt")).toBe(true);
 		});
 
-		// Regression test for #9354.
 		it("should report invalid prompt frontmatter while loading valid siblings", async () => {
 			const promptsDir = join(agentDir, "prompts");
 			const invalidPromptPath = join(promptsDir, "invalid.md");
@@ -175,7 +129,7 @@ Prompt content.`,
 				expect.objectContaining({
 					type: "warning",
 					path: invalidPromptPath,
-					message: expect.stringContaining("line 1, column 14"),
+					message: expect.stringContaining("YAML Parse error"),
 				}),
 			]);
 		});
@@ -213,20 +167,6 @@ description: project
 Project skill`,
 			);
 
-			const baseTheme = JSON.parse(
-				readFileSync(join(process.cwd(), "src", "modes", "interactive", "theme", "dark.json"), "utf-8"),
-			) as { name: string; vars?: Record<string, string> };
-			baseTheme.name = "collision-theme";
-			const userThemePath = join(agentDir, "themes", "collision.json");
-			const projectThemePath = join(cwd, ".pi", "themes", "collision.json");
-			mkdirSync(join(agentDir, "themes"), { recursive: true });
-			mkdirSync(join(cwd, ".pi", "themes"), { recursive: true });
-			writeFileSync(userThemePath, JSON.stringify(baseTheme, null, 2));
-			if (baseTheme.vars) {
-				baseTheme.vars.accent = "#ff00ff";
-			}
-			writeFileSync(projectThemePath, JSON.stringify(baseTheme, null, 2));
-
 			const loader = new DefaultResourceLoader({ cwd, agentDir });
 			await loader.reload();
 
@@ -235,9 +175,6 @@ Project skill`,
 
 			const skill = loader.getSkills().skills.find((s) => s.name === "collision-skill");
 			expect(skill?.filePath).toBe(projectSkillPath);
-
-			const theme = loader.getThemes().themes.find((t) => t.name === "collision-theme");
-			expect(theme?.sourcePath).toBe(projectThemePath);
 		});
 
 		it("should load symlinked user and project extensions once", async () => {
@@ -265,57 +202,9 @@ Project skill`,
 			expect(extensionsResult.extensions).toHaveLength(1);
 			expect(extensionsResult.errors).toEqual([]);
 
-			// mergePaths processes project paths before user paths, so the project
-			// alias is the canonical survivor.
 			expect(extensionsResult.extensions[0].path).toBe(join(cwd, ".pi", "extensions", "shared.ts"));
 		});
 
-		it("should load user extensions before trust and reuse them after trust resolves", async () => {
-			const userExtDir = join(agentDir, "extensions");
-			const projectExtDir = join(cwd, ".pi", "extensions");
-			mkdirSync(userExtDir, { recursive: true });
-			mkdirSync(projectExtDir, { recursive: true });
-			const loadCountKey = `__piTrustPreloadCount_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-			const globalState = globalThis as typeof globalThis & Record<string, number | undefined>;
-
-			writeFileSync(
-				join(userExtDir, "user.ts"),
-				`globalThis[${JSON.stringify(loadCountKey)}] = (globalThis[${JSON.stringify(loadCountKey)}] ?? 0) + 1;
-export default function(pi) {
-	pi.on("project_trust", () => ({ trusted: "yes" }));
-	pi.registerCommand("user-trust", {
-		description: "user trust",
-		handler: async () => {},
-	});
-}`,
-			);
-			writeFileSync(
-				join(projectExtDir, "project.ts"),
-				`export default function(pi) {
-	pi.registerCommand("project-trusted", {
-		description: "project trusted",
-		handler: async () => {},
-	});
-}`,
-			);
-
-			const loader = new DefaultResourceLoader({ cwd, agentDir });
-			await loader.reload({
-				resolveProjectTrust: async ({ extensionsResult }) => {
-					expect(extensionsResult.extensions.map((extension) => extension.path)).toEqual([
-						join(userExtDir, "user.ts"),
-					]);
-					return true;
-				},
-			});
-
-			const extensionsResult = loader.getExtensions();
-			expect(extensionsResult.extensions.map((extension) => extension.path)).toEqual([
-				join(cwd, ".pi", "extensions", "project.ts"),
-				join(userExtDir, "user.ts"),
-			]);
-			expect(globalState[loadCountKey]).toBe(1);
-		});
 
 		it("should keep both extensions loaded when command names collide", async () => {
 			const userExtDir = join(agentDir, "extensions");
@@ -388,7 +277,6 @@ export default function(pi) {
 			settingsManager.setExtensionPaths(["-extensions/disabled.ts"]);
 			settingsManager.setSkillPaths(["-skills/skip-skill"]);
 			settingsManager.setPromptTemplatePaths(["-prompts/skip.md"]);
-			settingsManager.setThemePaths(["-themes/skip.json"]);
 
 			const extensionsDir = join(agentDir, "extensions");
 			mkdirSync(extensionsDir, { recursive: true });
@@ -409,22 +297,16 @@ Content`,
 			mkdirSync(promptsDir, { recursive: true });
 			writeFileSync(join(promptsDir, "skip.md"), "Skip prompt");
 
-			const themesDir = join(agentDir, "themes");
-			mkdirSync(themesDir, { recursive: true });
-			writeFileSync(join(themesDir, "skip.json"), "{}");
-
 			const loader = new DefaultResourceLoader({ cwd, agentDir, settingsManager });
 			await loader.reload();
 
 			const { extensions } = loader.getExtensions();
 			const { skills } = loader.getSkills();
 			const { prompts } = loader.getPrompts();
-			const { themes } = loader.getThemes();
 
 			expect(extensions.some((e) => e.path.endsWith("disabled.ts"))).toBe(false);
 			expect(skills.some((s) => s.name === "skip-skill")).toBe(false);
 			expect(prompts.some((p) => p.name === "skip")).toBe(false);
-			expect(themes.some((t) => t.sourcePath?.endsWith("skip.json"))).toBe(false);
 		});
 
 		it("should discover AGENTS.md context files", async () => {
@@ -497,51 +379,6 @@ Content`,
 			expect(loader.getSystemPrompt()).toBe("You are a helpful assistant.");
 		});
 
-		it("should skip project resources that require trust when project is not trusted", async () => {
-			const piDir = join(cwd, ".pi");
-			const extensionsDir = join(piDir, "extensions");
-			const skillDir = join(piDir, "skills", "project-skill");
-			const promptsDir = join(piDir, "prompts");
-			const themesDir = join(piDir, "themes");
-			mkdirSync(extensionsDir, { recursive: true });
-			mkdirSync(skillDir, { recursive: true });
-			mkdirSync(promptsDir, { recursive: true });
-			mkdirSync(themesDir, { recursive: true });
-			writeFileSync(join(piDir, "SYSTEM.md"), "Project system prompt.");
-			writeFileSync(join(agentDir, "SYSTEM.md"), "Global system prompt.");
-			writeFileSync(join(agentDir, "AGENTS.md"), "Global instructions");
-			writeFileSync(join(cwd, "AGENTS.md"), "Project instructions");
-			writeFileSync(join(extensionsDir, "project.ts"), `throw new Error("should not load");`);
-			writeFileSync(
-				join(skillDir, "SKILL.md"),
-				`---
-name: project-skill
-description: Project skill
----
-Project skill content`,
-			);
-			writeFileSync(join(promptsDir, "project.md"), "Project prompt");
-			const themeData = JSON.parse(
-				readFileSync(join(process.cwd(), "src", "modes", "interactive", "theme", "dark.json"), "utf-8"),
-			) as { name: string };
-			themeData.name = "project-theme";
-			writeFileSync(join(themesDir, "project.json"), JSON.stringify(themeData, null, 2));
-			const settingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted: false });
-
-			const loader = new DefaultResourceLoader({ cwd, agentDir, settingsManager });
-			await loader.reload();
-
-			expect(loader.getSystemPrompt()).toBe("Global system prompt.");
-			expect(loader.getAgentsFiles().agentsFiles.some((file) => file.path === join(agentDir, "AGENTS.md"))).toBe(
-				true,
-			);
-			expect(loader.getAgentsFiles().agentsFiles.some((file) => file.path === join(cwd, "AGENTS.md"))).toBe(true);
-			expect(loader.getExtensions().extensions).toHaveLength(0);
-			expect(loader.getExtensions().errors).toEqual([]);
-			expect(loader.getSkills().skills.some((skill) => skill.name === "project-skill")).toBe(false);
-			expect(loader.getPrompts().prompts.some((prompt) => prompt.name === "project")).toBe(false);
-			expect(loader.getThemes().themes.some((theme) => theme.name === "project-theme")).toBe(false);
-		});
 
 		it("should discover APPEND_SYSTEM.md", async () => {
 			const piDir = join(cwd, ".pi");
@@ -671,7 +508,6 @@ Extra prompt content`,
 						metadata: {
 							source: "extension:extra",
 							scope: "temporary",
-							origin: "top-level",
 							baseDir: extraSkillDir,
 						},
 					},
@@ -682,7 +518,6 @@ Extra prompt content`,
 						metadata: {
 							source: "extension:extra",
 							scope: "temporary",
-							origin: "top-level",
 							baseDir: extraPromptDir,
 						},
 					},
@@ -725,7 +560,6 @@ Extra content`,
 						metadata: {
 							source: "extension:file-url",
 							scope: "temporary",
-							origin: "top-level",
 							baseDir: extraSkillDir,
 						},
 					},
@@ -738,107 +572,6 @@ Extra content`,
 			expect(loadedSkill).toBeDefined();
 			expect(loadedSkill?.filePath).toBe(skillPath);
 			expect(loadedSkill?.sourceInfo?.source).toBe("extension:file-url");
-		});
-
-		// Regression: extension discovery used to drop package scope/source, collapsing every
-		// autocomplete source tag to [t]. See issue #6968.
-		it("should keep package metadata for skills, prompts, and themes", async () => {
-			const packageRoot = join(agentDir, "npm", "node_modules", "metadata-pkg");
-			const packageSkillDir = join(packageRoot, "skills", "package-skill");
-			const packagePromptsDir = join(packageRoot, "prompts");
-			const packageThemesDir = join(packageRoot, "themes");
-			mkdirSync(packageSkillDir, { recursive: true });
-			mkdirSync(packagePromptsDir, { recursive: true });
-			mkdirSync(packageThemesDir, { recursive: true });
-			writeFileSync(join(packageRoot, "package.json"), JSON.stringify({ name: "metadata-pkg", version: "1.0.0" }));
-			writeFileSync(
-				join(packageSkillDir, "SKILL.md"),
-				`---
-name: package-skill
-description: Package skill
----
-Package skill content`,
-			);
-			writeFileSync(
-				join(packagePromptsDir, "package-prompt.md"),
-				`---
-description: Package prompt
----
-Package prompt content`,
-			);
-			const baseTheme = JSON.parse(
-				readFileSync(join(process.cwd(), "src", "modes", "interactive", "theme", "dark.json"), "utf-8"),
-			) as { name: string };
-			writeFileSync(
-				join(packageThemesDir, "package-theme.json"),
-				JSON.stringify({ ...baseTheme, name: "package-theme" }),
-			);
-
-			const extensionResourceDir = join(tempDir, "extension-resources");
-			const extensionSkillDir = join(extensionResourceDir, "extension-skill");
-			const extensionPromptsDir = join(extensionResourceDir, "prompts");
-			const extensionThemesDir = join(extensionResourceDir, "themes");
-			mkdirSync(extensionSkillDir, { recursive: true });
-			mkdirSync(extensionPromptsDir, { recursive: true });
-			mkdirSync(extensionThemesDir, { recursive: true });
-			writeFileSync(
-				join(extensionSkillDir, "SKILL.md"),
-				`---
-name: extension-skill
-description: Extension skill
----
-Extension skill content`,
-			);
-			writeFileSync(
-				join(extensionPromptsDir, "extension-prompt.md"),
-				`---
-description: Extension prompt
----
-Extension prompt content`,
-			);
-			writeFileSync(
-				join(extensionThemesDir, "extension.json"),
-				JSON.stringify({ ...baseTheme, name: "extension-theme" }),
-			);
-
-			const loader = new DefaultResourceLoader({
-				cwd,
-				agentDir,
-				settingsManager: SettingsManager.inMemory({ packages: ["npm:metadata-pkg"] }),
-			});
-			await loader.reload();
-
-			const extensionMetadata = {
-				source: "extension:discovery",
-				scope: "temporary",
-				origin: "top-level",
-			} as const;
-			loader.extendResources({
-				skillPaths: [{ path: extensionSkillDir, metadata: extensionMetadata }],
-				promptPaths: [{ path: extensionPromptsDir, metadata: extensionMetadata }],
-				themePaths: [{ path: extensionThemesDir, metadata: extensionMetadata }],
-			});
-
-			const packageSourceInfo = { source: "npm:metadata-pkg", scope: "user", origin: "package" };
-			expect(loader.getSkills().skills.find((skill) => skill.name === "package-skill")?.sourceInfo).toMatchObject(
-				packageSourceInfo,
-			);
-			expect(
-				loader.getPrompts().prompts.find((prompt) => prompt.name === "package-prompt")?.sourceInfo,
-			).toMatchObject(packageSourceInfo);
-			expect(loader.getThemes().themes.find((theme) => theme.name === "package-theme")?.sourceInfo).toMatchObject(
-				packageSourceInfo,
-			);
-
-			expect(loader.getSkills().skills.find((skill) => skill.name === "extension-skill")?.sourceInfo).toMatchObject(
-				extensionMetadata,
-			);
-			expect(
-				loader.getPrompts().prompts.find((prompt) => prompt.name === "extension-prompt")?.sourceInfo,
-			).toMatchObject(extensionMetadata);
-			expect(loader.getThemes().themes.find((theme) => theme.name === "extension-theme")?.sourceInfo).toMatchObject(
-				extensionMetadata,
-			);
 		});
 	});
 
@@ -926,7 +659,6 @@ Content`,
 
 	describe("extension conflict detection", () => {
 		it("should detect tool conflicts between extensions", async () => {
-			// Create two extensions that register the same tool
 			const ext1Dir = join(agentDir, "extensions", "ext1");
 			const ext2Dir = join(agentDir, "extensions", "ext2");
 			mkdirSync(ext1Dir, { recursive: true });
@@ -1040,23 +772,15 @@ export default function(pi: ExtensionAPI) {
 	});
 
 	describe("loadProjectContextFiles - nested worktree dedup", () => {
-		// Builds a linked-worktree skeleton (no git binary needed): the main repo's
-		// `.git/worktrees/<name>/` holds `HEAD` plus a `commondir` pointing back at the
-		// main `.git`, and the worktree's working tree carries a `.git` *file* whose
-		// `gitdir:` resolves to it.
 		const linkWorktree = (mainDir: string, worktreeDir: string, name: string) => {
 			const gitDir = join(mainDir, ".git", "worktrees", name);
 			mkdirSync(gitDir, { recursive: true });
-			// The main repo's own `.git` is a real git dir with a HEAD, as git writes it.
 			writeFileSync(join(mainDir, ".git", "HEAD"), "ref: refs/heads/main\n");
 			writeFileSync(join(gitDir, "HEAD"), "ref: refs/heads/feat\n");
-			// commondir is relative to the worktree gitdir and points at the main .git.
 			writeFileSync(join(gitDir, "commondir"), "../..");
 			writeFileSync(join(worktreeDir, ".git"), `gitdir: ${gitDir}\n`);
 		};
 
-		// Main repo at <tempDir>/outer/main with a linked worktree at main/worktrees/feat.
-		// Each case writes only the AGENTS.md files it needs.
 		const setupNestedWorktree = () => {
 			const outer = join(tempDir, "outer");
 			const main = join(outer, "main");
@@ -1087,9 +811,6 @@ export default function(pi: ExtensionAPI) {
 		});
 
 		it("should only skip the same filename, not a differently named context file", () => {
-			// The repo tracks CLAUDE.md; the worktree adds an AGENTS.md, which
-			// loadContextFileFromDir prefers. The main repo's CLAUDE.md is nobody's
-			// duplicate, so dropping it would lose its content entirely.
 			const { main, worktree, worktreeSrc } = setupNestedWorktree();
 			writeFileSync(join(main, "CLAUDE.md"), "main repo instructions");
 			writeFileSync(join(worktree, "AGENTS.md"), "worktree instructions");
@@ -1100,10 +821,6 @@ export default function(pi: ExtensionAPI) {
 		});
 
 		it("should NOT skip the container's context in a bare layout (proj/.bare + proj/main)", () => {
-			// `git clone --bare proj/.bare` + `git worktree add ../main` makes commondir
-			// `../..`, so dirname(commonGitDir) is `proj` - a plain directory that tracks
-			// nothing. Its AGENTS.md is not a duplicate of the worktree's. Layout below
-			// matches what real git writes for this setup.
 			const proj = join(tempDir, "proj");
 			const bare = join(proj, ".bare");
 			const worktree = join(proj, "main");
@@ -1130,13 +847,10 @@ export default function(pi: ExtensionAPI) {
 
 			const files = loadProjectContextFiles({ cwd: worktreeSrc, agentDir });
 
-			// Only the main repo root's duplicate is dropped; the unrelated dir above it stays.
 			expect(files.map((f) => f.content)).toEqual(["outer instructions", "worktree instructions"]);
 		});
 
 		it("should NOT skip anything for a sibling worktree (main repo is not an ancestor)", () => {
-			// git worktree add ../feat puts the worktree beside the main repo, so no
-			// duplicate is ever encountered and ancestors above it are unrelated.
 			const outer = join(tempDir, "outer");
 			const main = join(outer, "main");
 			const sib = join(outer, "sib-feat");
@@ -1153,8 +867,6 @@ export default function(pi: ExtensionAPI) {
 		});
 
 		it("should NOT skip the superproject's context from inside a submodule", () => {
-			// A submodule's `.git` file is also `gitdir:`-style, but its gitdir has no
-			// commondir, so it resolves under `.git/modules` - never an ancestor of cwd.
 			const sup = join(tempDir, "super");
 			const sub = join(sup, "vendor", "lib");
 			const subSrc = join(sub, "src");

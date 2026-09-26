@@ -14,7 +14,7 @@ describe("issue #7269 CLI end-of-options delimiter", () => {
 	it.each(["- summarize the following points for me", "--answer my question briefly"])(
 		"passes %j as a prompt after --",
 		async (prompt) => {
-			const parsed = parseArgs(["-ne", "--no-session", "-p", "--", prompt]);
+			const parsed = parseArgs(["-ne", "--no-session", "--", prompt]);
 			expect(parsed.messages).toEqual([prompt]);
 			expect(parsed.unknownFlags.size).toBe(0);
 			expect(parsed.diagnostics).toEqual([]);

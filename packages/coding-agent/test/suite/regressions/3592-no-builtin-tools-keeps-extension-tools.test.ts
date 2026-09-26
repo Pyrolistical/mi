@@ -1,7 +1,6 @@
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getModel } from "@earendil-works/pi-ai/compat";
 import { Type } from "typebox";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -12,6 +11,7 @@ import { DefaultResourceLoader } from "../../../src/core/resource-loader.ts";
 import { createAgentSession } from "../../../src/core/sdk.ts";
 import { SessionManager } from "../../../src/core/session-manager.ts";
 import { SettingsManager } from "../../../src/core/settings-manager.ts";
+import { openaiModel } from "../../../../ai/test/openai-models.ts";
 
 describe("regression #3592: no-builtin-tools keeps extension tools enabled", () => {
 	let tempDir: string;
@@ -59,7 +59,7 @@ describe("regression #3592: no-builtin-tools keeps extension tools enabled", () 
 		const { session } = await createAgentSession({
 			cwd: tempDir,
 			agentDir,
-			model: getModel("anthropic", "claude-sonnet-4-5")!,
+			model: openaiModel("gpt-5-mini"),
 			settingsManager,
 			sessionManager,
 			resourceLoader,
@@ -78,7 +78,7 @@ describe("regression #3592: no-builtin-tools keeps extension tools enabled", () 
 				.getAllTools()
 				.map((tool) => tool.name)
 				.sort(),
-		).toEqual(["bash", "dynamic_tool", "edit", "find", "grep", "ls", "powershell", "read", "write"]);
+		).toEqual(["bash", "dynamic_tool", "edit", "read", "write"]);
 		expect(session.getActiveToolNames()).toEqual(["dynamic_tool"]);
 		expect(session.systemPrompt).toContain("- dynamic_tool: Run dynamic test behavior");
 		expect(session.systemPrompt).not.toContain("- read:");
@@ -107,7 +107,7 @@ describe("regression #3592: no-builtin-tools keeps extension tools enabled", () 
 		const { session } = await createAgentSessionFromServices({
 			services,
 			sessionManager,
-			model: getModel("anthropic", "claude-sonnet-4-5")!,
+			model: openaiModel("gpt-5-mini"),
 			noTools: "builtin",
 		});
 

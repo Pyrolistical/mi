@@ -19,7 +19,7 @@ function createAssistant(timestamp: number, totalTokens: number): AssistantMessa
 	return {
 		role: "assistant",
 		content: [{ type: "text", text: "kept" }],
-		api: "openai-responses",
+		api: "test-api",
 		provider: "openai",
 		model: "test-model",
 		usage: createUsage(totalTokens),
@@ -28,10 +28,10 @@ function createAssistant(timestamp: number, totalTokens: number): AssistantMessa
 	};
 }
 
-const model: Model<"openai-responses"> = {
+const model: Model<"test-api"> = {
 	id: "test-model",
 	name: "Test Model",
-	api: "openai-responses",
+	api: "test-api",
 	provider: "openai",
 	baseUrl: "https://api.openai.com/v1",
 	reasoning: false,
@@ -52,12 +52,7 @@ describe("context token estimation", () => {
 			],
 		});
 
-		expect(estimateContextTokens(context)).toEqual({
-			tokens: 1_005,
-			usageTokens: 0,
-			trailingTokens: 1_005,
-			lastUsageIndex: null,
-		});
+		expect(estimateContextTokens(context)).toBe(1_005);
 		expect(buildBaseOptions(model, context).maxTokens).toBe(4_899);
 	});
 
@@ -72,11 +67,6 @@ describe("context token estimation", () => {
 			],
 		});
 
-		expect(estimateContextTokens(context)).toEqual({
-			tokens: 2_001,
-			usageTokens: 2_000,
-			trailingTokens: 1,
-			lastUsageIndex: 3,
-		});
+		expect(estimateContextTokens(context)).toBe(2_001);
 	});
 });

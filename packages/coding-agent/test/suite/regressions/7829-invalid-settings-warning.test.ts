@@ -2,7 +2,6 @@ import { Container } from "@earendil-works/pi-tui";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { AgentSessionRuntimeDiagnostic } from "../../../src/core/agent-session-services.ts";
 import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
-import { initTheme } from "../../../src/modes/interactive/theme/theme.ts";
 import { createHarness } from "../harness.ts";
 
 function render(container: Container): string {
@@ -10,8 +9,6 @@ function render(container: Container): string {
 }
 
 describe("issue #7829 invalid settings warning", () => {
-	beforeAll(() => initTheme("dark"));
-
 	it("renders startup diagnostics inside the transcript", async () => {
 		const harness = await createHarness();
 		const previousOffline = process.env.PI_OFFLINE;

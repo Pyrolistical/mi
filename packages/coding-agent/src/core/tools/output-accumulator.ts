@@ -25,13 +25,6 @@ function byteLength(text: string): number {
 	return Buffer.byteLength(text, "utf-8");
 }
 
-/**
- * Incrementally tracks streaming output with bounded memory.
- *
- * Appends decode chunks with a streaming UTF-8 decoder, keeps only a decoded
- * tail for display snapshots, and opens a temp file when the full output needs
- * to be preserved.
- */
 export class OutputAccumulator {
 	private readonly maxLines: number;
 	private readonly maxBytes: number;

@@ -3,13 +3,6 @@ import { type AssistantMessage, createAssistantMessageEventStream, fauxAssistant
 import { afterEach, describe, expect, it } from "vitest";
 import { createHarness, type Harness } from "../harness.ts";
 
-/**
- * Regression for #6647: compaction runs a single non-retried summarization call, so a
- * transient mid-stream socket death (`terminated`) failed the whole compaction.
- * Verifies that summarization now reuses `settings.retry` (bounded retries with
- * exponential backoff gated on isRetryableAssistantError), emits
- * `summarization_retry_*` events, and that aborts / non-retryable errors are not retried.
- */
 describe("#6647 compaction retries transient summarization failures", () => {
 	const harnesses: Harness[] = [];
 
@@ -51,7 +44,6 @@ describe("#6647 compaction retries transient summarization failures", () => {
 		harness.session.agent.state.messages = harness.sessionManager.buildSessionContext().messages;
 	}
 
-	/** streamFn that responds with the given sequence of assistant messages across calls. */
 	function useScriptedStreamFn(harness: Harness, script: AssistantMessage[]): () => number {
 		let callCount = 0;
 		const streamFunction: StreamFn = (model) => {
@@ -99,7 +91,7 @@ describe("#6647 compaction retries transient summarization failures", () => {
 		const result = await harness.session.compact();
 
 		expect(result.summary).toContain("recovered summary");
-		expect(getCallCount()).toBe(3); // 1 prefix-summary attempt + 2 retries
+		expect(getCallCount()).toBe(3);
 		const starts = harness.eventsOfType("summarization_retry_scheduled");
 		const ends = harness.eventsOfType("summarization_retry_finished");
 		expect(starts).toHaveLength(2);
@@ -107,7 +99,6 @@ describe("#6647 compaction retries transient summarization failures", () => {
 		expect(starts[0]).toMatchObject({ attempt: 1, maxAttempts: 3, errorMessage: "terminated" });
 		expect(starts[1]).toMatchObject({ attempt: 2, maxAttempts: 3 });
 		expect(ends[0]).toMatchObject({ type: "summarization_retry_finished" });
-		// model.* referenced to keep imports honest
 		expect(model.id).toBeTruthy();
 	});
 
@@ -158,7 +149,7 @@ describe("#6647 compaction retries transient summarization failures", () => {
 		const getCallCount = useScriptedStreamFn(harness, [error, error, error]);
 
 		await expect(harness.session.compact()).rejects.toThrow("terminated");
-		expect(getCallCount()).toBe(3); // 1 initial + 2 retries
+		expect(getCallCount()).toBe(3);
 		const starts = harness.eventsOfType("summarization_retry_scheduled");
 		const ends = harness.eventsOfType("summarization_retry_finished");
 		expect(starts).toHaveLength(2);
@@ -179,12 +170,9 @@ describe("#6647 compaction retries transient summarization failures", () => {
 		useScriptedStreamFn(harness, [error, error, error]);
 
 		const compactPromise = harness.session.compact();
-		// Let the first error resolve and the retry backoff sleep start.
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		harness.session.abortCompaction();
 
-		// The aborted retry backoff is normalized to an aborted assistant message,
-		// which compaction classifies as aborted.
 		await expect(compactPromise).rejects.toThrow();
 		const compactionEnd = harness.eventsOfType("compaction_end").at(-1);
 		expect(compactionEnd).toMatchObject({ aborted: true });

@@ -1,10 +1,11 @@
 import { Type } from "typebox";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "bun:test";
+import { openAIHttpModule } from "./openai-http-mock.ts";
 import { streamSimple } from "../src/compat.ts";
 import type { Model, SimpleStreamOptions, Tool } from "../src/types.ts";
 import { openaiModel } from "./openai-models.ts";
 
-const mockState = vi.hoisted(() => ({
+const mockState = {
 	lastParams: undefined as unknown,
 	chunks: undefined as
 		| Array<null | {
@@ -18,9 +19,9 @@ const mockState = vi.hoisted(() => ({
 				};
 		  }>
 		| undefined,
-}));
+};
 
-vi.mock("openai", () => {
+vi.mock("../src/api/openai-http.ts", () => {
 	class FakeOpenAI {
 		chat = {
 			completions: {
@@ -60,7 +61,7 @@ vi.mock("openai", () => {
 		};
 	}
 
-	return { default: FakeOpenAI };
+	return openAIHttpModule(() => new FakeOpenAI());
 });
 
 const localOpenAICompletionsModel = {

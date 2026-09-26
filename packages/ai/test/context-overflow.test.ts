@@ -1,6 +1,6 @@
 import type { ChildProcess } from "child_process";
 import { execSync, spawn } from "child_process";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { complete } from "../src/compat.ts";
 import type { AssistantMessage, Context, Model, Usage } from "../src/types.ts";
 import { isContextOverflow } from "../src/utils/overflow.ts";
@@ -66,7 +66,6 @@ function logResult(result: OverflowResult) {
 }
 
 describe("Context overflow error handling", () => {
-
 	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Completions", () => {
 		it("gpt-4o-mini - should detect overflow via isContextOverflow", async () => {
 			const model = { ...openaiModel("gpt-4o-mini") };
@@ -81,7 +80,7 @@ describe("Context overflow error handling", () => {
 	});
 
 	let ollamaInstalled = false;
-	if (!process.env.PI_NO_LOCAL_LLM) {
+	if (!process.env.MI_NO_LOCAL_LLM) {
 		try {
 			execSync("which ollama", { stdio: "ignore" });
 			ollamaInstalled = true;
@@ -162,7 +161,7 @@ describe("Context overflow error handling", () => {
 	});
 
 	let lmStudioRunning = false;
-	if (!process.env.PI_NO_LOCAL_LLM) {
+	if (!process.env.MI_NO_LOCAL_LLM) {
 		try {
 			execSync("curl -s --max-time 1 http://localhost:1234/v1/models > /dev/null", { stdio: "ignore" });
 			lmStudioRunning = true;
@@ -195,7 +194,7 @@ describe("Context overflow error handling", () => {
 	});
 
 	let llamaCppRunning = false;
-	if (!process.env.PI_NO_LOCAL_LLM) {
+	if (!process.env.MI_NO_LOCAL_LLM) {
 		try {
 			execSync("curl -s --max-time 1 http://localhost:8081/health > /dev/null", { stdio: "ignore" });
 			const probeStatus = execSync(

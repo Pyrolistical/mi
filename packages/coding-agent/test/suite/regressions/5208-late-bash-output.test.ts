@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { type BashOperations, createBashTool } from "../../../src/core/tools/bash.ts";
 
 function getTextOutput(result: { content?: Array<{ type: string; text?: string }> }): string {

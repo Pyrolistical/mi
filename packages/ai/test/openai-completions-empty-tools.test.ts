@@ -1,13 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "bun:test";
+import { openAIHttpModule } from "./openai-http-mock.ts";
 import { streamSimple } from "../src/compat.ts";
 import { openaiModel } from "./openai-models.ts";
 
-const mockState = vi.hoisted(() => ({
+const mockState = {
 	lastParams: undefined as unknown,
 	lastClientOptions: undefined as unknown,
-}));
+};
 
-vi.mock("openai", () => {
+vi.mock("../src/api/openai-http.ts", () => {
 	class FakeOpenAI {
 		constructor(options: unknown) {
 			mockState.lastClientOptions = options;
@@ -46,7 +47,7 @@ vi.mock("openai", () => {
 		};
 	}
 
-	return { default: FakeOpenAI };
+	return openAIHttpModule((options) => new FakeOpenAI(options));
 });
 
 describe("openai-completions empty tools handling", () => {

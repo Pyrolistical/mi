@@ -33,8 +33,8 @@ const ENV_KEYS = [
 	"CMUX_WORKSPACE_ID",
 	"WARP_SESSION_ID",
 	"WARP_TERMINAL_SESSION_UUID",
-	"PI_HYPERLINKS",
-	"PI_IMAGE_PROTOCOL",
+	"MI_HYPERLINKS",
+	"MI_IMAGE_PROTOCOL",
 ] as const;
 
 function withEnv<T>(overrides: Record<string, string | undefined>, fn: () => T): T {
@@ -199,11 +199,11 @@ describe("detectCapabilities", () => {
 
 	it("applies environment overrides", () => {
 		assert.deepStrictEqual(
-			withEnv({ PI_HYPERLINKS: "1", PI_IMAGE_PROTOCOL: "kitty" }, () => detectCapabilities()),
+			withEnv({ MI_HYPERLINKS: "1", MI_IMAGE_PROTOCOL: "kitty" }, () => detectCapabilities()),
 			{ images: "kitty", hyperlinks: true },
 		);
 		assert.deepStrictEqual(
-			withEnv({ TERM_PROGRAM: "iterm.app", PI_HYPERLINKS: "0", PI_IMAGE_PROTOCOL: "none" }, () =>
+			withEnv({ TERM_PROGRAM: "iterm.app", MI_HYPERLINKS: "0", MI_IMAGE_PROTOCOL: "none" }, () =>
 				detectCapabilities(),
 			),
 			{ images: null, hyperlinks: false },
@@ -215,8 +215,8 @@ describe("detectCapabilities", () => {
 			withEnv(
 				{
 					TERM_PROGRAM: "ghostty",
-					PI_HYPERLINKS: "auto",
-					PI_IMAGE_PROTOCOL: "auto",
+					MI_HYPERLINKS: "auto",
+					MI_IMAGE_PROTOCOL: "auto",
 				},
 				() => detectCapabilities(),
 			),
@@ -225,7 +225,7 @@ describe("detectCapabilities", () => {
 	});
 
 	it("applies and clears programmatic overrides", () => {
-		withEnv({ PI_HYPERLINKS: "1", PI_IMAGE_PROTOCOL: "kitty" }, () => {
+		withEnv({ MI_HYPERLINKS: "1", MI_IMAGE_PROTOCOL: "kitty" }, () => {
 			setCapabilityOverrides({ images: null, hyperlinks: false });
 			try {
 				assert.deepStrictEqual(getCapabilities(), { images: null, hyperlinks: false });
@@ -241,7 +241,7 @@ describe("detectCapabilities", () => {
 	it("bypasses the tmux probe when hyperlinks are overridden", () => {
 		let probed = false;
 		const caps = withEnv(
-			{ TMUX: "/tmp/tmux-1000/default,1234,0", PI_HYPERLINKS: "1", PI_IMAGE_PROTOCOL: "kitty" },
+			{ TMUX: "/tmp/tmux-1000/default,1234,0", MI_HYPERLINKS: "1", MI_IMAGE_PROTOCOL: "kitty" },
 			() =>
 				detectCapabilities(() => {
 					probed = true;

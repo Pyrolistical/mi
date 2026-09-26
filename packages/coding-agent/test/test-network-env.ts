@@ -1,5 +1,5 @@
-import { vi } from "vitest";
+import { stubEnv } from "./test-helpers.ts";
 
 export function allowNetwork(): void {
-	vi.stubEnv("PI_OFFLINE", undefined);
+	stubEnv("MI_OFFLINE", undefined);
 }

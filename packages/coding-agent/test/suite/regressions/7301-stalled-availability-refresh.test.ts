@@ -1,5 +1,6 @@
 import type { Models } from "@earendil-works/pi-ai";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "bun:test";
+import { waitFor } from "../../test-helpers.ts";
 import { createHarness, type Harness } from "../harness.ts";
 
 interface Deferred {
@@ -52,7 +53,7 @@ function stallNextCredentialList(harness: Harness): StalledCredentialList {
 
 async function waitForRecoveryRefresh(stalledList: StalledCredentialList, harness: Harness): Promise<void> {
 	const refresh = harness.session.modelRuntime.refresh({ allowNetwork: false });
-	await vi.waitFor(() => expect(stalledList.getCallCount()).toBe(2));
+	await waitFor(() => expect(stalledList.getCallCount()).toBe(2));
 	await refresh;
 }
 

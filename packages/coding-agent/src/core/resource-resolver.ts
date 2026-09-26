@@ -1,8 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
-import ignore from "ignore";
-import { minimatch } from "minimatch";
+import { createIgnoreMatcher, type IgnoreMatcher } from "@earendil-works/pi-agent-core";
 import { CONFIG_DIR_NAME } from "../config.ts";
 import { canonicalizePath, resolvePath } from "../utils/paths.ts";
 import type { SettingsManager } from "./settings-manager.ts";
@@ -55,8 +54,6 @@ const FILE_PATTERNS: Record<ResourceType, RegExp> = {
 };
 
 const IGNORE_FILE_NAMES = [".gitignore", ".ignore", ".fdignore"];
-
-type IgnoreMatcher = ReturnType<typeof ignore>;
 
 function toPosixPath(p: string): string {
 	return p.split(sep).join("/");
@@ -137,11 +134,11 @@ function collectFiles(
 	if (!existsSync(dir)) return files;
 
 	const root = rootDir ?? dir;
-	const ig = ignoreMatcher ?? ignore();
+	const ig = ignoreMatcher ?? createIgnoreMatcher();
 	addIgnoreRules(ig, dir, root);
 
 	try {
-		const entries = readdirSync(dir, { withFileTypes: true });
+		const entries = readdirSync(dir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1));
 		for (const entry of entries) {
 			if (entry.name.startsWith(".")) continue;
 			if (skipNodeModules && entry.name === "node_modules") continue;
@@ -187,11 +184,11 @@ function collectSkillEntries(
 	if (!existsSync(dir)) return entries;
 
 	const root = rootDir ?? dir;
-	const ig = ignoreMatcher ?? ignore();
+	const ig = ignoreMatcher ?? createIgnoreMatcher();
 	addIgnoreRules(ig, dir, root);
 
 	try {
-		const dirEntries = readdirSync(dir, { withFileTypes: true });
+		const dirEntries = readdirSync(dir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1));
 
 		for (const entry of dirEntries) {
 			if (entry.name !== "SKILL.md") {
@@ -297,11 +294,11 @@ function collectAutoPromptEntries(dir: string): string[] {
 	const entries: string[] = [];
 	if (!existsSync(dir)) return entries;
 
-	const ig = ignore();
+	const ig = createIgnoreMatcher();
 	addIgnoreRules(ig, dir, dir);
 
 	try {
-		const dirEntries = readdirSync(dir, { withFileTypes: true });
+		const dirEntries = readdirSync(dir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1));
 		for (const entry of dirEntries) {
 			if (entry.name.startsWith(".")) continue;
 			if (entry.name === "node_modules") continue;
@@ -350,11 +347,11 @@ function collectAutoExtensionEntries(dir: string): string[] {
 		return rootEntries;
 	}
 
-	const ig = ignore();
+	const ig = createIgnoreMatcher();
 	addIgnoreRules(ig, dir, dir);
 
 	try {
-		const dirEntries = readdirSync(dir, { withFileTypes: true });
+		const dirEntries = readdirSync(dir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1));
 		for (const entry of dirEntries) {
 			if (entry.name.startsWith(".")) continue;
 			if (entry.name === "node_modules") continue;
@@ -412,20 +409,12 @@ function matchesAnyPattern(filePath: string, patterns: string[], baseDir: string
 	const parentDirPosix = isSkillFile ? toPosixPath(parentDir!) : undefined;
 
 	return patterns.some((pattern) => {
-		const normalizedPattern = toPosixPath(pattern);
-		if (
-			minimatch(rel, normalizedPattern) ||
-			minimatch(name, normalizedPattern) ||
-			minimatch(filePathPosix, normalizedPattern)
-		) {
+		const glob = new Bun.Glob(toPosixPath(pattern));
+		if (glob.match(rel) || glob.match(name) || glob.match(filePathPosix)) {
 			return true;
 		}
 		if (!isSkillFile) return false;
-		return (
-			minimatch(parentRel!, normalizedPattern) ||
-			minimatch(parentName!, normalizedPattern) ||
-			minimatch(parentDirPosix!, normalizedPattern)
-		);
+		return glob.match(parentRel!) || glob.match(parentName!) || glob.match(parentDirPosix!);
 	});
 }
 

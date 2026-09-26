@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { findExtensionStackMatches } from "../src/core/crash-log.ts";
 
 type StackExtension = Parameters<typeof findExtensionStackMatches>[1][number];

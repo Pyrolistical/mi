@@ -1,10 +1,9 @@
-import { writeFileSync } from "fs";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "bun:test";
 import { readClipboardImage } from "../src/utils/clipboard-image.ts";
 
-const mocks = vi.hoisted(() => ({
+const mocks = {
 	command: vi.fn<(command: string, args: string[], options?: unknown) => Promise<Buffer | undefined>>(),
-}));
+};
 
 vi.mock("../src/utils/clipboard-command.ts", () => ({ runClipboardCommand: mocks.command }));
 

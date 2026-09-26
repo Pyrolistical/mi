@@ -106,11 +106,11 @@ function parseBooleanCapabilityOverride(value: string | undefined): boolean | un
 }
 
 export function detectCapabilities(tmuxForwardsHyperlink: () => boolean = probeTmuxHyperlinks): TerminalCapabilities {
-	const hyperlinks = parseBooleanCapabilityOverride(process.env.PI_HYPERLINKS);
+	const hyperlinks = parseBooleanCapabilityOverride(process.env.MI_HYPERLINKS);
 	const detected = detectCapabilitiesFromEnvironment(
 		hyperlinks === undefined ? tmuxForwardsHyperlink : () => hyperlinks,
 	);
-	const imageProtocol = process.env.PI_IMAGE_PROTOCOL?.toLowerCase();
+	const imageProtocol = process.env.MI_IMAGE_PROTOCOL?.toLowerCase();
 	const images =
 		imageProtocol === "kitty" || imageProtocol === "iterm2"
 			? imageProtocol

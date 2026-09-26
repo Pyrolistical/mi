@@ -59,24 +59,8 @@ export class Theme {
 		return `\x1b[${open}m${text}\x1b[${close}m`;
 	}
 
-	bold(text: string): string {
-		return `\x1b[1m${text}\x1b[22m`;
-	}
-
-	italic(text: string): string {
-		return `\x1b[3m${text}\x1b[23m`;
-	}
-
-	underline(text: string): string {
-		return `\x1b[4m${text}\x1b[24m`;
-	}
-
 	inverse(text: string): string {
 		return `\x1b[7m${text}\x1b[27m`;
-	}
-
-	strikethrough(text: string): string {
-		return `\x1b[9m${text}\x1b[29m`;
 	}
 
 	getThinkingBorderColor(level: ThinkingLevel): (str: string) => string {
@@ -102,10 +86,6 @@ export function getMarkdownTheme(): MarkdownTheme {
 		quoteBorder: (text: string) => theme.fg("mdQuoteBorder", text),
 		hr: (text: string) => theme.fg("mdHr", text),
 		listBullet: (text: string) => theme.fg("mdListBullet", text),
-		bold: (text: string) => theme.bold(text),
-		italic: (text: string) => theme.italic(text),
-		underline: (text: string) => theme.underline(text),
-		strikethrough: (text: string) => theme.strikethrough(text),
 	};
 }
 

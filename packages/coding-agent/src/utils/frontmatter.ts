@@ -1,4 +1,3 @@
-import { parse } from "yaml";
 import { stripBom } from "./text.ts";
 
 type ParsedFrontmatter<T extends Record<string, unknown>> = {
@@ -33,7 +32,7 @@ export const parseFrontmatter = <T extends Record<string, unknown> = Record<stri
 	if (!yamlString) {
 		return { frontmatter: {} as T, body };
 	}
-	const parsed = parse(yamlString);
+	const parsed = Bun.YAML.parse(yamlString);
 	return { frontmatter: (parsed ?? {}) as T, body };
 };
 

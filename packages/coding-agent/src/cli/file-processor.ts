@@ -1,10 +1,10 @@
 import { access, readFile, stat } from "node:fs/promises";
 import type { ImageContent } from "@earendil-works/pi-ai";
-import chalk from "chalk";
 import { resolve } from "path";
 import { resolveReadPath } from "../core/tools/path-utils.ts";
 import { detectSupportedImageMimeTypeFromFile } from "../utils/mime.ts";
 import { stripBom } from "../utils/text.ts";
+import { red } from "../utils/colors.ts";
 
 export interface ProcessedFiles {
 	text: string;
@@ -21,7 +21,7 @@ export async function processFileArguments(fileArgs: string[]): Promise<Processe
 		try {
 			await access(absolutePath);
 		} catch {
-			console.error(chalk.red(`Error: File not found: ${absolutePath}`));
+			console.error(red(`Error: File not found: ${absolutePath}`));
 			process.exit(1);
 		}
 
@@ -42,7 +42,7 @@ export async function processFileArguments(fileArgs: string[]): Promise<Processe
 				text += `<file name="${absolutePath}">\n${content}\n</file>\n`;
 			} catch (error: unknown) {
 				const message = error instanceof Error ? error.message : String(error);
-				console.error(chalk.red(`Error: Could not read file ${absolutePath}: ${message}`));
+				console.error(red(`Error: Could not read file ${absolutePath}: ${message}`));
 				process.exit(1);
 			}
 		}

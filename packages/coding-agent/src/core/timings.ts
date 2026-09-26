@@ -1,4 +1,4 @@
-const ENABLED = process.env.PI_TIMING === "1";
+const ENABLED = process.env.MI_TIMING === "1";
 interface TimingNamespace {
 	timings: Array<{ label: string; ms: number }>;
 	lastTime: number;

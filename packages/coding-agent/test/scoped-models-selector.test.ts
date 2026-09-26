@@ -1,5 +1,5 @@
 import { setKeybindings } from "@earendil-works/pi-tui";
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "bun:test";
 import { KeybindingsManager } from "../src/core/keybindings.ts";
 import { ScopedModelsSelectorComponent } from "../src/modes/interactive/components/scoped-models-selector.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";

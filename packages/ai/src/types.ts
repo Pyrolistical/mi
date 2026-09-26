@@ -39,7 +39,7 @@ export type ModelPromptCache = Partial<Record<Exclude<CacheRetention, "none">, n
 
 export type ProviderEnv = Record<string, string>;
 export type ProviderHeaders = Record<string, string | null>;
-export type FetchFunction = typeof globalThis.fetch;
+export type FetchFunction = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 export type SessionAffinityFormat = "openai" | "openai-nosession" | "openrouter";
 
 export interface ProviderResponse {

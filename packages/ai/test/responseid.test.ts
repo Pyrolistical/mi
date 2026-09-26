@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { complete } from "../src/compat.ts";
 import type { Api, Context, Model, StreamOptions } from "../src/types.ts";
 import { openaiModel } from "./openai-models.ts";
@@ -28,13 +28,12 @@ describe("responseId E2E Tests", () => {
 			api: "openai-completions",
 		};
 
-		it("should expose responseId", { retry: 3, timeout: 30000 }, async () => {
-			await expectResponseId(llm);
-		});
+		it(
+			"should expose responseId",
+			async () => {
+				await expectResponseId(llm);
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 	});
-
-	describe("GitHub Copilot Provider", () => {
-
-	});
-
 });

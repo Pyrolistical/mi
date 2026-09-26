@@ -1,23 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, describe, expect, it, vi } from "bun:test";
 
-const state = vi.hoisted(() => ({
-	jitiModuleLoads: 0,
-	jitiStaticModuleLoads: 0,
-	virtualModulesLoads: 0,
-	createJiti: vi.fn((_id: unknown, _options: unknown) => ({
-		import: vi.fn(async () => () => {}),
-	})),
-}));
-
-vi.mock("jiti", () => {
-	state.jitiModuleLoads++;
-	return { createJiti: state.createJiti };
-});
-
-vi.mock("jiti/static", () => {
-	state.jitiStaticModuleLoads++;
-	return { createJiti: state.createJiti };
-});
+const state = { virtualModulesLoads: 0 };
 
 vi.mock("../../../src/core/extensions/virtual-modules.ts", () => {
 	state.virtualModulesLoads++;
@@ -26,32 +12,22 @@ vi.mock("../../../src/core/extensions/virtual-modules.ts", () => {
 
 import { loadExtensions } from "../../../src/core/extensions/loader.ts";
 
-interface JitiOptionsProbe {
-	alias?: unknown;
-	tryNative?: boolean;
-	tsconfigPaths?: boolean;
-	virtualModules?: Record<string, unknown>;
-}
+const directory = mkdtempSync(join(tmpdir(), "pi-extension-lazy-"));
+
+afterAll(() => {
+	rmSync(directory, { recursive: true, force: true });
+});
 
 describe("extension loader lazy imports", () => {
-	it("defers ordinary jiti and its virtual modules until importing an extension", async () => {
-		expect(state.jitiModuleLoads).toBe(0);
-		expect(state.jitiStaticModuleLoads).toBe(0);
+	it("defers virtual modules until importing an extension", async () => {
+		const extensionPath = join(directory, "extension.ts");
+		writeFileSync(extensionPath, "export default function () {}\n");
 		expect(state.virtualModulesLoads).toBe(0);
 
-		const result = await loadExtensions(["/extension.ts"], "/");
+		const result = await loadExtensions([extensionPath], directory);
 
 		expect(result.errors).toEqual([]);
 		expect(result.extensions).toHaveLength(1);
-		expect(state.jitiModuleLoads).toBe(1);
-		expect(state.jitiStaticModuleLoads).toBe(0);
 		expect(state.virtualModulesLoads).toBe(1);
-		expect(state.createJiti).toHaveBeenCalledOnce();
-
-		const options = state.createJiti.mock.calls[0][1] as JitiOptionsProbe;
-		expect(options.tryNative).toBeUndefined();
-		expect(options.tsconfigPaths).toBe(true);
-		expect(options.alias).toBeUndefined();
-		expect(options.virtualModules).toBeDefined();
 	});
 });

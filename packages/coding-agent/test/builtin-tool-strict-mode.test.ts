@@ -1,7 +1,8 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "bun:test";
+import { stubEnv, unstubAllEnvs } from "./test-helpers.ts";
 import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
 import { createAgentSession } from "../src/core/sdk.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
@@ -13,10 +14,10 @@ import { openaiModel } from "../../ai/test/openai-models.ts";
 const strictToolNames = ["read", "bash", "edit", "write"] as const;
 
 describe("strict built-in tools", () => {
-	afterEach(() => vi.unstubAllEnvs());
+	afterEach(() => unstubAllEnvs());
 
-	it.each([undefined, "0", "1"])("prefers strict sampling with PI_EXPERIMENTAL=%s", (experimental) => {
-		vi.stubEnv("PI_EXPERIMENTAL", experimental);
+	it.each([undefined, "0", "1"])("prefers strict sampling with MI_EXPERIMENTAL=%s", (experimental) => {
+		stubEnv("MI_EXPERIMENTAL", experimental);
 		const definitions = createAllToolDefinitions(process.cwd());
 		for (const name of strictToolNames) {
 			expect(definitions[name].constrainedSampling).toEqual({ type: "json_schema", strict: "prefer" });

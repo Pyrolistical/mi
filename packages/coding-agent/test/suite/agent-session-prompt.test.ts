@@ -4,21 +4,19 @@ import { join } from "node:path";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { fauxAssistantMessage, fauxToolCall, type Model } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "bun:test";
 import type { ExtensionAPI, InputEvent } from "../../src/core/extensions/index.ts";
 import type { PromptTemplate } from "../../src/core/prompt-templates.ts";
 import { createSyntheticSourceInfo } from "../../src/core/source-info.ts";
 import { createTestResourceLoader } from "../utilities.ts";
 import { createHarness, getMessageText, type Harness } from "./harness.ts";
 
-const processImage = vi.hoisted(() =>
-	vi.fn(async (_bytes: Uint8Array, mimeType: string) => ({
+const processImage = vi.fn(async (_bytes: Uint8Array, mimeType: string) => ({
 		ok: true as const,
 		data: Buffer.from("normalized").toString("base64"),
 		mimeType,
 		hints: [],
-	})),
-);
+	}));
 vi.mock("../../src/utils/image-process.ts", () => ({ processImage }));
 
 describe("AgentSession prompt characterization", () => {

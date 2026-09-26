@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { stream } from "../src/compat.ts";
 import type { Api, Context, Model, StreamOptions } from "../src/types.ts";
 
@@ -49,8 +49,12 @@ describe("Token Statistics on Abort", () => {
 			api: "openai-completions",
 		};
 
-		it("should include token stats when aborted mid-stream", { retry: 3, timeout: 30000 }, async () => {
-			await testTokensOnAbort(llm);
-		});
+		it(
+			"should include token stats when aborted mid-stream",
+			async () => {
+				await testTokensOnAbort(llm);
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 	});
 });

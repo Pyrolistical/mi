@@ -1,5 +1,5 @@
 import { Container } from "@earendil-works/pi-tui";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "bun:test";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import type { StatusIndicator } from "../src/modes/interactive/components/status-indicator.ts";
@@ -106,14 +106,14 @@ describe("InteractiveMode tree navigation availability", () => {
 		ui.session.isStreaming = true;
 		ui.session.navigateTree.mockImplementation(async () => {
 			expect(ui.session.isStreaming).toBe(false);
-			expect(ui.restoreQueuedMessagesToEditor).toHaveBeenCalledOnce();
+			expect(ui.restoreQueuedMessagesToEditor).toHaveBeenCalledTimes(1);
 			return { cancelled: false };
 		});
 
 		await select();
 
-		expect(ui.session.abort).toHaveBeenCalledOnce();
-		expect(ui.session.navigateTree).toHaveBeenCalledOnce();
+		expect(ui.session.abort).toHaveBeenCalledTimes(1);
+		expect(ui.session.navigateTree).toHaveBeenCalledTimes(1);
 		expect(ui.showError).not.toHaveBeenCalled();
 	});
 
@@ -128,7 +128,7 @@ describe("InteractiveMode tree navigation availability", () => {
 
 		await select();
 
-		expect(ui.session.abort).toHaveBeenCalledOnce();
+		expect(ui.session.abort).toHaveBeenCalledTimes(1);
 		expect(ui.showError).toHaveBeenCalledWith(busyMessage);
 		expect(ui.showStatusIndicator).not.toHaveBeenCalled();
 		expect(ui.clearStatusIndicator).not.toHaveBeenCalled();

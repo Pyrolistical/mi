@@ -1,5 +1,5 @@
 import type { AssistantMessage, ToolResultMessage } from "@earendil-works/pi-ai";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import {
 	DEFAULT_COMPACTION_SETTINGS,
 	estimateProjectedContextTokens,

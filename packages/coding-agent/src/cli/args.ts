@@ -1,5 +1,4 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import chalk from "chalk";
 import { APP_NAME, CONFIG_DIR_NAME, ENV_AGENT_DIR, ENV_SESSION_DIR } from "../config.ts";
 import type { ExtensionFlag } from "../core/extensions/types.ts";
 
@@ -189,7 +188,7 @@ export function parseArgs(args: string[]): Args {
 export function printHelp(extensionFlags?: ExtensionFlag[]): void {
 	const extensionFlagsText =
 		extensionFlags && extensionFlags.length > 0
-			? `\n${chalk.bold("Extension CLI Flags:")}\n${extensionFlags
+			? `\nExtension CLI Flags:\n${extensionFlags
 					.map((flag) => {
 						const value = flag.type === "string" ? " <value>" : "";
 						const description = flag.description ?? `Registered by ${flag.extensionPath}`;
@@ -197,16 +196,16 @@ export function printHelp(extensionFlags?: ExtensionFlag[]): void {
 					})
 					.join("\n")}\n`
 			: "";
-	console.log(`${chalk.bold(APP_NAME)} - AI coding assistant with read, bash, edit, write tools
+	console.log(`${APP_NAME} - AI coding assistant with read, bash, edit, write tools
 
-${chalk.bold("Usage:")}
+Usage:
   ${APP_NAME} [options] [--] [@files...] [messages...]
 
-${chalk.bold("Commands:")}
+Commands:
   ${APP_NAME} auth <command>            Print credentials or check provider readiness
   ${APP_NAME} auth --help               Show help for auth
 
-${chalk.bold("Options:")}
+Options:
   --provider <name>              Provider name (default: first configured provider)
   --model <pattern>              Model pattern or ID (supports "provider/id" and optional ":<thinking>")
   --api-key <key>                API key (defaults to env vars)
@@ -238,14 +237,14 @@ ${chalk.bold("Options:")}
   --no-context-files, -nc        Disable AGENTS.md and CLAUDE.md discovery and loading
   --list-models [search]         List available models (with optional fuzzy search)
   --verbose                      Force verbose startup (overrides quietStartup setting)
-  --offline                      Disable startup network operations (same as PI_OFFLINE=1)
+  --offline                      Disable startup network operations (same as MI_OFFLINE=1)
   --                             End option parsing; treat remaining arguments as messages/files
   --help, -h                     Show this help
   --version, -v                  Show version number
 
 Extensions can register additional flags (e.g., --plan from plan-mode extension).${extensionFlagsText}
 
-${chalk.bold("Examples:")}
+Examples:
   # Print a provider API key for an external client
   ${APP_NAME} auth print-api-key --provider openai
 
@@ -300,13 +299,13 @@ ${chalk.bold("Examples:")}
   # Disable one tool while keeping the rest available
   ${APP_NAME} --exclude-tools ask_question
 
-${chalk.bold("Environment Variables:")}
+Environment Variables:
   ${ENV_AGENT_DIR.padEnd(32)} - Config directory (default: ~/${CONFIG_DIR_NAME}/agent)
   ${ENV_SESSION_DIR.padEnd(32)} - Session storage directory (overridden by --session-dir)
-  PI_PACKAGE_DIR                   - Override package directory (for Nix/Guix store paths)
-  PI_OFFLINE                       - Disable startup network operations when set to 1/true/yes
+  MI_PACKAGE_DIR                   - Override package directory (for Nix/Guix store paths)
+  MI_OFFLINE                       - Disable startup network operations when set to 1/true/yes
 
-${chalk.bold("Built-in Tool Names:")}
+Built-in Tool Names:
   read       - Read file contents
   bash       - Execute bash commands
   edit       - Edit files with find/replace

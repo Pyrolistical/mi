@@ -1,5 +1,5 @@
 import { Type } from "typebox";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { complete } from "../src/compat.ts";
 import type { Api, Context, Model, StreamOptions, ToolResultMessage } from "../src/types.ts";
 
@@ -252,16 +252,28 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
 	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Completions Provider Unicode Handling", () => {
 		const llm = openaiModel("gpt-4o-mini");
 
-		it("should handle emoji in tool results", { retry: 3, timeout: 30000 }, async () => {
-			await testEmojiInToolResults(llm);
-		});
+		it(
+			"should handle emoji in tool results",
+			async () => {
+				await testEmojiInToolResults(llm);
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 
-		it("should handle real-world LinkedIn comment data with emoji", { retry: 3, timeout: 30000 }, async () => {
-			await testRealWorldLinkedInData(llm);
-		});
+		it(
+			"should handle real-world LinkedIn comment data with emoji",
+			async () => {
+				await testRealWorldLinkedInData(llm);
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 
-		it("should handle unpaired high surrogate (0xD83D) in tool results", { retry: 3, timeout: 30000 }, async () => {
-			await testUnpairedHighSurrogate(llm);
-		});
+		it(
+			"should handle unpaired high surrogate (0xD83D) in tool results",
+			async () => {
+				await testUnpairedHighSurrogate(llm);
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 	});
 });

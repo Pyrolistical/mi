@@ -609,7 +609,7 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 				searchPrefix = file;
 			}
 
-			const entries = readdirSync(searchDir, { withFileTypes: true });
+			const entries = readdirSync(searchDir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1));
 			const suggestions: AutocompleteItem[] = [];
 
 			for (const entry of entries) {

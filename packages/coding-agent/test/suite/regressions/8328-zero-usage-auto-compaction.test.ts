@@ -1,5 +1,5 @@
 import type { AssistantMessage } from "@earendil-works/pi-ai";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "bun:test";
 import { createHarness, type Harness } from "../harness.ts";
 
 type SessionWithCompactionInternals = {
@@ -59,7 +59,7 @@ describe("issue #8328 zero-usage auto-compaction", () => {
 
 		await sessionInternals._checkCompaction(assistant);
 
-		expect(runAutoCompactionSpy).toHaveBeenCalledOnce();
+		expect(runAutoCompactionSpy).toHaveBeenCalledTimes(1);
 		expect(runAutoCompactionSpy).toHaveBeenCalledWith("threshold", false);
 	});
 

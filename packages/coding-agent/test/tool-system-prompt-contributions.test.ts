@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { bashToolSystemPromptContribution, createBashToolDefinition } from "../src/core/tools/bash.ts";
 import { createEditToolDefinition, editToolSystemPromptContribution } from "../src/core/tools/edit.ts";
 import { createReadToolDefinition, readToolSystemPromptContribution } from "../src/core/tools/read.ts";
@@ -18,7 +18,7 @@ describe("built-in tool system prompt contributions", () => {
 			const definition = createDefinition("/workspace");
 
 			expect(definition.promptSnippet).toBe(contribution.snippet);
-			expect(definition.promptGuidelines ?? []).toEqual(contribution.guidelines);
+			expect<unknown>(definition.promptGuidelines ?? []).toEqual(contribution.guidelines);
 		},
 	);
 

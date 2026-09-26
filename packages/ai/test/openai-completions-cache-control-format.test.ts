@@ -1,5 +1,6 @@
 import { Type } from "typebox";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "bun:test";
+import { openAIHttpModule } from "./openai-http-mock.ts";
 import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
 import { normalizeContext } from "../src/compat.ts";
 import type { Message, Model } from "../src/types.ts";
@@ -28,11 +29,11 @@ interface CapturedParams {
 	tools?: ToolWithCacheControl[];
 }
 
-const mockState = vi.hoisted(() => ({
+const mockState = {
 	lastParams: undefined as CapturedParams | undefined,
-}));
+};
 
-vi.mock("openai", () => {
+vi.mock("../src/api/openai-http.ts", () => {
 	class FakeOpenAI {
 		chat = {
 			completions: {
@@ -68,7 +69,7 @@ vi.mock("openai", () => {
 		};
 	}
 
-	return { default: FakeOpenAI };
+	return openAIHttpModule(() => new FakeOpenAI());
 });
 
 async function capturePayload(

@@ -35,8 +35,8 @@ export function isAuthCommandHelp(args: string[]): boolean {
 
 export function printAuthCommandHelp(): void {
 	console.log(`Usage:
-  pi auth print-api-key [--provider <provider>] [--model <model>]
-  pi auth check [--provider <provider>] [--model <model>] [--json] [--credentials]
+  ${APP_NAME} auth print-api-key [--provider <provider>] [--model <model>]
+  ${APP_NAME} auth check [--provider <provider>] [--model <model>] [--json] [--credentials]
 
 Auth commands require at least one of --provider or --model. --credentials emits the credential, or includes it in JSON output.`);
 }

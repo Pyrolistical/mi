@@ -1,13 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "bun:test";
+import { openAIHttpModule } from "./openai-http-mock.ts";
 import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
 import type { Model } from "../src/types.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 
-const mockState = vi.hoisted(() => ({
+const mockState = {
 	chunks: [] as unknown[],
-}));
+};
 
-vi.mock("openai", () => {
+vi.mock("../src/api/openai-http.ts", () => {
 	class FakeOpenAI {
 		chat = {
 			completions: {
@@ -33,7 +34,7 @@ vi.mock("openai", () => {
 			},
 		};
 	}
-	return { default: FakeOpenAI };
+	return openAIHttpModule(() => new FakeOpenAI());
 });
 
 const model: Model<"openai-completions"> = {

@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { UserMessageComponent } from "../src/modes/interactive/components/user-message.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 

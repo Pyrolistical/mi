@@ -1,5 +1,5 @@
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "bun:test";
 import { BashExecutionComponent } from "../src/modes/interactive/components/bash-execution.ts";
 
 function createTuiStub(columns: number): { columns: number; stub: any } {

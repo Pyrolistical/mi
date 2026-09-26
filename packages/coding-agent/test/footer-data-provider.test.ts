@@ -1,41 +1,42 @@
-import { execFile, spawnSync } from "child_process";
 import { existsSync, type FSWatcher, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { advanceTimersByTimeAsync } from "../../ai/test/fake-timers.ts";
 
 let resolvedBranch = "main";
 
-vi.mock("child_process", () => ({
-	execFile: vi.fn(
-		(
-			_command: string,
-			args: readonly string[],
-			_options: unknown,
-			callback: (error: Error | null, stdout: string, stderr: string) => void,
-		) => {
-			if (args[1] === "symbolic-ref") {
-				setTimeout(
-					() =>
-						callback(
-							resolvedBranch ? null : new Error("detached"),
-							resolvedBranch ? `${resolvedBranch}\n` : "",
-							"",
-						),
-					0,
-				);
-				return;
-			}
-			setTimeout(() => callback(new Error("unsupported"), "", ""), 0);
-		},
-	),
-	spawnSync: vi.fn((_command: string, args: readonly string[]) => {
+const execFileMock = vi.fn(
+	(
+		_command: string,
+		args: readonly string[],
+		_options: unknown,
+		callback: (error: Error | null, stdout: string, stderr: string) => void,
+	) => {
 		if (args[1] === "symbolic-ref") {
-			return { status: resolvedBranch ? 0 : 1, stdout: resolvedBranch ? `${resolvedBranch}\n` : "", stderr: "" };
+			setTimeout(
+				() =>
+					callback(
+						resolvedBranch ? null : new Error("detached"),
+						resolvedBranch ? `${resolvedBranch}\n` : "",
+						"",
+					),
+				0,
+			);
+			return;
 		}
-		return { status: 1, stdout: "", stderr: "" };
-	}),
-}));
+		setTimeout(() => callback(new Error("unsupported"), "", ""), 0);
+	},
+);
+
+const spawnSyncMock = vi.fn((_command: string, args: readonly string[]) => {
+	if (args[1] === "symbolic-ref") {
+		return { status: resolvedBranch ? 0 : 1, stdout: resolvedBranch ? `${resolvedBranch}\n` : "", stderr: "" };
+	}
+	return { status: 1, stdout: "", stderr: "" };
+});
+
+vi.mock("child_process", () => ({ execFile: execFileMock, spawnSync: spawnSyncMock }));
 
 import { FooterDataProvider } from "../src/core/footer-data-provider.ts";
 
@@ -101,8 +102,8 @@ describe("FooterDataProvider reftable branch detection", () => {
 		originalCwd = process.cwd();
 		tempDir = mkdtempSync(join(tmpdir(), "footer-data-provider-"));
 		resolvedBranch = "main";
-		vi.mocked(spawnSync).mockClear();
-		vi.mocked(execFile).mockClear();
+		spawnSyncMock.mockClear();
+		execFileMock.mockClear();
 	});
 
 	afterEach(() => {
@@ -121,7 +122,7 @@ describe("FooterDataProvider reftable branch detection", () => {
 		const provider = new FooterDataProvider(nestedDir);
 		try {
 			expect(provider.getGitBranch()).toBe("main");
-			expect(vi.mocked(spawnSync)).not.toHaveBeenCalled();
+			expect(spawnSyncMock).not.toHaveBeenCalled();
 		} finally {
 			provider.dispose();
 		}
@@ -134,7 +135,7 @@ describe("FooterDataProvider reftable branch detection", () => {
 		const provider = new FooterDataProvider(repoDir);
 		try {
 			expect(provider.getGitBranch()).toBe("main");
-			expect(vi.mocked(spawnSync)).toHaveBeenCalledWith(
+			expect(spawnSyncMock).toHaveBeenCalledWith(
 				"git",
 				["--no-optional-locks", "symbolic-ref", "--quiet", "--short", "HEAD"],
 				expect.objectContaining({
@@ -181,15 +182,15 @@ describe("FooterDataProvider reftable branch detection", () => {
 		const provider = new FooterDataProvider(worktreeDir);
 		try {
 			expect(provider.getGitBranch()).toBe("main");
-			vi.mocked(spawnSync).mockClear();
+			spawnSyncMock.mockClear();
 			const onBranchChange = vi.fn();
 			provider.onBranchChange(onBranchChange);
 
 			emitReftableChange(provider);
-			await vi.advanceTimersByTimeAsync(501);
+			await advanceTimersByTimeAsync(501);
 
-			expect(vi.mocked(execFile)).toHaveBeenCalledTimes(1);
-			expect(vi.mocked(spawnSync)).not.toHaveBeenCalled();
+			expect(execFileMock).toHaveBeenCalledTimes(1);
+			expect(spawnSyncMock).not.toHaveBeenCalled();
 			expect(provider.getGitBranch()).toBe("main");
 			expect(onBranchChange).not.toHaveBeenCalled();
 		} finally {
@@ -206,17 +207,17 @@ describe("FooterDataProvider reftable branch detection", () => {
 		const provider = new FooterDataProvider(worktreeDir);
 		try {
 			expect(provider.getGitBranch()).toBe("main");
-			vi.mocked(execFile).mockClear();
+			execFileMock.mockClear();
 
 			emitReftableChange(provider);
 			emitReftableChange(provider);
 			emitReftableChange(provider);
-			await vi.advanceTimersByTimeAsync(499);
-			expect(vi.mocked(execFile)).not.toHaveBeenCalled();
-			await vi.advanceTimersByTimeAsync(2);
-			expect(vi.mocked(execFile)).toHaveBeenCalledTimes(1);
-			await vi.advanceTimersByTimeAsync(650);
-			expect(vi.mocked(execFile)).toHaveBeenCalledTimes(1);
+			await advanceTimersByTimeAsync(499);
+			expect(execFileMock).not.toHaveBeenCalled();
+			await advanceTimersByTimeAsync(2);
+			expect(execFileMock).toHaveBeenCalledTimes(1);
+			await advanceTimersByTimeAsync(650);
+			expect(execFileMock).toHaveBeenCalledTimes(1);
 		} finally {
 			provider.dispose();
 			vi.useRealTimers();
@@ -235,10 +236,10 @@ describe("FooterDataProvider reftable branch detection", () => {
 			provider.onBranchChange(onBranchChange);
 
 			writeFileSync(join(reftableDir, "tables.list"), "1\n");
-			await waitFor(() => vi.mocked(execFile).mock.calls.length === 1);
+			await waitFor(() => execFileMock.mock.calls.length === 1);
 			await waitFor(() => provider.getGitBranch() === "foo");
 
-			expect(vi.mocked(execFile)).toHaveBeenCalledTimes(1);
+			expect(execFileMock).toHaveBeenCalledTimes(1);
 			expect(provider.getGitBranch()).toBe("foo");
 			expect(onBranchChange).toHaveBeenCalledTimes(1);
 		} finally {
@@ -263,10 +264,10 @@ describe("FooterDataProvider reftable branch detection", () => {
 			originalWatcher?.emit("error", new Error("simulated EMFILE"));
 			expect(providerWithInternals.headWatcher).toBeNull();
 
-			await vi.advanceTimersByTimeAsync(4999);
+			await advanceTimersByTimeAsync(4999);
 			expect(providerWithInternals.headWatcher).toBeNull();
 
-			await vi.advanceTimersByTimeAsync(1);
+			await advanceTimersByTimeAsync(1);
 			expect(providerWithInternals.headWatcher).not.toBeNull();
 			expect(providerWithInternals.headWatcher).not.toBe(originalWatcher);
 		} finally {

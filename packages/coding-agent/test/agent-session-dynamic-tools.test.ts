@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Type } from "typebox";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
 import { createAgentSession } from "../src/core/sdk.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
@@ -78,20 +78,20 @@ describe("AgentSession dynamic tool registration", () => {
 		);
 		await bashTool.execute("bash-env", { command: "printf ok" });
 		expect(sessionEnv).toMatchObject({
-			PI_SESSION_ID: session.sessionId,
-			PI_SESSION_FILE: session.sessionFile,
-			PI_PROVIDER: model.provider,
-			PI_MODEL: model.id,
-			PI_REASONING_LEVEL: session.thinkingLevel,
+			MI_SESSION_ID: session.sessionId,
+			MI_SESSION_FILE: session.sessionFile,
+			MI_PROVIDER: model.provider,
+			MI_MODEL: model.id,
+			MI_REASONING_LEVEL: session.thinkingLevel,
 		});
 
 		const optedOutBashTool = session.agent.state.tools.find((tool) => tool.name === "bash_without_session_env")!;
 		await optedOutBashTool.execute("bash-no-env", { command: "printf ok" });
-		expect(optedOutEnv).not.toHaveProperty("PI_SESSION_ID");
-		expect(optedOutEnv).not.toHaveProperty("PI_SESSION_FILE");
-		expect(optedOutEnv).not.toHaveProperty("PI_PROVIDER");
-		expect(optedOutEnv).not.toHaveProperty("PI_MODEL");
-		expect(optedOutEnv).not.toHaveProperty("PI_REASONING_LEVEL");
+		expect(optedOutEnv).not.toHaveProperty("MI_SESSION_ID");
+		expect(optedOutEnv).not.toHaveProperty("MI_SESSION_FILE");
+		expect(optedOutEnv).not.toHaveProperty("MI_PROVIDER");
+		expect(optedOutEnv).not.toHaveProperty("MI_MODEL");
+		expect(optedOutEnv).not.toHaveProperty("MI_REASONING_LEVEL");
 
 		session.dispose();
 	});

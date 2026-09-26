@@ -1,8 +1,9 @@
 import * as OsModule from "node:os";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
+import { stubEnv, unstubAllEnvs } from "./test-helpers.ts";
 import { copyToClipboard, readClipboardText } from "../src/utils/clipboard.ts";
 
-const mocks = vi.hoisted(() => ({
+const mocks = {
 	command:
 		vi.fn<
 			(
@@ -12,10 +13,11 @@ const mocks = vi.hoisted(() => ({
 			) => Promise<Buffer | undefined>
 		>(),
 	platform: vi.fn<() => NodeJS.Platform>(),
-}));
+};
 vi.mock("../src/utils/clipboard-command.ts", () => ({ runClipboardCommand: mocks.command }));
-vi.mock("node:os", async () => ({
-	...(await vi.importActual<typeof OsModule>("node:os")),
+const actualOs = { ...OsModule };
+vi.mock("node:os", () => ({
+	...actualOs,
 	platform: mocks.platform,
 }));
 
@@ -31,7 +33,7 @@ beforeEach(() => {
 		"DISPLAY",
 		"TERMUX_VERSION",
 	])
-		vi.stubEnv(name, "");
+		stubEnv(name, "");
 	mocks.platform.mockReturnValue("darwin");
 	mocks.command.mockResolvedValue(Buffer.alloc(0));
 	osc52Writes = [];
@@ -47,7 +49,7 @@ beforeEach(() => {
 });
 afterEach(() => {
 	process.stdout.write = originalWrite;
-	vi.unstubAllEnvs();
+	unstubAllEnvs();
 });
 
 describe("readClipboardText", () => {
@@ -63,26 +65,26 @@ describe("readClipboardText", () => {
 	] as const) {
 		test.each(["clipboard text", ""])(`${command} result %j stops fallback`, async (text) => {
 			mocks.platform.mockReturnValue("linux");
-			vi.stubEnv("DISPLAY", ":0");
-			vi.stubEnv(env, "1");
+			stubEnv("DISPLAY", ":0");
+			stubEnv(env, "1");
 			mocks.command.mockImplementation(async (name) => (name === command ? Buffer.from(text) : undefined));
 			await expect(readClipboardText()).resolves.toBe(text || null);
-			expect(mocks.command.mock.calls.map(([name]) => name)).toEqual(calls);
+			expect<unknown>(mocks.command.mock.calls.map(([name]) => name)).toEqual(calls);
 			expect(mocks.command).toHaveBeenLastCalledWith(command, args, { timeoutMs: 5000 });
 		});
 	}
 	test("returns null after all commands fail", async () => {
 		mocks.platform.mockReturnValue("linux");
-		vi.stubEnv("DISPLAY", ":0");
-		vi.stubEnv("WAYLAND_DISPLAY", "wayland-0");
+		stubEnv("DISPLAY", ":0");
+		stubEnv("WAYLAND_DISPLAY", "wayland-0");
 		mocks.command.mockResolvedValue(undefined);
 		await expect(readClipboardText()).resolves.toBeNull();
 		expect(mocks.command.mock.calls.map(([name]) => name)).toEqual(["wl-paste", "xclip", "xsel"]);
 	});
 	test("falls back to X11 tools when wl-paste is unavailable", async () => {
 		mocks.platform.mockReturnValue("linux");
-		vi.stubEnv("WAYLAND_DISPLAY", "wayland-0");
-		vi.stubEnv("DISPLAY", ":0");
+		stubEnv("WAYLAND_DISPLAY", "wayland-0");
+		stubEnv("DISPLAY", ":0");
 		mocks.command.mockImplementation(async (name) => (name === "wl-paste" ? undefined : Buffer.from("X11 text")));
 		await expect(readClipboardText()).resolves.toBe("X11 text");
 	});
@@ -96,7 +98,7 @@ describe("copyToClipboard", () => {
 	});
 	test("Linux uses xclip with a display", async () => {
 		mocks.platform.mockReturnValue("linux");
-		vi.stubEnv("DISPLAY", ":0");
+		stubEnv("DISPLAY", ":0");
 		await copyToClipboard("hello");
 		expect(mocks.command).toHaveBeenCalledWith("xclip", ["-selection", "clipboard"], {
 			input: "hello",
@@ -104,7 +106,7 @@ describe("copyToClipboard", () => {
 		});
 	});
 	test("waits for the command write before emitting remote OSC 52", async () => {
-		vi.stubEnv("SSH_CONNECTION", "client server");
+		stubEnv("SSH_CONNECTION", "client server");
 		let complete = (_value: Buffer | undefined) => {};
 		mocks.command.mockReturnValue(
 			new Promise<Buffer | undefined>((resolve) => {
@@ -119,8 +121,8 @@ describe("copyToClipboard", () => {
 	});
 	test("tries xclip and xsel after wl-copy fails", async () => {
 		mocks.platform.mockReturnValue("linux");
-		vi.stubEnv("WAYLAND_DISPLAY", "wayland-0");
-		vi.stubEnv("DISPLAY", ":0");
+		stubEnv("WAYLAND_DISPLAY", "wayland-0");
+		stubEnv("DISPLAY", ":0");
 		mocks.command.mockImplementation(async (name) => (name === "xsel" ? Buffer.alloc(0) : undefined));
 		await copyToClipboard("hello");
 		expect(mocks.command.mock.calls.map(([name]) => name)).toEqual(["wl-copy", "xclip", "xsel"]);
@@ -128,7 +130,7 @@ describe("copyToClipboard", () => {
 	});
 	test("local Linux failure does not report an unverified OSC 52 write as success", async () => {
 		mocks.platform.mockReturnValue("linux");
-		vi.stubEnv("DISPLAY", ":0");
+		stubEnv("DISPLAY", ":0");
 		mocks.command.mockResolvedValue(undefined);
 		await expect(copyToClipboard("hello")).rejects.toThrow(
 			"Clipboard unavailable: install `xclip` or `xsel`, or check X11 access",
@@ -144,8 +146,8 @@ describe("copyToClipboard", () => {
 	});
 	test("reports the Wayland clipboard tool instead of the X11 fallback", async () => {
 		mocks.platform.mockReturnValue("linux");
-		vi.stubEnv("WAYLAND_DISPLAY", "wayland-0");
-		vi.stubEnv("DISPLAY", ":0");
+		stubEnv("WAYLAND_DISPLAY", "wayland-0");
+		stubEnv("DISPLAY", ":0");
 		mocks.command.mockResolvedValue(undefined);
 		await expect(copyToClipboard("hello")).rejects.toThrow(
 			"Clipboard unavailable: install `wl-clipboard` (`wl-copy`) or check Wayland access",
@@ -153,13 +155,13 @@ describe("copyToClipboard", () => {
 		expect(mocks.command.mock.calls.map(([name]) => name)).toEqual(["wl-copy", "xclip", "xsel"]);
 	});
 	test("uses OSC 52 when command writes fail in a remote session", async () => {
-		vi.stubEnv("SSH_CONNECTION", "client server");
+		stubEnv("SSH_CONNECTION", "client server");
 		mocks.command.mockResolvedValue(undefined);
 		await copyToClipboard("hello");
 		expect(osc52Writes).toHaveLength(1);
 	});
 	test("does not emit oversized OSC 52 payloads", async () => {
-		vi.stubEnv("SSH_CONNECTION", "client server");
+		stubEnv("SSH_CONNECTION", "client server");
 		mocks.command.mockResolvedValue(undefined);
 		await expect(copyToClipboard("x".repeat(80_000))).rejects.toThrow(
 			"Clipboard unavailable: text exceeds the OSC 52 size limit",

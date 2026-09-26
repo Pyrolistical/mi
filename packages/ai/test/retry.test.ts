@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "bun:test";
 import { fauxAssistantMessage } from "../src/providers/faux.ts";
 import { isRetryableAssistantError, type RetryPolicy, retryAssistantCall, retryDelayMs } from "../src/utils/retry.ts";
 
@@ -238,10 +238,10 @@ describe("retryAssistantCall", () => {
 		const produce = vi.fn(async () => fauxAssistantMessage("", { stopReason: "error", errorMessage: "terminated" }));
 		const policy: RetryPolicy = { enabled: true, maxRetries: 5, baseDelayMs: 10_000 };
 		const onRetryFinished = vi.fn();
-		const p = retryAssistantCall(produce, policy, controller.signal, { onRetryFinished });
-		await vi.waitFor(() => expect(produce).toHaveBeenCalled());
-		controller.abort();
-		const res = await p;
+		const res = await retryAssistantCall(produce, policy, controller.signal, {
+			onRetryFinished,
+			onRetryScheduled: () => controller.abort(),
+		});
 		expect(res.stopReason).toBe("aborted");
 		expect(res.errorMessage).toBeUndefined();
 		expect(produce).toHaveBeenCalledTimes(1);

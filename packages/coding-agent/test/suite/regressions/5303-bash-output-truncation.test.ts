@@ -1,7 +1,8 @@
 import type { ChildProcessByStdio } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { advanceTimersByTimeAsync } from "../../../../ai/test/fake-timers.ts";
 import { waitForChildProcess } from "../../../src/utils/child-process.ts";
 
 describe("issue #5303 bash output truncation past exit", () => {
@@ -36,12 +37,12 @@ describe("issue #5303 bash output truncation past exit", () => {
 		child.stdout.write("HEAD\n");
 		child.emit("exit", 0, null);
 		for (let index = 1; index <= 6; index++) {
-			await vi.advanceTimersByTimeAsync(50);
+			await advanceTimersByTimeAsync(50);
 			child.stdout.write(`TICK${index}\n`);
 		}
-		await vi.advanceTimersByTimeAsync(99);
+		await advanceTimersByTimeAsync(99);
 		expect(resolved).toBe(false);
-		await vi.advanceTimersByTimeAsync(1);
+		await advanceTimersByTimeAsync(1);
 
 		expect(await waiting).toBe(0);
 		expect(output).toContain("HEAD");
@@ -58,9 +59,9 @@ describe("issue #5303 bash output truncation past exit", () => {
 
 		child.stdout.write("DONE\n");
 		child.emit("exit", 0, null);
-		await vi.advanceTimersByTimeAsync(99);
+		await advanceTimersByTimeAsync(99);
 		expect(resolved).toBe(false);
-		await vi.advanceTimersByTimeAsync(1);
+		await advanceTimersByTimeAsync(1);
 
 		expect(await waiting).toBe(0);
 	});

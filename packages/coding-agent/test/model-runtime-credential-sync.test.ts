@@ -1,5 +1,5 @@
-import type { ApiKeyCredential, Credential, CredentialStore, Model, Provider } from "@earendil-works/pi-ai";
-import { describe, expect, it, vi } from "vitest";
+import type { Model, Provider } from "@earendil-works/pi-ai";
+import { describe, expect, it } from "bun:test";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
 

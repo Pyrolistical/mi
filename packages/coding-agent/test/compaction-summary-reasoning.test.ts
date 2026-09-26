@@ -1,6 +1,7 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { type AssistantMessage, type Model, normalizeContext, type TranscriptContext } from "@earendil-works/pi-ai";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import * as piAiCompat from "@earendil-works/pi-ai/compat";
+import { beforeEach, describe, expect, it, vi } from "bun:test";
 import {
 	type CompactionPreparation,
 	compact,
@@ -9,17 +10,15 @@ import {
 	generateSummaryWithUsage,
 } from "../src/core/compaction/index.ts";
 
-const { completeSimpleMock } = vi.hoisted(() => ({
+const { completeSimpleMock } = {
 	completeSimpleMock: vi.fn(),
-}));
+};
 
-vi.mock("@earendil-works/pi-ai/compat", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("@earendil-works/pi-ai/compat")>();
-	return {
-		...actual,
-		completeSimple: completeSimpleMock,
-	};
-});
+const actualPiAiCompat = { ...piAiCompat };
+vi.mock("@earendil-works/pi-ai/compat", () => ({
+	...actualPiAiCompat,
+	completeSimple: completeSimpleMock,
+}));
 
 function createModel(reasoning: boolean, maxTokens = 8192): Model<"openai-completions"> {
 	return {

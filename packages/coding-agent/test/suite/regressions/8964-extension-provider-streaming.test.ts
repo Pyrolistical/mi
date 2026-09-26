@@ -1,6 +1,6 @@
 import { type AssistantMessage, fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai";
 import { getApiProvider } from "@earendil-works/pi-ai/compat";
-import { expect, it } from "vitest";
+import { expect, it } from "bun:test";
 import { createHarness } from "../harness.ts";
 
 it.each(["stream", "streamSimple"] as const)(

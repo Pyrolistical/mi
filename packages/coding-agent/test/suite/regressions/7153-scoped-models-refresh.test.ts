@@ -1,6 +1,7 @@
 import type { Api, Model, ModelsRefreshResult } from "@earendil-works/pi-ai";
 import { setKeybindings, type TUI } from "@earendil-works/pi-tui";
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { waitFor } from "../../test-helpers.ts";
 import { KeybindingsManager } from "../../../src/core/keybindings.ts";
 import type { ScopedModelsSelectorComponent } from "../../../src/modes/interactive/components/scoped-models-selector.ts";
 import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
@@ -86,7 +87,7 @@ describe("issue #7153 scoped models refresh", () => {
 		expect(initial).not.toContain("refreshed");
 
 		refresh.complete(harness.models, { aborted: false, errors: new Map() });
-		await vi.waitFor(() => {
+		await waitFor(() => {
 			const rendered = stripAnsi(refresh.selector.render(100).join("\n"));
 			expect(rendered).toContain("refreshed");
 			expect(rendered).toContain("Model catalogs refreshed.");
@@ -99,7 +100,7 @@ describe("issue #7153 scoped models refresh", () => {
 
 		expect(refresh.refreshSignal).toBeDefined();
 		refresh.selector.handleInput("\x1b");
-		await vi.waitFor(() => expect(refresh.refreshSignal?.aborted).toBe(true));
-		expect(refresh.done).toHaveBeenCalledOnce();
+		await waitFor(() => expect(refresh.refreshSignal?.aborted).toBe(true));
+		expect(refresh.done).toHaveBeenCalledTimes(1);
 	});
 });

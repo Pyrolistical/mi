@@ -1,5 +1,6 @@
 import { setKeybindings, type TUI } from "@earendil-works/pi-tui";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "bun:test";
+import { waitFor } from "../../test-helpers.ts";
 import { KeybindingsManager } from "../../../src/core/keybindings.ts";
 import { ModelSelectorComponent } from "../../../src/modes/interactive/components/model-selector.ts";
 import { stripAnsi } from "../../../src/utils/ansi.ts";
@@ -53,7 +54,7 @@ describe("model selector filter resets selection to top", () => {
 			() => {},
 		);
 
-		await vi.waitFor(() => {
+		await waitFor(() => {
 			const rendered = stripAnsi(selector.render(120).join("\n"));
 			expect(rendered).toContain("Model catalogs refreshed.");
 		});
@@ -96,7 +97,7 @@ describe("model selector filter resets selection to top", () => {
 			() => {},
 		);
 
-		await vi.waitFor(() => {
+		await waitFor(() => {
 			const rendered = stripAnsi(selector.render(120).join("\n"));
 			expect(rendered).toContain("Model catalogs refreshed.");
 		});

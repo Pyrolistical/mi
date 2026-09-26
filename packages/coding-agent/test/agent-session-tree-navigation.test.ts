@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { API_KEY, createTestSession, type TestSessionContext } from "./utilities.ts";
 
 describe.skipIf(!API_KEY)("AgentSession tree navigation e2e", () => {
@@ -77,7 +77,7 @@ describe.skipIf(!API_KEY)("AgentSession tree navigation e2e", () => {
 
 		expect(result.summaryEntry?.parentId).toBeNull();
 
-		expect(sessionManager.getLeafId()).toBe(result.summaryEntry?.id);
+		expect<unknown>(sessionManager.getLeafId()).toBe(result.summaryEntry?.id);
 	}, 120000);
 
 	it("should attach summary to correct parent when navigating to nested user message", async () => {
@@ -133,7 +133,7 @@ describe.skipIf(!API_KEY)("AgentSession tree navigation e2e", () => {
 
 		expect(result.summaryEntry?.parentId).toBe(a1.id);
 
-		expect(sessionManager.getLeafId()).toBe(result.summaryEntry?.id);
+		expect<unknown>(sessionManager.getLeafId()).toBe(result.summaryEntry?.id);
 	}, 120000);
 
 	it("should handle abort during summarization", async () => {

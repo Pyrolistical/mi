@@ -1,5 +1,5 @@
 import { Type } from "typebox";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { complete } from "../src/compat.ts";
 import type { Api, Context, Model, StreamOptions, Tool } from "../src/types.ts";
 
@@ -74,8 +74,12 @@ describe("Tool Call Without Result Tests", () => {
 			api: "openai-completions",
 		};
 
-		it("should filter out tool calls without corresponding tool results", { retry: 3, timeout: 30000 }, async () => {
-			await testToolCallWithoutResult(model);
-		});
+		it(
+			"should filter out tool calls without corresponding tool results",
+			async () => {
+				await testToolCallWithoutResult(model);
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 	});
 });

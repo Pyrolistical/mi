@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryModelsStore } from "@earendil-works/pi-ai";
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "bun:test";
 import { parseArgs } from "../src/cli/args.ts";
 import { AuthCommandError, isAuthCommandHelp, parseAuthCommand } from "../src/cli/auth-command.ts";
 import { resolveCredentialForPrint } from "../src/cli/credential-print.ts";
@@ -51,9 +51,9 @@ describe("credential print commands", () => {
 			const stderr = errorSpy.mock.calls.map(([message]) => String(message)).join("\n");
 			expect(stderr).toContain('Unknown option --credentails for "auth check".');
 			expect(stderr).toContain(
-				'Use "pi --help" or "pi auth check --provider <provider> [--json] [--credentials]".',
+				'Use "mi --help" or "mi auth check --provider <provider> [--json] [--credentials]".',
 			);
-			expect(process.exitCode).toBe(1);
+			expect<unknown>(process.exitCode).toBe(1);
 		} finally {
 			process.exitCode = originalExitCode ?? 0;
 			errorSpy.mockRestore();

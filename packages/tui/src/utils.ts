@@ -1,4 +1,3 @@
-import { eastAsianWidth } from "get-east-asian-width";
 
 const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 const wordSegmenter = new Intl.Segmenter(undefined, { granularity: "word" });
@@ -183,7 +182,7 @@ function graphemeWidth(segment: string): number {
 		return 2;
 	}
 
-	let width = eastAsianWidth(cp);
+	let width = codePointWidth(cp);
 
 	let followsMark = false;
 	const chars = [...base];
@@ -196,7 +195,7 @@ function graphemeWidth(segment: string): number {
 		} else if (!nonPrintingCharRegex.test(char)) {
 			const c = char.codePointAt(0)!;
 			if (followsMark || (c >= 0xff00 && c <= 0xffef)) {
-				width += eastAsianWidth(c);
+				width += codePointWidth(c);
 			} else if (c === 0x0e33 || c === 0x0eb3) {
 				width += 1;
 			}
@@ -205,6 +204,10 @@ function graphemeWidth(segment: string): number {
 	}
 
 	return width;
+}
+
+function codePointWidth(cp: number): number {
+	return Bun.stringWidth(String.fromCodePoint(cp)) === 2 ? 2 : 1;
 }
 
 export function visibleWidth(str: string): number {

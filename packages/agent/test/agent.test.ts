@@ -1,6 +1,6 @@
 import { type AssistantMessage, type AssistantMessageEvent, EventStream, getCurrentSystemMessage, toToolDeclaration, type UserMessage } from "@earendil-works/pi-ai/compat";
 import { Type } from "typebox";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import {
 	Agent,
 	type AgentEvent,
@@ -636,7 +636,7 @@ describe("Agent", () => {
 		const newMessage = { role: "assistant" as const, content: [{ type: "text" as const, text: "Hi" }] };
 		agent.state.messages.push(newMessage as any);
 		expect(agent.state.messages).toHaveLength(2);
-		expect(agent.state.messages[1]).toBe(newMessage);
+		expect<unknown>(agent.state.messages[1]).toBe(newMessage);
 
 		agent.state.messages = [];
 		expect(agent.state.messages).toEqual([]);

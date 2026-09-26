@@ -11,7 +11,7 @@ import {
 	type TranscriptContext,
 } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { createAgentSession } from "../src/core/sdk.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";

@@ -6,11 +6,11 @@
 		"packages/*"
 	],
 	"devDependencies": {
-		"@types/node": "22.19.19",
+		"@types/bun": "^1.4.0",
 		"typescript": "6.0.3"
 	},
 	"engines": {
-		"node": ">=22.19.0"
+		"bun": ">=1.4.0"
 	},
 	"version": "0.0.3"
 }

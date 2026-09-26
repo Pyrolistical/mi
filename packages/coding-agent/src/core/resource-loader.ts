@@ -1,6 +1,5 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename, dirname, join, resolve, sep } from "node:path";
-import chalk from "chalk";
 import { CONFIG_DIR_NAME } from "../config.ts";
 import type { ResourceDiagnostic } from "./diagnostics.ts";
 
@@ -25,6 +24,7 @@ import type { Skill } from "./skills.ts";
 import { loadSkills } from "./skills.ts";
 import { createSourceInfo, type SourceInfo } from "./source-info.ts";
 import { resetTimings } from "./timings.ts";
+import { yellow } from "../utils/colors.ts";
 
 export interface ResourceExtensionPaths {
 	skillPaths?: Array<{ path: string; metadata: PathMetadata }>;
@@ -53,7 +53,7 @@ function resolvePromptInput(input: string | undefined, description: string): str
 		try {
 			return stripBom(readFileSync(input, "utf-8"));
 		} catch (error) {
-			console.error(chalk.yellow(`Warning: Could not read ${description} file ${input}: ${error}`));
+			console.error(yellow(`Warning: Could not read ${description} file ${input}: ${error}`));
 			return input;
 		}
 	}
@@ -75,7 +75,7 @@ function loadContextFileFromDir(dir: string): { path: string; content: string } 
 					content: stripBom(readFileSync(filePath, "utf-8")),
 				};
 			} catch (error) {
-				console.error(chalk.yellow(`Warning: Could not read ${filePath}: ${error}`));
+				console.error(yellow(`Warning: Could not read ${filePath}: ${error}`));
 			}
 		}
 	}

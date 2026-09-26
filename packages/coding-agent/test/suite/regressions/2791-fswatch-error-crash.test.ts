@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { closeWatcher, watchWithErrorHandler } from "../../../src/utils/fs-watch.ts";
 
 describe("issue #2791 fs.watch error event crashes process", () => {

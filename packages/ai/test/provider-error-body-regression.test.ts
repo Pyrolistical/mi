@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "bun:test";
+import { openAIHttpModule } from "./openai-http-mock.ts";
 import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
 import type { Model } from "../src/types.ts";
 
@@ -13,15 +14,11 @@ class FakeAPIError extends Error {
 	}
 }
 
-const bedrockMock = vi.hoisted(() => ({
-	sendError: undefined as unknown,
-}));
-
-const openaiMock = vi.hoisted(() => ({
+const openaiMock = {
 	parsedBody: { error: "blocked by gateway WAF" } as unknown,
-}));
+};
 
-vi.mock("openai", () => {
+vi.mock("../src/api/openai-http.ts", () => {
 	function throwingCreate() {
 		const promise = Promise.resolve(undefined) as unknown as { withResponse: () => Promise<never> };
 		promise.withResponse = async () => {
@@ -32,43 +29,7 @@ vi.mock("openai", () => {
 	class FakeOpenAI {
 		chat = { completions: { create: throwingCreate } };
 	}
-	return { default: FakeOpenAI };
-});
-
-vi.mock("@aws-sdk/client-bedrock-runtime", () => {
-	class BedrockRuntimeServiceException extends Error {}
-
-	class BedrockRuntimeClient {
-		middlewareStack = { add: () => {} };
-		send(): Promise<never> {
-			return Promise.reject(bedrockMock.sendError);
-		}
-	}
-
-	class ConverseStreamCommand {
-		readonly input: unknown;
-		constructor(input: unknown) {
-			this.input = input;
-		}
-	}
-
-	return {
-		BedrockRuntimeClient,
-		BedrockRuntimeServiceException,
-		ConverseStreamCommand,
-		StopReason: {
-			END_TURN: "end_turn",
-			STOP_SEQUENCE: "stop_sequence",
-			MAX_TOKENS: "max_tokens",
-			MODEL_CONTEXT_WINDOW_EXCEEDED: "model_context_window_exceeded",
-			TOOL_USE: "tool_use",
-		},
-		CachePointType: { DEFAULT: "default" },
-		CacheTTL: { ONE_HOUR: "ONE_HOUR" },
-		ConversationRole: { ASSISTANT: "assistant", USER: "user" },
-		ImageFormat: { JPEG: "jpeg", PNG: "png", GIF: "gif", WEBP: "webp" },
-		ToolResultStatus: { ERROR: "error", SUCCESS: "success" },
-	};
+	return openAIHttpModule(() => new FakeOpenAI());
 });
 
 import { normalizeContext } from "../src/compat.ts";
@@ -129,5 +90,6 @@ describe("provider error body passthrough (per-tier regression)", () => {
 		const occurrences = output.errorMessage?.match(/upstream WAF blocked policy XYZ/g) ?? [];
 		expect(occurrences).toHaveLength(1);
 	});
+
 
 });

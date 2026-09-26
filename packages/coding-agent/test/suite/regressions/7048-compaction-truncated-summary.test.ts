@@ -1,5 +1,5 @@
 import { type AssistantMessage, fauxAssistantMessage } from "@earendil-works/pi-ai";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "bun:test";
 import { createHarness, type Harness } from "../harness.ts";
 
 function seedCompactableSession(harness: Harness): void {

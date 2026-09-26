@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, setSystemTime, vi } from "bun:test";
 import { uuidv7 } from "../src/utils/uuid.ts";
 
 const UUID_V7_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -10,19 +10,19 @@ function parseTimestamp(uuid: string): number {
 
 afterEach(() => {
 	vi.useRealTimers();
-	vi.unstubAllGlobals();
+	vi.restoreAllMocks();
 });
 
 describe("uuidv7", () => {
 	it("generates ordered UUIDv7s while preserving follower timestamps", () => {
 		vi.useFakeTimers();
-		vi.setSystemTime(TIMESTAMP);
+		setSystemTime(TIMESTAMP);
 
 		const first = uuidv7();
 		const second = uuidv7();
-		vi.setSystemTime(TIMESTAMP - 1);
+		setSystemTime(TIMESTAMP - 1);
 		const afterRollback = uuidv7();
-		vi.setSystemTime(TIMESTAMP + 1);
+		setSystemTime(TIMESTAMP + 1);
 		const afterAdvance = uuidv7();
 		const ordinaryIds = [first, second, afterRollback, afterAdvance];
 		const followerTimestamp = TIMESTAMP - 1_000;
@@ -38,10 +38,9 @@ describe("uuidv7", () => {
 
 	it("uses fresh randomness for every UUID tail", () => {
 		let randomByte = 0;
-		vi.stubGlobal("crypto", {
-			getRandomValues(bytes: Uint8Array) {
-				return bytes.fill(++randomByte);
-			},
+		vi.spyOn(crypto, "getRandomValues").mockImplementation((bytes) => {
+			if (bytes instanceof Uint8Array) bytes.fill(++randomByte);
+			return bytes;
 		});
 
 		expect([uuidv7(TIMESTAMP).slice(-8), uuidv7(TIMESTAMP).slice(-8)]).toEqual(["01010101", "02020202"]);

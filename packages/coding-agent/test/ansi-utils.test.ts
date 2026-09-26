@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { stripAnsi } from "../src/utils/ansi.ts";
 
 function referenceAnsiRegex(): RegExp {

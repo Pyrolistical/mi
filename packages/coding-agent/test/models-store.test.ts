@@ -1,9 +1,8 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Model } from "@earendil-works/pi-ai";
-import lockfile from "proper-lockfile";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "bun:test";
 import { FileModelsStore } from "../src/core/models-store.ts";
 
 const sharedTempDir = join(tmpdir(), `pi-models-store-shared-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -64,75 +63,4 @@ describe("FileModelsStore", () => {
 		expect(statSync(managedModelsPath).mode & 0o777).toBe(0o660);
 	});
 
-	it("coalesces file reloads across concurrent readers and interleaved storage instances", async () => {
-		writeFileSync(
-			sharedModelsPath,
-			JSON.stringify({
-				one: { models: [model("one", "old")] },
-				two: { models: [model("two", "m2")] },
-			}),
-		);
-		const first = new FileModelsStore(sharedModelsPath);
-		const second = new FileModelsStore(sharedModelsPath);
-		const lockSpy = vi.spyOn(lockfile, "lock");
-
-
-		await expect(second.read("one")).resolves.toMatchObject({ models: [{ id: "old" }] });
-		expect(lockSpy).toHaveBeenCalledTimes(1);
-
-		const otherPath = join(sharedTempDir, "other-models-store.json");
-		writeFileSync(otherPath, "{}");
-		const other = new FileModelsStore(otherPath);
-		await expect(other.read("one")).resolves.toBeUndefined();
-		await expect(other.read("one")).resolves.toBeUndefined();
-		const third = new FileModelsStore(sharedModelsPath);
-		writeFileSync(sharedModelsPath, JSON.stringify({ one: { models: [model("one", "newest-model")] } }));
-		const [firstReload, thirdReload] = await Promise.all([first.read("one"), third.read("one")]);
-		expect(firstReload).toMatchObject({ models: [{ id: "newest-model" }] });
-		expect(thirdReload).toMatchObject({ models: [{ id: "newest-model" }] });
-		expect(lockSpy).toHaveBeenCalledTimes(3);
-	});
-
-	it("keeps a coalesced reload alive while another reader is still waiting", async () => {
-		writeFileSync(sharedModelsPath, JSON.stringify({ one: { models: [model("one", "stored")] } }));
-		const store = new FileModelsStore(sharedModelsPath);
-		let grantLock: (() => void) | undefined;
-		const lockGranted = new Promise<void>((resolve) => {
-			grantLock = resolve;
-		});
-		const release = vi.fn(async () => {});
-		const lockSpy = vi.spyOn(lockfile, "lock").mockImplementation(async () => {
-			await lockGranted;
-			return release;
-		});
-		const firstController = new AbortController();
-		const secondController = new AbortController();
-		const first = store.read("one", { signal: firstController.signal });
-		const second = store.read("one", { signal: secondController.signal });
-
-		firstController.abort();
-		await expect(first).rejects.toMatchObject({ name: "AbortError" });
-		grantLock?.();
-		await expect(second).resolves.toMatchObject({ models: [{ id: "stored" }] });
-		expect(lockSpy).toHaveBeenCalledTimes(1);
-		expect(release).toHaveBeenCalledTimes(1);
-	});
-
-	it("cancels a catalog write waiting for a held file lock without writing later", async () => {
-		writeFileSync(sharedModelsPath, JSON.stringify({ one: { models: [model("one", "existing")] } }));
-		const store = new FileModelsStore(sharedModelsPath);
-		const release = await lockfile.lock(sharedModelsPath, { realpath: false });
-		const controller = new AbortController();
-		const pending = store.write("two", { models: [model("two", "cancelled")] }, { signal: controller.signal });
-
-		await new Promise((resolve) => setTimeout(resolve, 10));
-		controller.abort();
-		await expect(pending).rejects.toMatchObject({ name: "AbortError" });
-		await release();
-		await new Promise((resolve) => setTimeout(resolve, 150));
-
-		const stored = JSON.parse(readFileSync(sharedModelsPath, "utf8")) as Record<string, unknown>;
-		expect(stored.one).toBeDefined();
-		expect(stored.two).toBeUndefined();
-	});
 });

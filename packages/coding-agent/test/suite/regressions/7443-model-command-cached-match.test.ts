@@ -1,5 +1,5 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "bun:test";
 import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
 import { createHarness, type Harness } from "../harness.ts";
 
@@ -39,7 +39,7 @@ describe("issue #7443 /model cached match", () => {
 
 		await expect(findExactModelMatch.call(context, "not-cached")).resolves.toBeUndefined();
 
-		expect(refresh).toHaveBeenCalledOnce();
+		expect(refresh).toHaveBeenCalledTimes(1);
 		expect(refresh.mock.calls[0]?.[0]?.signal).toBeInstanceOf(AbortSignal);
 		expect(context.showStatus).toHaveBeenCalledWith("Refreshing model catalogs…");
 	});

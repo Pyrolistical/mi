@@ -1,14 +1,14 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { openAIHttpModule } from "./openai-http-mock.ts";
 import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
 import { normalizeContext } from "../src/compat.ts";
-import type { Model } from "../src/types.ts";
+import type { Model, ProviderHeaders } from "../src/types.ts";
 import { openaiModel } from "./openai-models.ts";
 
 interface FakeOpenAIClientOptions {
 	apiKey: string;
 	baseURL: string;
-	dangerouslyAllowBrowser: boolean;
-	defaultHeaders?: Record<string, string>;
+	defaultHeaders?: ProviderHeaders;
 }
 
 interface CapturedCompletionsPayload {
@@ -17,12 +17,12 @@ interface CapturedCompletionsPayload {
 	session_id?: string;
 }
 
-const mockState = vi.hoisted(() => ({
+const mockState = {
 	lastParams: undefined as CapturedCompletionsPayload | undefined,
 	lastClientOptions: undefined as FakeOpenAIClientOptions | undefined,
-}));
+};
 
-vi.mock("openai", () => {
+vi.mock("../src/api/openai-http.ts", () => {
 	class FakeOpenAI {
 		chat = {
 			completions: {
@@ -61,23 +61,23 @@ vi.mock("openai", () => {
 		}
 	}
 
-	return { default: FakeOpenAI };
+	return openAIHttpModule((options) => new FakeOpenAI(options));
 });
 
 describe("openai-completions prompt caching", () => {
-	const originalEnv = process.env.PI_CACHE_RETENTION;
+	const originalEnv = process.env.MI_CACHE_RETENTION;
 
 	beforeEach(() => {
 		mockState.lastParams = undefined;
 		mockState.lastClientOptions = undefined;
-		delete process.env.PI_CACHE_RETENTION;
+		delete process.env.MI_CACHE_RETENTION;
 	});
 
 	afterEach(() => {
 		if (originalEnv === undefined) {
-			delete process.env.PI_CACHE_RETENTION;
+			delete process.env.MI_CACHE_RETENTION;
 		} else {
-			process.env.PI_CACHE_RETENTION = originalEnv;
+			process.env.MI_CACHE_RETENTION = originalEnv;
 		}
 	});
 
@@ -145,8 +145,8 @@ describe("openai-completions prompt caching", () => {
 		expect(payload?.prompt_cache_retention).toBeUndefined();
 	});
 
-	it("uses PI_CACHE_RETENTION", async () => {
-		process.env.PI_CACHE_RETENTION = "long";
+	it("uses MI_CACHE_RETENTION", async () => {
+		process.env.MI_CACHE_RETENTION = "long";
 		const { payload } = await captureRequest({ sessionId: "session-env" });
 
 		expect(payload?.prompt_cache_key).toBe("session-env");

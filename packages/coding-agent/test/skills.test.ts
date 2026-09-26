@@ -1,6 +1,6 @@
 import { homedir } from "os";
 import { join, resolve } from "path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import type { ResourceDiagnostic } from "../src/core/diagnostics.ts";
 import { formatSkillsForPrompt, loadSkills, loadSkillsFromDir, type Skill } from "../src/core/skills.ts";
 import { createSyntheticSourceInfo } from "../src/core/source-info.ts";

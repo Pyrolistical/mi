@@ -1,6 +1,6 @@
 import type { Usage } from "@earendil-works/pi-ai";
 import { Container } from "@earendil-works/pi-tui";
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi } from "bun:test";
 import type { SessionEntry } from "../src/core/session-manager.ts";
 import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
@@ -240,7 +240,7 @@ describe("InteractiveMode compaction events", () => {
 
 		restoreQueuedMessagesToEditor.call(ui, { abort: true });
 
-		expect(abort).toHaveBeenCalledOnce();
+		expect(abort).toHaveBeenCalledTimes(1);
 	});
 
 	test("preserves steering behavior when flushing into an active agent run", async () => {

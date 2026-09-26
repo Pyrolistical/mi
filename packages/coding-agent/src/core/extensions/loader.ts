@@ -1,11 +1,9 @@
 import * as fs from "node:fs";
 import { createRequire } from "node:module";
 import * as path from "node:path";
-import { fileURLToPath } from "node:url";
 import type { Provider } from "@earendil-works/pi-ai";
 import type { KeyId } from "@earendil-works/pi-tui";
-import type { createJiti } from "jiti";
-import { CONFIG_DIR_NAME, getAgentDir, isBunBinary, isBundledNode } from "../../config.ts";
+import { CONFIG_DIR_NAME, getAgentDir } from "../../config.ts";
 import { resolvePath } from "../../utils/paths.ts";
 import { createEventBus, type EventBus } from "../event-bus.ts";
 import type { ExecOptions } from "../exec.ts";
@@ -28,83 +26,28 @@ import type {
 
 const require = createRequire(import.meta.url);
 
-const isNodeSeaBinary =
-	("sea" in process.features && process.features.sea === true) ||
-	process.getBuiltinModule("node:sea")?.isSea() === true;
-const isTypeScriptSourceRuntime = !isBunBinary && path.extname(fileURLToPath(import.meta.url)) === ".ts";
-const usesEmbeddedModules = isBunBinary || isNodeSeaBinary || isBundledNode;
+let virtualModulesRegistration: Promise<void> | undefined;
 
-let createJitiPromise: Promise<typeof createJiti> | undefined;
-
-function getCreateJiti(): Promise<typeof createJiti> {
-	createJitiPromise ??= (usesEmbeddedModules ? import("./jiti-static-loader.ts") : import("./jiti-loader.ts")).then(
-		(module) => module.createJiti,
-	);
-	return createJitiPromise;
+function registerVirtualModules(): Promise<void> {
+	virtualModulesRegistration ??= import("./virtual-modules.ts").then(({ VIRTUAL_MODULES }) => {
+		Bun.plugin({
+			name: "mi-extension-modules",
+			setup(build) {
+				for (const [specifier, exports] of Object.entries(VIRTUAL_MODULES)) {
+					build.module(specifier, () => ({ exports: exports as Record<string, unknown>, loader: "object" }));
+				}
+			},
+		});
+	});
+	return virtualModulesRegistration;
 }
 
-let virtualModulesPromise: Promise<Record<string, unknown>> | undefined;
-
-function getVirtualModules(): Promise<Record<string, unknown>> {
-	virtualModulesPromise ??= import("./virtual-modules.ts").then((module) => module.VIRTUAL_MODULES);
-	return virtualModulesPromise;
-}
-
-let _aliases: Record<string, string> | null = null;
-
-function getAliases(): Record<string, string> {
-	if (_aliases) return _aliases;
-
-	const __dirname = path.dirname(fileURLToPath(import.meta.url));
-	const packageIndex = path.resolve(__dirname, "../..", "index.js");
-
-	const typeboxEntry = require.resolve("typebox");
-	const typeboxCompileEntry = require.resolve("typebox/compile");
-	const typeboxValueEntry = require.resolve("typebox/value");
-
-	const packagesRoot = path.resolve(__dirname, "../../../../");
-	const resolveWorkspaceOrImport = (workspaceRelativePath: string, specifier: string): string => {
-		const workspacePath = path.join(packagesRoot, workspaceRelativePath);
-		if (fs.existsSync(workspacePath)) {
-			return workspacePath;
-		}
-		return fileURLToPath(import.meta.resolve(specifier));
-	};
-
-	const piCodingAgentEntry = packageIndex;
-	const piAgentCoreEntry = resolveWorkspaceOrImport("agent/dist/index.js", "@earendil-works/pi-agent-core");
-	const piTuiEntry = resolveWorkspaceOrImport("tui/dist/index.js", "@earendil-works/pi-tui");
-	const piAiCompatEntry = resolveWorkspaceOrImport("ai/dist/compat.js", "@earendil-works/pi-ai/compat");
-	const piAiOauthEntry = resolveWorkspaceOrImport("ai/dist/oauth.js", "@earendil-works/pi-ai/oauth");
-	const piAiProvidersEntry = resolveWorkspaceOrImport(
-		"ai/dist/providers/all.js",
-		"@earendil-works/pi-ai/providers/all",
-	);
-
-	_aliases = {
-		"@earendil-works/pi-coding-agent": piCodingAgentEntry,
-		"@earendil-works/pi-agent-core": piAgentCoreEntry,
-		"@earendil-works/pi-tui": piTuiEntry,
-		"@earendil-works/pi-ai/providers/all": piAiProvidersEntry,
-		"@earendil-works/pi-ai/compat": piAiCompatEntry,
-		"@earendil-works/pi-ai/oauth": piAiOauthEntry,
-		"@earendil-works/pi-ai": piAiCompatEntry,
-		"@mariozechner/pi-coding-agent": piCodingAgentEntry,
-		"@mariozechner/pi-agent-core": piAgentCoreEntry,
-		"@mariozechner/pi-tui": piTuiEntry,
-		"@mariozechner/pi-ai/providers/all": piAiProvidersEntry,
-		"@mariozechner/pi-ai/compat": piAiCompatEntry,
-		"@mariozechner/pi-ai/oauth": piAiOauthEntry,
-		"@mariozechner/pi-ai": piAiCompatEntry,
-		typebox: typeboxEntry,
-		"typebox/compile": typeboxCompileEntry,
-		"typebox/value": typeboxValueEntry,
-		"@sinclair/typebox": typeboxEntry,
-		"@sinclair/typebox/compile": typeboxCompileEntry,
-		"@sinclair/typebox/value": typeboxValueEntry,
-	};
-
-	return _aliases;
+function evictModuleCache(directory: string): void {
+	const prefix = `${directory}${path.sep}`;
+	const nodeModules = `${path.sep}node_modules${path.sep}`;
+	for (const key of Object.keys(require.cache)) {
+		if (key.startsWith(prefix) && !key.includes(nodeModules)) delete require.cache[key];
+	}
 }
 
 type HandlerFn = (...args: unknown[]) => Promise<unknown>;
@@ -456,19 +399,10 @@ async function loadExtensionModule(extensionPath: string, cacheToken?: Extension
 		}
 	}
 
-	const createJitiImpl = await getCreateJiti();
-	const resolutionOptions = usesEmbeddedModules
-		? { virtualModules: await getVirtualModules(), tryNative: false }
-		: isTypeScriptSourceRuntime
-			? { virtualModules: await getVirtualModules(), tsconfigPaths: true }
-			: { alias: getAliases() };
-	const jiti = createJitiImpl(import.meta.url, {
-		moduleCache: false,
-		...resolutionOptions,
-	});
-
-	const module = await jiti.import(extensionPath, { default: true });
-	const factory = module as ExtensionFactory;
+	await registerVirtualModules();
+	evictModuleCache(path.dirname(extensionPath));
+	const module = (await import(extensionPath)) as { default?: unknown };
+	const factory = module.default as ExtensionFactory;
 	if (typeof factory !== "function") {
 		return undefined;
 	}
@@ -641,7 +575,7 @@ function discoverExtensionsInDir(dir: string): string[] {
 	const discovered: string[] = [];
 
 	try {
-		const entries = fs.readdirSync(dir, { withFileTypes: true });
+		const entries = fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1));
 
 		for (const entry of entries) {
 			const entryPath = path.join(dir, entry.name);

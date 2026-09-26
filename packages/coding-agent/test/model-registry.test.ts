@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { normalizeContext } from "@earendil-works/pi-ai";
 import type { Api, Model, OpenAICompletionsCompat } from "@earendil-works/pi-ai/compat";
 import { getApiProvider, getSupportedThinkingLevels } from "@earendil-works/pi-ai/compat";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "bun:test";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import type { ModelsJsonProvider } from "../src/core/model-config.ts";
 import type { ModelRegistry, ProviderConfigInput } from "../src/core/model-registry.ts";

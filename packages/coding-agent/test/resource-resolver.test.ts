@@ -1,8 +1,7 @@
 import { mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PassThrough } from "node:stream";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import { type ResolvedResource, ResourceResolver } from "../src/core/resource-resolver.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 
@@ -38,8 +37,8 @@ describe("ResourceResolver", () => {
 	let previousOfflineEnv: string | undefined;
 
 	beforeEach(() => {
-		previousOfflineEnv = process.env.PI_OFFLINE;
-		delete process.env.PI_OFFLINE;
+		previousOfflineEnv = process.env.MI_OFFLINE;
+		delete process.env.MI_OFFLINE;
 		tempDir = join(tmpdir(), `pm-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 		mkdirSync(tempDir, { recursive: true });
 		agentDir = join(tempDir, "agent");
@@ -55,12 +54,11 @@ describe("ResourceResolver", () => {
 
 	afterEach(() => {
 		if (previousOfflineEnv === undefined) {
-			delete process.env.PI_OFFLINE;
+			delete process.env.MI_OFFLINE;
 		} else {
-			process.env.PI_OFFLINE = previousOfflineEnv;
+			process.env.MI_OFFLINE = previousOfflineEnv;
 		}
 		vi.restoreAllMocks();
-		vi.unstubAllGlobals();
 		rmSync(tempDir, { recursive: true, force: true });
 	});
 

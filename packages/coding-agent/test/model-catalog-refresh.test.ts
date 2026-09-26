@@ -1,5 +1,6 @@
 import type { ModelsRefreshOptions, ModelsRefreshResult } from "@earendil-works/pi-ai";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "bun:test";
+import { waitFor } from "./test-helpers.ts";
 import { refreshModelCatalogs } from "../src/modes/interactive/model-catalog-refresh.ts";
 
 interface Deferred<T> {
@@ -29,7 +30,7 @@ describe("interactive model catalog refresh", () => {
 		const first = refreshModelCatalogs(runtime, firstController.signal);
 		const second = refreshModelCatalogs(runtime, secondController.signal);
 
-		expect(runtime.refresh).toHaveBeenCalledOnce();
+		expect(runtime.refresh).toHaveBeenCalledTimes(1);
 		deferred.resolve(successfulRefresh());
 		await expect(first).resolves.toEqual(successfulRefresh());
 		await expect(second).resolves.toEqual(successfulRefresh());
@@ -70,7 +71,7 @@ describe("interactive model catalog refresh", () => {
 
 		firstController.abort();
 		await expect(first).rejects.toMatchObject({ name: "AbortError" });
-		await vi.waitFor(() => expect(refreshSignals[0]?.aborted).toBe(true));
+		await waitFor(() => expect(refreshSignals[0]?.aborted).toBe(true));
 
 		const secondController = new AbortController();
 		const second = refreshModelCatalogs(runtime, secondController.signal);

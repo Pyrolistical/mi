@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { createAgentSession } from "../src/core/sdk.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { openaiModel } from "../../ai/test/openai-models.ts";
@@ -111,14 +111,14 @@ describe("createAgentSession session manager defaults", () => {
 		const bashTool = session.agent.state.tools.find((tool) => tool.name === "bash");
 		expect(bashTool).toBeTruthy();
 		const result = await bashTool!.execute("test", {
-			command: `printf '%s\\n' "$PI_SESSION_ID" "$PI_SESSION_FILE" "$PI_PROVIDER" "$PI_MODEL" "$PI_REASONING_LEVEL"`,
+			command: `printf '%s\\n' "$MI_SESSION_ID" "$MI_SESSION_FILE" "$MI_PROVIDER" "$MI_MODEL" "$MI_REASONING_LEVEL"`,
 		});
 		const output = result.content
 			.filter((item): item is { type: "text"; text: string } => item.type === "text")
 			.map((item) => item.text)
 			.join("");
 
-		expect(output.trim().split("\n")).toEqual([
+		expect<unknown>(output.trim().split("\n")).toEqual([
 			session.sessionId,
 			session.sessionFile,
 			model!.provider,

@@ -1,9 +1,8 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { type Api, type AuthOperationOptions, type Model, modelsAreEqual } from "@earendil-works/pi-ai";
-import chalk from "chalk";
-import { minimatch } from "minimatch";
 import { isValidThinkingLevel } from "../cli/args.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
+import { yellow } from "../utils/colors.ts";
 
 export interface ScopedModel {
 	model: Model<Api>;
@@ -196,7 +195,8 @@ export function resolveModelScopeFromModels(
 
 			const matchingModels = availableModels.filter((m) => {
 				const fullId = `${m.provider}/${m.id}`;
-				return minimatch(fullId, globPattern, { nocase: true }) || minimatch(m.id, globPattern, { nocase: true });
+				const glob = new Bun.Glob(globPattern.toLowerCase());
+				return glob.match(fullId.toLowerCase()) || glob.match(m.id.toLowerCase());
 			});
 
 			if (matchingModels.length === 0) {
@@ -256,7 +256,7 @@ export async function resolveModelScope(
 ): Promise<ScopedModel[]> {
 	const { scopedModels, diagnostics } = await resolveModelScopeWithDiagnostics(patterns, modelRuntime, options);
 	for (const diagnostic of diagnostics) {
-		console.warn(chalk.yellow(`Warning: ${diagnostic.message}`));
+		console.warn(yellow(`Warning: ${diagnostic.message}`));
 	}
 	return scopedModels;
 }

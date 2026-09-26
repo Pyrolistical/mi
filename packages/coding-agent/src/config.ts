@@ -8,13 +8,8 @@ import { stripBom } from "./utils/text.ts";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-export const isBunBinary =
+const isBunBinary =
 	import.meta.url.includes("$bunfs") || import.meta.url.includes("~BUN") || import.meta.url.includes("%7EBUN");
-
-export const isBunRuntime = !!process.versions.bun;
-
-declare const PI_BUNDLED_NODE: boolean;
-export const isBundledNode = typeof PI_BUNDLED_NODE !== "undefined" && PI_BUNDLED_NODE;
 
 export function findNodePackageDir(startDir: string): string {
 	let dir = startDir;
@@ -32,7 +27,7 @@ export function findNodePackageDir(startDir: string): string {
 }
 
 export function getPackageDir(): string {
-	const envDir = process.env.PI_PACKAGE_DIR;
+	const envDir = process.env.MI_PACKAGE_DIR;
 	if (envDir) {
 		return normalizePath(envDir);
 	}

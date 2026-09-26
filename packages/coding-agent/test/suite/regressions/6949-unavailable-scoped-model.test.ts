@@ -1,6 +1,7 @@
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { setKeybindings } from "@earendil-works/pi-tui";
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
+import { waitFor } from "../../test-helpers.ts";
 import { KeybindingsManager } from "../../../src/core/keybindings.ts";
 import { ScopedModelsSelectorComponent } from "../../../src/modes/interactive/components/scoped-models-selector.ts";
 import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
@@ -148,7 +149,7 @@ describe("issue #6949 unavailable scoped models", () => {
 		if (!selector) throw new Error("Expected scoped-model selector to open");
 		selector.handleInput("\x1b[1;3B");
 
-		await vi.waitFor(() => {
+		await waitFor(() => {
 			expect(setScopedModels).toHaveBeenLastCalledWith([
 				{ model: two, thinkingLevel: undefined },
 				{ model: one, thinkingLevel: undefined },

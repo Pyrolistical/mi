@@ -7,8 +7,8 @@ test_root="$(mktemp -d "$temp_parent/pi-test.XXXXXX")"
 git_askpass="$(type -P false)"
 readonly temp_parent test_root git_askpass
 
-mkdir -p "$test_root/home/.config" "$test_root/tmp" "$test_root/cache/npm"
-touch "$test_root/.pi-test-owned" "$test_root/npm-userconfig" "$test_root/npm-globalconfig"
+mkdir -p "$test_root/home/.config" "$test_root/tmp" "$test_root/cache"
+touch "$test_root/.pi-test-owned"
 
 cleanup() {
 	local status=$?
@@ -52,11 +52,7 @@ test_env=(
 	"GIT_ASKPASS=$git_askpass"
 	"GIT_EDITOR=true"
 	"GIT_SEQUENCE_EDITOR=true"
-	"NPM_CONFIG_USERCONFIG=$test_root/npm-userconfig"
-	"NPM_CONFIG_GLOBALCONFIG=$test_root/npm-globalconfig"
-	"NPM_CONFIG_CACHE=$test_root/cache/npm"
-	"PI_NO_LOCAL_LLM=1"
-	"AWS_EC2_METADATA_DISABLED=true"
+	"MI_NO_LOCAL_LLM=1"
 )
 
 for name in SystemRoot SYSTEMROOT WINDIR COMSPEC PATHEXT; do
@@ -70,4 +66,10 @@ for name in CI GITHUB_ACTIONS; do
 done
 
 echo "Running tests without API keys in isolated home: $test_root/home"
-env -i "${test_env[@]}" npm test
+status=0
+for package_dir in packages/*/; do
+	[[ -f "$package_dir/package.json" ]] || continue
+	echo "Testing $package_dir"
+	(cd "$package_dir" && env -i "${test_env[@]}" bun test --parallel) || status=1
+done
+exit "$status"

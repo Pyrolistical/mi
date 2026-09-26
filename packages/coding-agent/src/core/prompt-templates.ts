@@ -139,7 +139,7 @@ function loadTemplatesFromDir(dir: string, getSourceInfo: (filePath: string) => 
 	}
 
 	try {
-		const entries = readdirSync(dir, { withFileTypes: true });
+		const entries = readdirSync(dir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1));
 
 		for (const entry of entries) {
 			const fullPath = join(dir, entry.name);

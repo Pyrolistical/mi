@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "bun:test";
+import { advanceTimersByTimeAsync } from "./fake-timers.ts";
 import { retryProviderRequest } from "../src/utils/provider-retry.ts";
 
 function providerError(status: number | undefined, headers?: Record<string, string>): Error {
@@ -21,9 +22,9 @@ describe("provider request retries", () => {
 			.mockResolvedValue("ok");
 
 		const result = retryProviderRequest(request, { maxRetries: 1 });
-		await vi.advanceTimersByTimeAsync(999);
+		await advanceTimersByTimeAsync(999);
 		expect(request).toHaveBeenCalledTimes(1);
-		await vi.advanceTimersByTimeAsync(1);
+		await advanceTimersByTimeAsync(1);
 
 		await expect(result).resolves.toBe("ok");
 		expect(request).toHaveBeenCalledTimes(2);
@@ -54,9 +55,9 @@ describe("provider request retries", () => {
 			.mockResolvedValue("ok");
 
 		const result = retryProviderRequest(request, { maxRetries: 1, maxRetryDelayMs: 0 });
-		await vi.advanceTimersByTimeAsync(1999);
+		await advanceTimersByTimeAsync(1999);
 		expect(request).toHaveBeenCalledTimes(1);
-		await vi.advanceTimersByTimeAsync(1);
+		await advanceTimersByTimeAsync(1);
 
 		await expect(result).resolves.toBe("ok");
 		expect(request).toHaveBeenCalledTimes(2);
@@ -68,7 +69,7 @@ describe("provider request retries", () => {
 		const request = vi.fn<() => Promise<string>>().mockRejectedValue(providerError(429, { "retry-after": "277403" }));
 
 		const result = retryProviderRequest(request, { maxRetries: 2, maxRetryDelayMs: 0, signal: controller.signal });
-		await vi.advanceTimersByTimeAsync(0);
+		await advanceTimersByTimeAsync(0);
 		expect(request).toHaveBeenCalledTimes(1);
 		expect(vi.getTimerCount()).toBe(1);
 

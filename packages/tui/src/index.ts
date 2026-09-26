@@ -1,4 +1,3 @@
-export { Marked, type Token, type Tokens } from "marked";
 export {
 	type AutocompleteItem,
 	type AutocompleteProvider,
@@ -50,7 +49,6 @@ export {
 	parseKey,
 	setKittyProtocolActive,
 } from "./keys.ts";
-export { type RenderLatexOptions, renderLatex } from "./latex.ts";
 export { StdinBuffer, type StdinBufferEventMap, type StdinBufferOptions } from "./stdin-buffer.ts";
 export { ProcessTerminal, type Terminal } from "./terminal.ts";
 export {

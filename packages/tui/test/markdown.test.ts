@@ -1,25 +1,9 @@
 import assert from "node:assert";
 import { afterEach, describe, it } from "node:test";
-import type { Terminal as XtermTerminalType } from "@xterm/headless";
-import { Chalk } from "chalk";
-import { Markdown, type MarkdownTheme } from "../src/components/markdown.ts";
+import { Markdown } from "../src/components/markdown.ts";
 import { resetCapabilitiesCache, setCapabilities } from "../src/terminal-image.ts";
-import type { Component, TUI } from "../src/tui.ts";
-import { TuiMainScreen } from "../src/tui-main-screen.ts";
+import { cyan, gray, magenta, yellow } from "./ansi.ts";
 import { defaultMarkdownTheme } from "./test-themes.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
-
-const chalk = new Chalk({ level: 3 });
-
-function getCell(terminal: VirtualTerminal, row: number, col: number) {
-	const xterm = (terminal as unknown as { xterm: XtermTerminalType }).xterm;
-	const buffer = xterm.buffer.active;
-	const line = buffer.getLine(buffer.viewportY + row);
-	assert.ok(line, `Missing buffer line at row ${row}`);
-	const cell = line.getCell(col);
-	assert.ok(cell, `Missing cell at row ${row} col ${col}`);
-	return cell;
-}
 
 function stripAnsi(line: string): string {
 	return line.replace(/\x1b\[[0-9;]*m/g, "");
@@ -134,34 +118,6 @@ describe("Markdown component", () => {
 			const lines = markdown.render(80).map((line) => stripAnsi(line).trimEnd());
 
 			assert.deepStrictEqual(lines, ["1. alpha", "2. beta", "3. gamma"]);
-		});
-
-		it("should preserve source list markers when configured", () => {
-			const markdown = new Markdown(
-				"  4. forth\n  3. third\n\n10) ten\n7) seven\n\n+ plus\n* star\n- minus\n+",
-				0,
-				0,
-				defaultMarkdownTheme,
-				undefined,
-				{
-					preserveOrderedListMarkers: true,
-				},
-			);
-
-			const lines = markdown.render(80).map((line) => stripAnsi(line).trimEnd());
-
-			assert.deepStrictEqual(lines, [
-				"4. forth",
-				"3. third",
-				"",
-				"10) ten",
-				"7) seven",
-				"",
-				"+ plus",
-				"* star",
-				"- minus",
-				"+",
-			]);
 		});
 
 		it("should render mixed ordered and unordered nested lists", () => {
@@ -451,104 +407,6 @@ describe("Markdown component", () => {
 			assert.ok(allText.includes("Install"), "Should contain 'Install'");
 		});
 
-		it("should not leak wrapped link styles into table borders or plain cells", async () => {
-			const source = `| Link | Plain |
-| --- | --- |
-| [**one two three four five six**](https://example.com) | normal text |`;
-
-			try {
-				for (const hyperlinks of [true, false]) {
-					setCapabilities({ images: null, hyperlinks });
-					const terminal = new VirtualTerminal(24, 16);
-					const tui: TUI = new TuiMainScreen(terminal);
-					tui.addChild(new Markdown(source, 0, 0, defaultMarkdownTheme));
-					tui.start();
-
-					try {
-						await terminal.waitForRender();
-						const viewport = terminal.getViewport();
-						const row = viewport.findIndex((line) => line.includes("one") && line.includes("norm"));
-						assert.notStrictEqual(row, -1, `Missing wrapped table row: ${JSON.stringify(viewport)}`);
-						const line = viewport[row];
-						const linkCol = line.indexOf("one");
-						const separatorCol = line.indexOf("│", linkCol);
-						const plainCol = line.indexOf("norm");
-						assert.ok(linkCol >= 0 && separatorCol > linkCol && plainCol > separatorCol);
-						assert.strictEqual(getCell(terminal, row, linkCol).isFgDefault(), false);
-						assert.strictEqual(getCell(terminal, row, separatorCol).isFgDefault(), true);
-						assert.strictEqual(getCell(terminal, row, plainCol).isFgDefault(), true);
-						assert.notStrictEqual(getCell(terminal, row, linkCol).isBold(), 0);
-						assert.strictEqual(getCell(terminal, row, separatorCol).isBold(), 0);
-						assert.strictEqual(getCell(terminal, row, plainCol).isBold(), 0);
-
-						if (!hyperlinks) {
-							const urlRow = viewport.findIndex((viewportLine) => viewportLine.includes("https"));
-							assert.notStrictEqual(urlRow, -1, `Missing fallback URL row: ${JSON.stringify(viewport)}`);
-							const urlLine = viewport[urlRow];
-							const urlCol = urlLine.indexOf("https");
-							const urlSeparatorCol = urlLine.indexOf("│", urlCol);
-							const urlBorderCol = urlLine.lastIndexOf("│");
-							assert.ok(urlCol >= 0 && urlSeparatorCol > urlCol && urlBorderCol > urlSeparatorCol);
-							assert.notStrictEqual(getCell(terminal, urlRow, urlCol).isDim(), 0);
-							assert.strictEqual(getCell(terminal, urlRow, urlSeparatorCol).isDim(), 0);
-							assert.strictEqual(getCell(terminal, urlRow, urlBorderCol).isDim(), 0);
-						}
-					} finally {
-						tui.stop();
-					}
-				}
-			} finally {
-				resetCapabilitiesCache();
-			}
-		});
-
-		it("should restore the enclosing style after a wrapped table link", async () => {
-			const quoteColor = 0x123456;
-			const theme: MarkdownTheme = {
-				...defaultMarkdownTheme,
-				quote: (text) => `\x1b[38;2;18;52;86m${text}\x1b[39m`,
-				link: (text) => `\x1b[38;2;129;162;190m${text}\x1b[39m`,
-			};
-			const source = `> | Link | Plain |
-> | --- | --- |
-> | [one two three four five six](https://example.com) | normal text |`;
-
-			setCapabilities({ images: null, hyperlinks: true });
-			const terminal = new VirtualTerminal(28, 10);
-			const tui: TUI = new TuiMainScreen(terminal);
-			tui.addChild(new Markdown(source, 0, 0, theme));
-			tui.start();
-
-			try {
-				await terminal.waitForRender();
-				const viewport = terminal.getViewport();
-				const row = viewport.findIndex((line) => line.includes("one") && line.includes("normal"));
-				assert.notStrictEqual(row, -1, `Missing wrapped blockquote table row: ${JSON.stringify(viewport)}`);
-				const line = viewport[row];
-				const linkCol = line.indexOf("one");
-				const separatorCol = line.indexOf("│", linkCol);
-				const plainCol = line.indexOf("normal");
-				assert.ok(linkCol >= 0 && separatorCol > linkCol && plainCol > separatorCol);
-
-				assert.notStrictEqual(getCell(terminal, row, linkCol).getFgColor(), quoteColor);
-				assert.strictEqual(getCell(terminal, row, separatorCol).getFgColor(), quoteColor);
-				assert.strictEqual(getCell(terminal, row, plainCol).getFgColor(), quoteColor);
-
-				const finalRow = viewport.findIndex((line) => line.includes("five six"));
-				assert.notStrictEqual(finalRow, -1, `Missing final wrapped link row: ${JSON.stringify(viewport)}`);
-				const finalLine = viewport[finalRow];
-				const finalLinkCol = finalLine.indexOf("five six");
-				const finalSeparatorCol = finalLine.indexOf("│", finalLinkCol);
-				const finalBorderCol = finalLine.lastIndexOf("│");
-				assert.ok(finalLinkCol >= 0 && finalSeparatorCol > finalLinkCol && finalBorderCol > finalSeparatorCol);
-				assert.strictEqual(getCell(terminal, finalRow, finalSeparatorCol).getFgColor(), quoteColor);
-				assert.strictEqual(getCell(terminal, finalRow, finalBorderCol).getFgColor(), quoteColor);
-			} finally {
-				tui.stop();
-				resetCapabilitiesCache();
-			}
-		});
-
 		it("should wrap long cell content to multiple lines", () => {
 			const markdown = new Markdown(
 				`| Header |
@@ -745,206 +603,6 @@ describe("Markdown component", () => {
 		});
 	});
 
-	describe("LaTeX math", () => {
-		it("renders inline dollar and parenthesis delimiters", () => {
-			const markdown = new Markdown(
-				String.raw`A map $\mathbb{C}^3 \to \mathbb{C}^3$, $xy$, $x-y$, $-x$, $\frac{1}{2}$, $\rightarrow$, and \(s \to \infty\).`,
-				0,
-				0,
-				defaultMarkdownTheme,
-			);
-
-			const lines = markdown.render(80).map((line) => stripAnsi(line).trimEnd());
-
-			assert.deepStrictEqual(lines, ["A map ℂ³ → ℂ³, xy, x-y, -x, 1/2, →, and s → ∞."]);
-		});
-
-		it("renders display dollar delimiters without Markdown escape corruption", () => {
-			const markdown = new Markdown(
-				String.raw`Before
-
-$$\{3x+2y,\; x \in \{0, \pm 1\}\}$$
-
-after`,
-				0,
-				0,
-				defaultMarkdownTheme,
-			);
-
-			const lines = markdown.render(80).map((line) => stripAnsi(line).trimEnd());
-
-			assert.deepStrictEqual(lines, ["Before", "", "{3x+2y, x ∈ {0, ± 1}}", "", "after"]);
-		});
-
-		it("renders display bracket delimiters", () => {
-			const markdown = new Markdown(
-				String.raw`Before
-
-\[
-E \approx \frac{0.1\ \text{lux}}{100\ \text{lm/W}}
-\]
-
-after`,
-				0,
-				0,
-				defaultMarkdownTheme,
-			);
-
-			const lines = markdown.render(80).map((line) => stripAnsi(line).trimEnd());
-
-			assert.deepStrictEqual(lines, ["Before", "", "    0.1 lux", "E ≈ ────────", "    100 lm/W", "", "after"]);
-		});
-
-		it("aligns matrix rows with the opening delimiter", () => {
-			const markdown = new Markdown(
-				String.raw`Consider the matrix
-
-\[
-A=
-\begin{pmatrix}
-\pi & 0\\
-0 & \frac{1}{\pi}
-\end{pmatrix}.
-\]`,
-				0,
-				0,
-				defaultMarkdownTheme,
-			);
-
-			const lines = markdown.render(80).map((line) => stripAnsi(line).trimEnd());
-
-			assert.deepStrictEqual(lines, ["Consider the matrix", "", "A = ⎛ π │ 0   ⎞", "    ⎝ 0 │ 1/π ⎠."]);
-		});
-
-		it("renders lower limits beneath display operators", () => {
-			const markdown = new Markdown(
-				String.raw`\[
-\lim_{x\to 0}\frac{\frac{\sin x}{x}-1}{\frac{e^x-1}{x}-1}=0
-\]`,
-				0,
-				0,
-				defaultMarkdownTheme,
-			);
-
-			const lines = markdown.render(80).map((line) => stripAnsi(line).trimEnd());
-
-			assert.deepStrictEqual(lines, ["     (sin x)/x-1", "lim  ─────────── = 0", "x→0  (eˣ-1)/x-1"]);
-		});
-
-		it("renders math inside lists and tables", () => {
-			const markdown = new Markdown(
-				String.raw`- Formula: $F_1 = u^2$
-
-| Value |
-| --- |
-| $\mathbb{C}^3$ |`,
-				0,
-				0,
-				defaultMarkdownTheme,
-			);
-
-			const lines = markdown.render(80).map((line) => stripAnsi(line).trimEnd());
-			const output = lines.join("\n");
-
-			assert.ok(output.includes("- Formula: F₁ = u²"));
-			assert.ok(output.includes("│ ℂ³"));
-		});
-
-		it("does not treat currency, shell variables, or code spans as math", () => {
-			const source = "Costs $5 and $10 or $8k–$12k; use `$x$`, $HOME, and $" + "{PATH}.";
-			const markdown = new Markdown(source, 0, 0, defaultMarkdownTheme);
-
-			const lines = markdown.render(80).map((line) => stripAnsi(line).trimEnd());
-
-			assert.deepStrictEqual(lines, ["Costs $5 and $10 or $8k–$12k; use $x$, $HOME, and $" + "{PATH}."]);
-
-			const shellVariables = "Paths: $HOME/$USER and $XDG_CONFIG_HOME/$APP_CONFIG";
-			const shellLines = new Markdown(shellVariables, 0, 0, defaultMarkdownTheme)
-				.render(80)
-				.map((line) => stripAnsi(line).trimEnd());
-			assert.deepStrictEqual(shellLines, [shellVariables]);
-		});
-
-		it("preserves unsupported and incomplete LaTeX exactly", () => {
-			const cases = [String.raw`Unknown $x + \unknown{y}$ after`, String.raw`Streaming $\mathbb{C}^3`];
-
-			for (const source of cases) {
-				const markdown = new Markdown(source, 0, 0, defaultMarkdownTheme);
-				const lines = markdown.render(80).map((line) => stripAnsi(line).trimEnd());
-				assert.deepStrictEqual(lines, [source]);
-			}
-		});
-
-		it("preserves incomplete backslash delimiters while streaming", () => {
-			const inline = new Markdown(String.raw`Map \(\mathbb{C}^3`, 0, 0, defaultMarkdownTheme);
-			assert.deepStrictEqual(
-				inline.render(80).map((line) => stripAnsi(line).trimEnd()),
-				[String.raw`Map \(\mathbb{C}^3`],
-			);
-
-			const display = new Markdown("\\[\nx^2", 0, 0, defaultMarkdownTheme);
-			assert.deepStrictEqual(
-				display.render(80).map((line) => stripAnsi(line).trimEnd()),
-				["\\[", "x^2"],
-			);
-		});
-
-		it("does not render LaTeX inside escaped delimiters or code fences", () => {
-			const source = [String.raw`Escaped \$x-y\$.`, "", "```text", String.raw`$\mathbb{C}^3$`, "```"].join("\n");
-			const markdown = new Markdown(source, 0, 0, defaultMarkdownTheme);
-			const lines = markdown.render(80).map((line) => stripAnsi(line).trimEnd());
-
-			assert.deepStrictEqual(lines, ["Escaped $x-y$.", "", "```text", "  $\\mathbb{C}^3$", "```"]);
-		});
-
-		it("allows LaTeX rendering to be disabled", () => {
-			const markdown = new Markdown(
-				String.raw`$$
-\widetilde Y_{sf}
-=
-(1-w_{sf})\mu_{sf}^{\mathrm{MAR}}
-$$
-
-Inline \(A_{sf}\)`,
-				0,
-				0,
-				defaultMarkdownTheme,
-				undefined,
-				{
-					renderLatex: false,
-				},
-			);
-
-			assert.deepStrictEqual(
-				markdown.render(80).map((line) => stripAnsi(line).trimEnd()),
-				[
-					"$$",
-					String.raw`\widetilde Y_{sf}`,
-					"=",
-					String.raw`(1-w_{sf})\mu_{sf}^{\mathrm{MAR}}`,
-					"$$",
-					"",
-					String.raw`Inline \(A_{sf}\)`,
-				],
-			);
-		});
-
-		it("switches from raw to rendered math when a streamed delimiter closes", () => {
-			const markdown = new Markdown(String.raw`Map $\mathbb{C}^3`, 0, 0, defaultMarkdownTheme);
-			assert.deepStrictEqual(
-				markdown.render(80).map((line) => stripAnsi(line).trimEnd()),
-				[String.raw`Map $\mathbb{C}^3`],
-			);
-
-			markdown.setText(String.raw`Map $\mathbb{C}^3$`);
-
-			assert.deepStrictEqual(
-				markdown.render(80).map((line) => stripAnsi(line).trimEnd()),
-				["Map ℂ³"],
-			);
-		});
-	});
-
 	describe("Backslash escapes", () => {
 		it("should normalize escaped punctuation by default", () => {
 			const markdown = new Markdown(String.raw`"\"`, 0, 0, defaultMarkdownTheme);
@@ -954,27 +612,17 @@ Inline \(A_{sf}\)`,
 			assert.deepStrictEqual(lines, [`""`]);
 		});
 
-		it("should preserve source backslash escapes when configured", () => {
-			const markdown = new Markdown(String.raw`"\"`, 0, 0, defaultMarkdownTheme, undefined, {
-				preserveBackslashEscapes: true,
-			});
-
-			const lines = markdown.render(80).map((line) => stripAnsi(line).trimEnd());
-
-			assert.deepStrictEqual(lines, [String.raw`"\"`]);
-		});
 	});
 
 	describe("Pre-styled text (thinking traces)", () => {
-		it("should preserve gray italic styling after inline code", () => {
+		it("should preserve gray styling after inline code", () => {
 			const markdown = new Markdown(
 				"This is thinking with `inline code` and more text after",
 				1,
 				0,
 				defaultMarkdownTheme,
 				{
-					color: (text) => chalk.gray(text),
-					italic: true,
+					color: gray,
 				},
 			);
 
@@ -984,72 +632,11 @@ Inline \(A_{sf}\)`,
 			assert.ok(joinedOutput.includes("inline code"));
 
 			assert.ok(joinedOutput.includes("\x1b[90m"), "Should have gray color code");
-			assert.ok(joinedOutput.includes("\x1b[3m"), "Should have italic code");
 
 			const hasCodeColor = joinedOutput.includes("\x1b[33m");
 			assert.ok(hasCodeColor, "Should style inline code");
 		});
 
-		it("should preserve gray italic styling after bold text", () => {
-			const markdown = new Markdown(
-				"This is thinking with **bold text** and more after",
-				1,
-				0,
-				defaultMarkdownTheme,
-				{
-					color: (text) => chalk.gray(text),
-					italic: true,
-				},
-			);
-
-			const lines = markdown.render(80);
-			const joinedOutput = lines.join("\n");
-
-			assert.ok(joinedOutput.includes("bold text"));
-
-			assert.ok(joinedOutput.includes("\x1b[90m"), "Should have gray color code");
-			assert.ok(joinedOutput.includes("\x1b[3m"), "Should have italic code");
-
-			assert.ok(joinedOutput.includes("\x1b[1m"), "Should have bold code");
-		});
-
-		it("should not leak styles into following lines when rendered in TUI", async () => {
-			class MarkdownWithInput implements Component {
-				public markdownLineCount = 0;
-				private readonly markdown: Markdown;
-
-				constructor(markdown: Markdown) {
-					this.markdown = markdown;
-				}
-
-				render(width: number): string[] {
-					const lines = this.markdown.render(width);
-					this.markdownLineCount = lines.length;
-					return [...lines, "INPUT"];
-				}
-
-				invalidate(): void {
-					this.markdown.invalidate();
-				}
-			}
-
-			const markdown = new Markdown("This is thinking with `inline code`", 1, 0, defaultMarkdownTheme, {
-				color: (text) => chalk.gray(text),
-				italic: true,
-			});
-
-			const terminal = new VirtualTerminal(80, 6);
-			const tui: TUI = new TuiMainScreen(terminal);
-			const component = new MarkdownWithInput(markdown);
-			tui.addChild(component);
-			tui.start();
-			await terminal.waitForRender();
-
-			assert.ok(component.markdownLineCount > 0);
-			const inputRow = component.markdownLineCount;
-			assert.strictEqual(getCell(terminal, inputRow, 0).isItalic(), 0);
-			tui.stop();
-		});
 	});
 
 	describe("Spacing after code blocks", () => {
@@ -1263,7 +850,7 @@ bar`,
 				0,
 				defaultMarkdownTheme,
 				{
-					color: (text) => chalk.magenta(text),
+					color: magenta,
 				},
 			);
 
@@ -1278,8 +865,8 @@ bar`,
 			assert.ok(fooLine, "Should have Foo line");
 			assert.ok(barLine, "Should have bar line");
 
-			assert.ok(fooLine?.includes("\x1b[3m"), `Foo line should have italic: ${fooLine}`);
-			assert.ok(barLine?.includes("\x1b[3m"), `bar line should have italic: ${barLine}`);
+			assert.ok(fooLine?.includes("\x1b[31m"), `Foo line should have quote color: ${fooLine}`);
+			assert.ok(barLine?.includes("\x1b[31m"), `bar line should have quote color: ${barLine}`);
 
 			assert.ok(!fooLine?.includes("\x1b[35m"), `Foo line should NOT have magenta color: ${fooLine}`);
 			assert.ok(!barLine?.includes("\x1b[35m"), `bar line should NOT have magenta color: ${barLine}`);
@@ -1293,7 +880,7 @@ bar`,
 				0,
 				defaultMarkdownTheme,
 				{
-					color: (text) => chalk.cyan(text),
+					color: cyan,
 				},
 			);
 
@@ -1305,8 +892,8 @@ bar`,
 
 			const fooLine = lines.find((line) => line.includes("Foo"));
 			const barLine = lines.find((line) => line.includes("bar"));
-			assert.ok(fooLine?.includes("\x1b[3m"), `Foo line should have italic: ${fooLine}`);
-			assert.ok(barLine?.includes("\x1b[3m"), `bar line should have italic: ${barLine}`);
+			assert.ok(fooLine?.includes("\x1b[31m"), `Foo line should have quote color: ${fooLine}`);
+			assert.ok(barLine?.includes("\x1b[31m"), `bar line should have quote color: ${barLine}`);
 
 			assert.ok(!fooLine?.includes("\x1b[36m"), `Foo line should NOT have cyan color: ${fooLine}`);
 			assert.ok(!barLine?.includes("\x1b[36m"), `bar line should NOT have cyan color: ${barLine}`);
@@ -1363,8 +950,7 @@ bar`,
 				0,
 				defaultMarkdownTheme,
 				{
-					color: (text) => chalk.yellow(text),
-					italic: true,
+					color: yellow,
 				},
 			);
 
@@ -1378,7 +964,7 @@ bar`,
 			}
 
 			const allOutput = lines.join("\n");
-			assert.ok(allOutput.includes("\x1b[3m"), "Should have italic");
+			assert.ok(allOutput.includes("\x1b[31m"), "Should have quote color");
 
 			assert.ok(!allOutput.includes("\x1b[33m"), "Should NOT have yellow color from default style");
 		});
@@ -1401,11 +987,9 @@ bar`,
 
 			const allOutput = lines.join("\n");
 
-			assert.ok(allOutput.includes("\x1b[1m"), "Should have bold styling");
-
 			assert.ok(allOutput.includes("\x1b[33m"), "Should have code styling (yellow)");
 
-			assert.ok(allOutput.includes("\x1b[3m"), "Should have italic from quote styling");
+			assert.ok(allOutput.includes("\x1b[31m"), "Should have quote color");
 		});
 	});
 
@@ -1423,10 +1007,6 @@ bar`,
 
 			const precedingChunk = joinedOutput.slice(Math.max(0, afterCodeIndex - 40), afterCodeIndex);
 			assert.ok(
-				precedingChunk.includes("\x1b[1m"),
-				`Should re-apply bold before text after code: ${precedingChunk}`,
-			);
-			assert.ok(
 				precedingChunk.includes("\x1b[36m"),
 				`Should re-apply cyan before text after code: ${precedingChunk}`,
 			);
@@ -1442,62 +1022,12 @@ bar`,
 			assert.ok(afterCodeIndex > 0, "Should contain text after inline code");
 
 			const precedingChunk = joinedOutput.slice(Math.max(0, afterCodeIndex - 40), afterCodeIndex);
-			assert.ok(precedingChunk.includes("\x1b[1m"), `Should re-apply bold for h1: ${precedingChunk}`);
 			assert.ok(precedingChunk.includes("\x1b[36m"), `Should re-apply cyan for h1: ${precedingChunk}`);
-			assert.ok(precedingChunk.includes("\x1b[4m"), `Should re-apply underline for h1: ${precedingChunk}`);
 		});
 
-		it("should not leak h1 underline into padding when inline code is the last token", async () => {
-			const markdown = new Markdown("# Important distinction from `open()`", 0, 0, defaultMarkdownTheme);
-			const terminal = new VirtualTerminal(80, 4);
-			const tui: TUI = new TuiMainScreen(terminal);
-			tui.addChild(markdown);
-			tui.start();
-			await terminal.waitForRender();
-
-			const renderedLine = markdown.render(80)[0];
-			assert.ok(renderedLine, "Should render heading line");
-			const contentWidth = renderedLine.replace(/\x1b\[[0-9;]*m/g, "").trimEnd().length;
-			assert.ok(contentWidth > 0, "Should have visible heading content");
-
-			for (let col = contentWidth; col < 80; col++) {
-				assert.strictEqual(
-					getCell(terminal, 0, col).isUnderline(),
-					0,
-					`Expected no underline in padding at col ${col}`,
-				);
-			}
-
-			tui.stop();
-		});
-
-		it("should preserve heading styling after bold text", () => {
-			const markdown = new Markdown("## Heading with **bold** and more", 0, 0, defaultMarkdownTheme);
-
-			const lines = markdown.render(80);
-			const joinedOutput = lines.join("\n");
-
-			const afterBoldIndex = joinedOutput.indexOf("and more");
-			assert.ok(afterBoldIndex > 0, "Should contain text after bold");
-
-			const precedingChunk = joinedOutput.slice(Math.max(0, afterBoldIndex - 40), afterBoldIndex);
-			assert.ok(precedingChunk.includes("\x1b[1m"), `Should re-apply bold for h2: ${precedingChunk}`);
-			assert.ok(precedingChunk.includes("\x1b[36m"), `Should re-apply cyan for h2: ${precedingChunk}`);
-		});
 	});
 
 	describe("Strikethrough syntax", () => {
-		it("should render ~~text~~ as strikethrough", () => {
-			const markdown = new Markdown("Use ~~strikethrough~~ here", 0, 0, defaultMarkdownTheme);
-
-			const lines = markdown.render(80);
-			const joinedOutput = lines.join("\n");
-			const joinedPlain = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/g, "")).join(" ");
-
-			assert.ok(joinedOutput.includes("\x1b[9m"), "Should apply strikethrough styling");
-			assert.ok(joinedPlain.includes("strikethrough"), "Should include struck text content");
-			assert.ok(!joinedPlain.includes("~~strikethrough~~"), "Should not render delimiters as text");
-		});
 
 		it("should keep ~text~ as plain text", () => {
 			const markdown = new Markdown("Use ~strikethrough~ literally", 0, 0, defaultMarkdownTheme);

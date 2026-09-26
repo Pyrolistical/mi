@@ -1,5 +1,5 @@
 import { Type } from "typebox";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import {
 	appendGrammarToolInputJsonDelta,
 	makeStrictJsonSchema,
@@ -28,7 +28,7 @@ describe("constrained tool sampling", () => {
 		const strict = makeStrictJsonSchema(parameters);
 
 		expect(parameters).not.toHaveProperty("additionalProperties");
-		expect(parameters.required).toEqual(["path", "metadata"]);
+		expect<unknown>(parameters.required).toEqual(["path", "metadata"]);
 		expect(strict).toMatchObject({
 			additionalProperties: false,
 			required: ["path", "offset", "metadata", "nullable"],

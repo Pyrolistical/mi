@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "bun:test";
 import type { ExtensionContext } from "../src/core/extensions/types.ts";
 import { createEditToolDefinition } from "../src/core/tools/edit.ts";
 
@@ -66,9 +66,9 @@ describe("edit tool prepareArguments", () => {
 
 	it("passes through non-object input unchanged", () => {
 		const definition = createEditToolDefinition(process.cwd());
-		expect(definition.prepareArguments!(null)).toBe(null);
-		expect(definition.prepareArguments!(undefined)).toBe(undefined);
-		expect(definition.prepareArguments!("garbage")).toBe("garbage");
+		expect<unknown>(definition.prepareArguments!(null)).toBe(null);
+		expect<unknown>(definition.prepareArguments!(undefined)).toBe(undefined);
+		expect<unknown>(definition.prepareArguments!("garbage")).toBe("garbage");
 	});
 
 	it("prepared args execute correctly", async () => {
@@ -108,7 +108,7 @@ describe("edit tool stringified edits", () => {
 			path: "file.txt",
 			edits: "not json",
 		});
-		expect(prepared).toEqual({
+		expect<unknown>(prepared).toEqual({
 			path: "file.txt",
 			edits: "not json",
 		});

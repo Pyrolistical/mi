@@ -1,10 +1,9 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
-import { Chalk } from "chalk";
 import { TruncatedText } from "../src/components/truncated-text.ts";
 import { visibleWidth } from "../src/utils.ts";
+import { blue, red } from "./ansi.ts";
 
-const chalk = new Chalk({ level: 3 });
 
 describe("TruncatedText component", () => {
 	it("pads output lines to exactly match width", () => {
@@ -42,7 +41,7 @@ describe("TruncatedText component", () => {
 	});
 
 	it("preserves ANSI codes in output and pads correctly", () => {
-		const styledText = `${chalk.red("Hello")} ${chalk.blue("world")}`;
+		const styledText = `${red("Hello")} ${blue("world")}`;
 		const text = new TruncatedText(styledText, 1, 0);
 		const lines = text.render(40);
 
@@ -54,7 +53,7 @@ describe("TruncatedText component", () => {
 	});
 
 	it("truncates styled text and adds reset code before ellipsis", () => {
-		const longStyledText = chalk.red("This is a very long red text that will be truncated");
+		const longStyledText = red("This is a very long red text that will be truncated");
 		const text = new TruncatedText(longStyledText, 1, 0);
 		const lines = text.render(20);
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { convertMessages } from "../src/api/openai-completions.ts";
 import { normalizeContext } from "../src/compat.ts";
 import type { AssistantMessage, Model, OpenAICompletionsCompat, ToolResultMessage, Usage } from "../src/types.ts";

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { complete, stream } from "../src/compat.ts";
 import type { Api, Context, Model, StreamOptions } from "../src/types.ts";
 import { openaiModel } from "./openai-models.ts";
@@ -70,12 +70,20 @@ describe("AI Providers Abort Tests", () => {
 			api: "openai-completions",
 		};
 
-		it("should abort mid-stream", { retry: 3 }, async () => {
-			await testAbortSignal(llm);
-		});
+		it(
+			"should abort mid-stream",
+			async () => {
+				await testAbortSignal(llm);
+			},
+			{ retry: 3 },
+		);
 
-		it("should handle immediate abort", { retry: 3 }, async () => {
-			await testImmediateAbort(llm);
-		});
+		it(
+			"should handle immediate abort",
+			async () => {
+				await testImmediateAbort(llm);
+			},
+			{ retry: 3 },
+		);
 	});
 });

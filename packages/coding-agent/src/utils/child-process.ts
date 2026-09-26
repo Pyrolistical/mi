@@ -1,17 +1,4 @@
-import {
-	type ChildProcess,
-	type ChildProcessByStdio,
-	spawn as nodeSpawn,
-	spawnSync as nodeSpawnSync,
-	type SpawnOptions,
-	type SpawnOptionsWithStdioTuple,
-	type SpawnSyncOptionsWithStringEncoding,
-	type SpawnSyncReturns,
-	type StdioNull,
-	type StdioPipe,
-} from "node:child_process";
-import type { Readable } from "node:stream";
-import crossSpawn from "cross-spawn";
+import type { ChildProcess } from "node:child_process";
 
 const EXIT_STDIO_GRACE_MS = 100;
 

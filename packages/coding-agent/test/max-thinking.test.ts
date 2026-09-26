@@ -1,5 +1,5 @@
 import { rmSync } from "node:fs";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "bun:test";
 import { isValidThinkingLevel } from "../src/cli/args.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 

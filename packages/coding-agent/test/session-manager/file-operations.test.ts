@@ -13,7 +13,7 @@ import {
 } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { findMostRecentSession, loadEntriesFromFile, SessionManager } from "../../src/core/session-manager.ts";
 import { assistantMsg, readSessionFileRoles, userMsg } from "../utilities.ts";
 
@@ -391,7 +391,7 @@ describe("SessionManager.setSessionFile with corrupted files", () => {
 		writeFileSync(noHeaderFile, originalContent);
 
 		expect(() => SessionManager.open(noHeaderFile, tempDir)).toThrow(
-			`Session file is not a valid pi session: ${noHeaderFile}`,
+			`Session file is not a valid mi session: ${noHeaderFile}`,
 		);
 		expect(readFileSync(noHeaderFile, "utf-8")).toBe(originalContent);
 	});
@@ -402,7 +402,7 @@ describe("SessionManager.setSessionFile with corrupted files", () => {
 		writeFileSync(nonSessionFile, originalContent);
 
 		expect(() => SessionManager.open(nonSessionFile, tempDir)).toThrow(
-			`Session file is not a valid pi session: ${nonSessionFile}`,
+			`Session file is not a valid mi session: ${nonSessionFile}`,
 		);
 		expect(readFileSync(nonSessionFile, "utf-8")).toBe(originalContent);
 	});

@@ -1,9 +1,9 @@
 import { join, resolve } from "node:path";
 import { resetCapabilitiesCache, setCapabilities, Text, type TUI } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
-import { afterEach, beforeAll, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, setSystemTime, test, vi } from "bun:test";
 
-const imageConvertMocks = vi.hoisted(() => ({ convertToPng: vi.fn() }));
+const imageConvertMocks = { convertToPng: vi.fn() };
 
 vi.mock("../src/utils/image-convert.ts", () => imageConvertMocks);
 
@@ -247,7 +247,7 @@ describe("ToolExecutionComponent parity", () => {
 		{ ms: 7_384_900, formatted: "2h 3m 4s" },
 	])("bash renderer formats $ms ms as $formatted while running and after completion", ({ ms, formatted }) => {
 		vi.useFakeTimers();
-		vi.setSystemTime(0);
+		setSystemTime(0);
 		const component = new ToolExecutionComponent(
 			"bash",
 			"tool-bash-duration",

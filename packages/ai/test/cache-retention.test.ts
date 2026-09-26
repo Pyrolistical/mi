@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
 import { normalizeContext } from "../src/compat.ts";
 import type { Model } from "../src/types.ts";
@@ -17,18 +17,18 @@ function stopAfterPayload<TPayload>(capture: (payload: TPayload) => void): (payl
 	};
 }
 
-describe("Cache Retention (PI_CACHE_RETENTION)", () => {
-	const originalEnv = process.env.PI_CACHE_RETENTION;
+describe("Cache Retention (MI_CACHE_RETENTION)", () => {
+	const originalEnv = process.env.MI_CACHE_RETENTION;
 
 	beforeEach(() => {
-		delete process.env.PI_CACHE_RETENTION;
+		delete process.env.MI_CACHE_RETENTION;
 	});
 
 	afterEach(() => {
 		if (originalEnv !== undefined) {
-			process.env.PI_CACHE_RETENTION = originalEnv;
+			process.env.MI_CACHE_RETENTION = originalEnv;
 		} else {
-			delete process.env.PI_CACHE_RETENTION;
+			delete process.env.MI_CACHE_RETENTION;
 		}
 	});
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { complete } from "../src/compat.ts";
 import type { Api, AssistantMessage, Context, Model, StreamOptions, UserMessage } from "../src/types.ts";
 
@@ -125,20 +125,36 @@ describe("AI Providers Empty Message Tests", () => {
 	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Completions Provider Empty Messages", () => {
 		const llm = openaiModel("gpt-4o-mini");
 
-		it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-			await testEmptyMessage(llm);
-		});
+		it(
+			"should handle empty content array",
+			async () => {
+				await testEmptyMessage(llm);
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 
-		it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-			await testEmptyStringMessage(llm);
-		});
+		it(
+			"should handle empty string content",
+			async () => {
+				await testEmptyStringMessage(llm);
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 
-		it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-			await testWhitespaceOnlyMessage(llm);
-		});
+		it(
+			"should handle whitespace-only content",
+			async () => {
+				await testWhitespaceOnlyMessage(llm);
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 
-		it("should handle empty assistant message in conversation", { retry: 3, timeout: 30000 }, async () => {
-			await testEmptyAssistantMessage(llm);
-		});
+		it(
+			"should handle empty assistant message in conversation",
+			async () => {
+				await testEmptyAssistantMessage(llm);
+			},
+			{ retry: 3, timeout: 30000 },
+		);
 	});
 });

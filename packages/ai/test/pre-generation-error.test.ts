@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { streamSimple as streamOpenAICompletions } from "../src/api/openai-completions.ts";
 import type { Api, AssistantMessageEventStream, Model } from "../src/types.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";

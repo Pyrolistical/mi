@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import type { SessionInfo } from "../src/core/session-manager.ts";
 import { filterAndSortSessions } from "../src/modes/interactive/components/session-selector-search.ts";
 

@@ -1,11 +1,10 @@
 {
 	"compilerOptions": {
-		"target": "ES2024",
+		"target": "ESNext",
 		"module": "Node16",
-		"lib": ["ES2024"],
+		"lib": ["ESNext"],
 		"strict": true,
 		"erasableSyntaxOnly": true,
-		"verbatimModuleSyntax": true,
 		"esModuleInterop": true,
 		"skipLibCheck": true,
 		"forceConsistentCasingInFileNames": true,
@@ -18,6 +17,9 @@
 		"resolveJsonModule": true,
 		"allowImportingTsExtensions": true,
 		"rewriteRelativeImportExtensions": true,
-		"types": ["node"]
+		"experimentalDecorators": true,
+		"emitDecoratorMetadata": true,
+		"useDefineForClassFields": false,
+		"types": ["bun"]
 	}
 }

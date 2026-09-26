@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { type CompactionEntry, SessionManager } from "../../../src/core/session-manager.ts";
 import { userMsg } from "../../utilities.ts";
 

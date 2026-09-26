@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import { runClipboardCommand } from "../src/utils/clipboard-command.ts";
 
 describe("clipboard commands", () => {
@@ -6,7 +6,7 @@ describe("clipboard commands", () => {
 		expect(
 			await runClipboardCommand(process.execPath, ["-e", "process.stdout.write(Buffer.from([0, 255, 10]))"]),
 		).toEqual(Buffer.from([0, 255, 10]));
-		expect(await runClipboardCommand(process.execPath, ["-e", ""])).toEqual(Buffer.alloc(0));
+		expect(await runClipboardCommand(process.execPath, ["-e", "void 0"])).toEqual(Buffer.alloc(0));
 		expect(await runClipboardCommand(process.execPath, ["-e", "process.exit(1)"])).toBeUndefined();
 		expect(await runClipboardCommand("pi-clipboard-command-does-not-exist", [])).toBeUndefined();
 	});

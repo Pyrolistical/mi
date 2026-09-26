@@ -1,5 +1,6 @@
 import { setKeybindings, type TUI } from "@earendil-works/pi-tui";
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "bun:test";
+import { waitFor } from "./test-helpers.ts";
 import { KeybindingsManager } from "../src/core/keybindings.ts";
 import { ModelSelectorComponent } from "../src/modes/interactive/components/model-selector.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
@@ -95,7 +96,7 @@ describe("model selector", () => {
 			() => {},
 		);
 
-		await vi.waitFor(() => {
+		await waitFor(() => {
 			const rendered = stripAnsi(selector.render(120).join("\n"));
 			expect(rendered).toContain("Could not refresh 2 model catalogs (openai, anthropic); showing cached models.");
 		});

@@ -1671,7 +1671,7 @@ export class SessionManager {
 
 		try {
 			if (!existsSync(sessionsDir)) return [];
-			const entries = await readdir(sessionsDir, { withFileTypes: true });
+			const entries = (await readdir(sessionsDir, { withFileTypes: true })).sort((a, b) => (a.name < b.name ? -1 : 1));
 			const dirs = entries
 				.filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
 				.map((entry) => join(sessionsDir, entry.name));

@@ -1,5 +1,6 @@
 import { Container } from "@earendil-works/pi-tui";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "bun:test";
+import { waitFor } from "../../test-helpers.ts";
 import type { AgentSessionRuntimeDiagnostic } from "../../../src/core/agent-session-services.ts";
 import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
 import { createHarness } from "../harness.ts";
@@ -11,8 +12,8 @@ function render(container: Container): string {
 describe("issue #7829 invalid settings warning", () => {
 	it("renders startup diagnostics inside the transcript", async () => {
 		const harness = await createHarness();
-		const previousOffline = process.env.PI_OFFLINE;
-		process.env.PI_OFFLINE = "1";
+		const previousOffline = process.env.MI_OFFLINE;
+		process.env.MI_OFFLINE = "1";
 		try {
 			const chatContainer = new Container();
 			const startupDiagnostics: AgentSessionRuntimeDiagnostic[] = [
@@ -39,14 +40,14 @@ describe("issue #7829 invalid settings warning", () => {
 
 			void run.call(context);
 
-			await vi.waitFor(() => {
+			await waitFor(() => {
 				expect(render(chatContainer)).toContain(
 					"Warning: Invalid settings file /tmp/settings.json: malformed JSON",
 				);
 			});
 		} finally {
-			if (previousOffline === undefined) delete process.env.PI_OFFLINE;
-			else process.env.PI_OFFLINE = previousOffline;
+			if (previousOffline === undefined) delete process.env.MI_OFFLINE;
+			else process.env.MI_OFFLINE = previousOffline;
 			harness.cleanup();
 		}
 	});

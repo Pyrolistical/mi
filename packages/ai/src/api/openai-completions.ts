@@ -1,16 +1,20 @@
-import OpenAI from "openai";
+import { postOpenAIStream } from "./openai-http.ts";
 import type {
 	ChatCompletionAssistantMessageParam,
 	ChatCompletionChunk,
+	ChatCompletionChunkChoice,
 	ChatCompletionContentPart,
 	ChatCompletionContentPartImage,
 	ChatCompletionContentPartText,
+	ChatCompletionCreateParamsStreaming,
 	ChatCompletionDeveloperMessageParam,
 	ChatCompletionMessageParam,
 	ChatCompletionMessageToolCall,
 	ChatCompletionSystemMessageParam,
+	ChatCompletionTool,
+	ChatCompletionToolChoiceOption,
 	ChatCompletionToolMessageParam,
-} from "openai/resources/chat/completions.js";
+} from "./openai-types.ts";
 import { calculateCost, clampThinkingLevel } from "../models.ts";
 import type {
 	AssistantMessage,
@@ -141,7 +145,7 @@ function isOpenAIReasoningDetail(detail: unknown): detail is OpenAIReasoningDeta
 }
 
 export interface OpenAICompletionsOptions extends StreamOptions {
-	toolChoice?: OpenAI.Chat.Completions.ChatCompletionToolChoiceOption;
+	toolChoice?: ChatCompletionToolChoiceOption;
 	reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 	thinkingBudgets?: ThinkingBudgets;
 }
@@ -178,7 +182,7 @@ type ChatCompletionInstructionMessageParam = ChatCompletionDeveloperMessageParam
 
 type KimiToolSystemMessageParam = {
 	role: "system";
-	tools: OpenAI.Chat.Completions.ChatCompletionTool[];
+	tools: ChatCompletionTool[];
 };
 
 type OpenAIReasoningDetailBase = Record<string, JsonValue> & {
@@ -275,7 +279,7 @@ type ChatCompletionTextPartWithCacheControl = ChatCompletionContentPartText & {
 	cache_control?: OpenAICompatCacheControl;
 };
 
-type ChatCompletionToolWithCacheControl = OpenAI.Chat.Completions.ChatCompletionTool & {
+type ChatCompletionToolWithCacheControl = ChatCompletionTool & {
 	cache_control?: OpenAICompatCacheControl;
 };
 
@@ -283,7 +287,7 @@ function resolveCacheRetention(cacheRetention?: CacheRetention, env?: ProviderEn
 	if (cacheRetention) {
 		return cacheRetention;
 	}
-	if (getProviderEnvValue("PI_CACHE_RETENTION", env) === "long") {
+	if (getProviderEnvValue("MI_CACHE_RETENTION", env) === "long") {
 		return "long";
 	}
 	return "short";
@@ -332,14 +336,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
 			);
 			const cacheRetention = resolveCacheRetention(options?.cacheRetention, options?.env);
 			const cacheSessionId = cacheRetention === "none" ? undefined : options?.sessionId;
-			const client = createClient(
-				model,
-				apiKey,
-				options?.headers,
-				options?.fetch,
-				cacheSessionId,
-				compat,
-			);
+			const headers = createRequestHeaders(model, options?.headers, cacheSessionId, compat);
 			let params = buildParams(
 				model,
 				normalizedContext,
@@ -350,15 +347,20 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
 			);
 			const nextParams = await options?.onPayload?.(params, model);
 			if (nextParams !== undefined) {
-				params = nextParams as OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming;
+				params = nextParams as ChatCompletionCreateParamsStreaming;
 			}
-			const requestOptions = {
-				...(options?.signal ? { signal: options.signal } : {}),
-				...(options?.timeoutMs !== undefined ? { timeout: options.timeoutMs } : {}),
-				maxRetries: 0,
-			};
-			const { data: openaiStream, response } = await retryProviderRequest(
-				() => client.chat.completions.create(params, requestOptions).withResponse(),
+			const { events: openaiStream, response } = await retryProviderRequest(
+				() =>
+					postOpenAIStream<ChatCompletionChunk>({
+						baseUrl: model.baseUrl,
+						path: "/chat/completions",
+						apiKey,
+						headers,
+						body: params,
+						signal: options?.signal,
+						timeoutMs: options?.timeoutMs,
+						fetch: options?.fetch,
+					}),
 				{
 					maxRetries: options?.maxRetries,
 					maxRetryDelayMs: options?.maxRetryDelayMs,
@@ -715,14 +717,12 @@ export const streamSimple: StreamFunction<"openai-completions", SimpleStreamOpti
 	} satisfies OpenAICompletionsOptions);
 };
 
-function createClient(
+function createRequestHeaders(
 	model: Model<"openai-completions">,
-	apiKey: string,
 	optionsHeaders?: ProviderHeaders,
-	fetch?: typeof globalThis.fetch,
 	sessionId?: string,
 	compat: ResolvedOpenAICompletionsCompat = getCompat(model),
-) {
+): ProviderHeaders {
 	const headers: ProviderHeaders = { "User-Agent": getPiUserAgent(), ...model.headers };
 	if (sessionId && compat.sendSessionAffinityHeaders) {
 		if (compat.sessionAffinityFormat === "openrouter") {
@@ -740,13 +740,7 @@ function createClient(
 		Object.assign(headers, optionsHeaders);
 	}
 
-	return new OpenAI({
-		apiKey,
-		baseURL: model.baseUrl,
-		dangerouslyAllowBrowser: true,
-		fetch,
-		defaultHeaders: headers,
-	});
+	return headers;
 }
 
 function buildParams(
@@ -769,7 +763,7 @@ function buildParams(
 	});
 	const cacheControl = getCompatCacheControl(compat, cacheRetention);
 
-	const params: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
+	const params: ChatCompletionCreateParamsStreaming = {
 		model: model.id,
 		messages,
 		stream: true,
@@ -941,7 +935,7 @@ function getCompatCacheControl(
 
 function applyAnthropicCacheControl(
 	messages: ChatCompletionMessageParam[],
-	tools: OpenAI.Chat.Completions.ChatCompletionTool[] | undefined,
+	tools: ChatCompletionTool[] | undefined,
 	cacheControl: OpenAICompatCacheControl,
 ): void {
 	addCacheControlToSystemPrompt(messages, cacheControl);
@@ -976,7 +970,7 @@ function addCacheControlToLastConversationMessage(
 }
 
 function addCacheControlToLastTool(
-	tools: OpenAI.Chat.Completions.ChatCompletionTool[] | undefined,
+	tools: ChatCompletionTool[] | undefined,
 	cacheControl: OpenAICompatCacheControl,
 ): void {
 	if (!tools || tools.length === 0) {
@@ -1293,7 +1287,7 @@ export function convertMessages(
 function convertTools(
 	tools: Tool[],
 	compat: ResolvedOpenAICompletionsCompat,
-): OpenAI.Chat.Completions.ChatCompletionTool[] {
+): ChatCompletionTool[] {
 	return tools.map((tool) => {
 		const grammar = resolveGrammarConstrainedSampling(tool, compat.supportsOpenAIGrammarTools);
 		if (grammar) {
@@ -1357,7 +1351,7 @@ function parseChunkUsage(
 	return usage;
 }
 
-function mapStopReason(reason: ChatCompletionChunk.Choice["finish_reason"] | string): {
+function mapStopReason(reason: ChatCompletionChunkChoice["finish_reason"] | string): {
 	stopReason: StopReason;
 	errorMessage?: string;
 } {

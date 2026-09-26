@@ -1,14 +1,16 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
+import { advanceTimersByTimeAsync } from "./fake-timers.ts";
+import { openAIHttpModule } from "./openai-http-mock.ts";
 import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
 import type { Model } from "../src/types.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 
-const mockState = vi.hoisted(() => ({
+const mockState = {
 	requestOptions: [] as unknown[],
 	requestErrors: [] as Error[],
-}));
+};
 
-vi.mock("openai", () => {
+vi.mock("../src/api/openai-http.ts", () => {
 	class FakeOpenAI {
 		chat = {
 			completions: {
@@ -45,7 +47,7 @@ vi.mock("openai", () => {
 			},
 		};
 	}
-	return { default: FakeOpenAI };
+	return openAIHttpModule(() => new FakeOpenAI());
 });
 
 const model: Model<"openai-completions"> = {
@@ -85,12 +87,12 @@ describe("openai-completions provider retries", () => {
 		vi.useRealTimers();
 	});
 
-	it("disables SDK retries by default", async () => {
+	it("makes a single request by default", async () => {
 		await consume();
-		expect(mockState.requestOptions).toEqual([expect.objectContaining({ maxRetries: 0 })]);
+		expect(mockState.requestOptions).toHaveLength(1);
 	});
 
-	it("honors provider retries while keeping SDK retries disabled", async () => {
+	it("honors provider retries", async () => {
 		vi.useFakeTimers();
 		mockState.requestErrors = [
 			Object.assign(new Error("rate limited"), {
@@ -104,22 +106,18 @@ describe("openai-completions provider retries", () => {
 		];
 
 		const result = consume({ maxRetries: 2, maxRetryDelayMs: 100 });
-		await vi.advanceTimersByTimeAsync(0);
+		await advanceTimersByTimeAsync(0);
 		expect(mockState.requestOptions).toHaveLength(1);
-		await vi.advanceTimersByTimeAsync(99);
+		await advanceTimersByTimeAsync(99);
 		expect(mockState.requestOptions).toHaveLength(1);
-		await vi.advanceTimersByTimeAsync(1);
+		await advanceTimersByTimeAsync(1);
 		expect(mockState.requestOptions).toHaveLength(2);
-		await vi.advanceTimersByTimeAsync(99);
+		await advanceTimersByTimeAsync(99);
 		expect(mockState.requestOptions).toHaveLength(2);
-		await vi.advanceTimersByTimeAsync(1);
+		await advanceTimersByTimeAsync(1);
 		await result;
 
-		expect(mockState.requestOptions).toEqual([
-			expect.objectContaining({ maxRetries: 0 }),
-			expect.objectContaining({ maxRetries: 0 }),
-			expect.objectContaining({ maxRetries: 0 }),
-		]);
+		expect(mockState.requestOptions).toHaveLength(3);
 	});
 
 	it("fails immediately when a provider-requested retry delay exceeds the limit", async () => {
@@ -135,6 +133,6 @@ describe("openai-completions provider retries", () => {
 		expect(result.stopReason).toBe("error");
 		expect(result.errorMessage).toContain("Server requested 277403s retry delay (max: 1s)");
 		expect(result.errorMessage).toContain("rate limited");
-		expect(mockState.requestOptions).toEqual([expect.objectContaining({ maxRetries: 0 })]);
+		expect(mockState.requestOptions).toHaveLength(1);
 	});
 });

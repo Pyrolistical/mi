@@ -1,5 +1,5 @@
 import { type AssistantMessage, fauxAssistantMessage } from "@earendil-works/pi-ai";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "bun:test";
 import { createHarness, getUserTexts, type Harness } from "../harness.ts";
 
 function createUsage(totalTokens: number) {

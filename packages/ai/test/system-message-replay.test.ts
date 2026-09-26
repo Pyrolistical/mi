@@ -1,5 +1,5 @@
 import { Type } from "typebox";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test } from "bun:test";
 import type { Message, Tool, TranscriptContext } from "../src/types.ts";
 import { getSystemMessageText, renderSystemMessageUpdate } from "../src/utils/text.ts";
 import {
@@ -99,8 +99,8 @@ describe("system message replay", () => {
 
 	test("normalizes the legacy prompt and tool fields into a leading system message", () => {
 		const messages: Message[] = [{ role: "user", content: "hi", timestamp: 1 }];
-		expect(normalizeContext({ messages })).toEqual({ messages });
-		expect(normalizeContext({ systemPrompt: "", tools: [], messages })).toEqual({ messages });
+		expect<unknown>(normalizeContext({ messages })).toEqual({ messages });
+		expect<unknown>(normalizeContext({ systemPrompt: "", tools: [], messages })).toEqual({ messages });
 		expect(normalizeContext({ systemPrompt: "be brief", tools: [tool("a")], messages }).messages).toEqual([
 			{ role: "system", content: "be brief", toolsAdded: [tool("a")], timestamp: 0 },
 			...messages,

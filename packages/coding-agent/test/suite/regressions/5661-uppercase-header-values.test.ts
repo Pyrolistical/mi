@@ -1,6 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "bun:test";
 import { AuthStorage } from "../../../src/core/auth-storage.ts";
 import { createModelRegistry } from "../../model-runtime-test-utils.ts";
 import { createHarness } from "../harness.ts";

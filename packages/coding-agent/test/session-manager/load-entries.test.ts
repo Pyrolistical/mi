@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import type { FileEntry, SessionEntry, SessionMessageEntry } from "../../src/core/session-manager.ts";
 import { SessionManager } from "../../src/core/session-manager.ts";
 
@@ -177,6 +177,6 @@ describe("SessionManager.inMemory with preloaded entries", () => {
 		const session = SessionManager.inMemory("/project", undefined, entries);
 		const restored = session.getEntries()[0] as SessionMessageEntry;
 
-		expect(restored.message.role).toBe("hookMessage");
+		expect<unknown>(restored.message.role).toBe("hookMessage");
 	});
 });

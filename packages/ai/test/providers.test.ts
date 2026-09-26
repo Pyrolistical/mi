@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { envApiKeyAuth } from "../src/auth/helpers.ts";
 import type { AuthContext } from "../src/auth/types.ts";
 import { createModels, createProvider } from "../src/models.ts";

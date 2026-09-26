@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { transformMessages } from "../src/api/transform-messages.ts";
 import type { Message, Model } from "../src/types.ts";
 

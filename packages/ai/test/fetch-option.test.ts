@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "bun:test";
 import { streamSimple as streamOpenAICompletions } from "../src/api/openai-completions.ts";
 import type { Api, FetchFunction, Model } from "../src/types.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
@@ -23,9 +23,7 @@ function createModel<TApi extends Api>(api: TApi): Model<TApi> {
 }
 
 function mockFetches() {
-	const fallback = vi.fn<FetchFunction>(async () => {
-		throw new Error("ambient fetch must not be called");
-	});
+	const fallback = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("ambient fetch must not be called"));
 	const custom = vi.fn<FetchFunction>(
 		async () =>
 			new Response(JSON.stringify({ error: { message: "upstream rejected request" } }), {
@@ -33,17 +31,16 @@ function mockFetches() {
 				headers: { "content-type": "application/json" },
 			}),
 	);
-	vi.stubGlobal("fetch", fallback);
 	return { custom, fallback };
 }
 
 afterEach(() => {
-	vi.unstubAllGlobals();
+	vi.restoreAllMocks();
 });
 
 describe("fetch stream option", () => {
 
-	it("passes fetch through streamSimple to OpenAI SDK adapters", async () => {
+	it("passes fetch through streamSimple to OpenAI adapters", async () => {
 		const adapters = [
 			() =>
 				streamOpenAICompletions(createModel("openai-completions"), context, {
@@ -58,6 +55,7 @@ describe("fetch stream option", () => {
 		}
 		expect(custom).toHaveBeenCalledTimes(adapters.length);
 		expect(fallback).not.toHaveBeenCalled();
-		expect(globalThis.fetch).toBe(fallback);
+		expect<unknown>(globalThis.fetch).toBe(fallback);
 	});
+
 });

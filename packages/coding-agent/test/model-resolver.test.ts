@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { Agent } from "@earendil-works/pi-agent-core";
 import type { Model } from "@earendil-works/pi-ai";
 import { streamSimple } from "@earendil-works/pi-ai/compat";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "bun:test";
 import { AgentSession } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import {
@@ -118,7 +118,7 @@ describe("parseModelPattern", () => {
 			for (const level of ["off", "minimal", "low", "medium", "high", "xhigh", "max"]) {
 				const result = parseModelPattern(`sonnet:${level}`, allModels);
 				expect(result.model?.id).toBe("claude-sonnet-4-5");
-				expect(result.thinkingLevel).toBe(level);
+				expect<unknown>(result.thinkingLevel).toBe(level);
 				expect(result.warning).toBeUndefined();
 			}
 		});
@@ -256,7 +256,7 @@ describe("resolveModelScopeWithDiagnostics", () => {
 			const scopedModels = await resolveModelScope(["missing"], registry);
 
 			expect(scopedModels).toEqual([]);
-			expect(warn).toHaveBeenCalledOnce();
+			expect(warn).toHaveBeenCalledTimes(1);
 			expect(warn.mock.calls[0][0]).toContain('Warning: No models match pattern "missing"');
 		} finally {
 			warn.mockRestore();
@@ -635,7 +635,7 @@ describe("resolveCliModel", () => {
 
 				expect(result.error).toBeUndefined();
 				expect(result.model?.id).toBe("zai-org/GLM-5.1-FP8");
-				expect(result.thinkingLevel).toBe(level);
+				expect<unknown>(result.thinkingLevel).toBe(level);
 			}
 		});
 

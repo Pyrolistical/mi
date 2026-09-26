@@ -1,5 +1,5 @@
 import { fauxAssistantMessage } from "@earendil-works/pi-ai";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "bun:test";
 import { createHarness, getAssistantTexts, type Harness } from "../harness.ts";
 
 describe("issue #3317 network connection lost retry", () => {

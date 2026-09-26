@@ -161,7 +161,7 @@ export class ModelRuntime implements Models {
 			config,
 			modelsPath,
 			modelsStore,
-			process.env.PI_OFFLINE === undefined,
+			process.env.MI_OFFLINE === undefined,
 		);
 		runtime.rebuildProviders();
 		const refreshFromNetwork = runtime.modelNetworkEnabled && options.allowModelNetwork === true;

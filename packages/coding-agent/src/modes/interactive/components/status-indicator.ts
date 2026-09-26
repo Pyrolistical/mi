@@ -112,8 +112,7 @@ export class BranchSummaryStatusIndicator extends StatusIndicator {
 }
 
 export class IdleStatus implements Component {
-	invalidate(): void {
-	}
+	invalidate(): void {}
 
 	render(width: number): string[] {
 		const emptyLine = " ".repeat(width);

@@ -20,8 +20,7 @@ class UserMessageList implements Component {
 		this.selectedIndex = initialIndex >= 0 ? initialIndex : Math.max(0, messages.length - 1);
 	}
 
-	invalidate(): void {
-	}
+	invalidate(): void {}
 
 	render(width: number): string[] {
 		const lines: string[] = [];
@@ -69,17 +68,14 @@ class UserMessageList implements Component {
 		const kb = getKeybindings();
 		if (kb.matches(keyData, "tui.select.up")) {
 			this.selectedIndex = this.selectedIndex === 0 ? this.messages.length - 1 : this.selectedIndex - 1;
-		}
-		else if (kb.matches(keyData, "tui.select.down")) {
+		} else if (kb.matches(keyData, "tui.select.down")) {
 			this.selectedIndex = this.selectedIndex === this.messages.length - 1 ? 0 : this.selectedIndex + 1;
-		}
-		else if (kb.matches(keyData, "tui.select.confirm")) {
+		} else if (kb.matches(keyData, "tui.select.confirm")) {
 			const selected = this.messages[this.selectedIndex];
 			if (selected && this.onSelect) {
 				this.onSelect(selected.id);
 			}
-		}
-		else if (kb.matches(keyData, "tui.select.cancel")) {
+		} else if (kb.matches(keyData, "tui.select.cancel")) {
 			if (this.onCancel) {
 				this.onCancel();
 			}

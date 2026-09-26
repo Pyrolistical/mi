@@ -11,12 +11,9 @@ const KEYBOARD_PROTOCOL_RESPONSE_FRAGMENT_TIMEOUT_MS = 150;
 const KITTY_KEYBOARD_PROTOCOL_QUERY = `\x1b[>${DESIRED_KITTY_KEYBOARD_PROTOCOL_FLAGS}u\x1b[?u\x1b[c`;
 
 export type KeyboardProtocolNegotiationSequence =
-	| { type: "kitty-flags"; flags: number }
-	| { type: "device-attributes" };
+	{ type: "kitty-flags"; flags: number } | { type: "device-attributes" };
 
-function parseKeyboardProtocolNegotiationSequence(
-	sequence: string,
-): KeyboardProtocolNegotiationSequence | undefined {
+function parseKeyboardProtocolNegotiationSequence(sequence: string): KeyboardProtocolNegotiationSequence | undefined {
 	const kittyFlags = sequence.match(/^\x1b\[\?(\d+)u$/);
 	if (kittyFlags) {
 		return { type: "kitty-flags", flags: Number.parseInt(kittyFlags[1]!, 10) };
@@ -35,8 +32,7 @@ export function refreshTerminalDimensions(): void {
 	if (process.pid <= 0) return;
 	try {
 		process.kill(process.pid, "SIGWINCH");
-	} catch {
-	}
+	} catch {}
 }
 
 export interface Terminal {
@@ -102,8 +98,7 @@ export class ProcessTerminal implements Terminal {
 				const ts = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}-${String(now.getMinutes()).padStart(2, "0")}-${String(now.getSeconds()).padStart(2, "0")}`;
 				return path.join(env, `tui-${ts}-${process.pid}.log`);
 			}
-		} catch {
-		}
+		} catch {}
 		return env;
 	})();
 
@@ -348,8 +343,7 @@ export class ProcessTerminal implements Terminal {
 		if (this.writeLogPath) {
 			try {
 				fs.appendFileSync(this.writeLogPath, data, { encoding: "utf8" });
-			} catch {
-			}
+			} catch {}
 		}
 	}
 

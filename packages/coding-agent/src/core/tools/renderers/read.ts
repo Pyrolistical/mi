@@ -46,7 +46,6 @@ function getCompactReadClassification(
 		return { kind: "skill", label: basename(dirname(absolutePath)) || fileName };
 	}
 
-
 	if (COMPACT_RESOURCE_FILE_NAMES.has(fileName)) {
 		return { kind: "resource", label: formatPathRelativeToCwdOrAbsolute(absolutePath, cwd) };
 	}

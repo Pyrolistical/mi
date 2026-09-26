@@ -349,8 +349,7 @@ export class Input implements Component, Focusable {
 		this.cursor += cleanText.length;
 	}
 
-	invalidate(): void {
-	}
+	invalidate(): void {}
 
 	render(width: number): string[] {
 		const availableWidth = width - visibleWidth(this.prompt);

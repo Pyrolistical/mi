@@ -409,8 +409,7 @@ export class Editor implements Component, Focusable {
 		}
 	}
 
-	invalidate(): void {
-	}
+	invalidate(): void {}
 
 	protected renderTopBorder(width: number, hiddenLineCount: number): string {
 		const border = hiddenLineCount > 0 ? createScrollBorder("↑", hiddenLineCount, width) : "─".repeat(width);
@@ -971,21 +970,18 @@ export class Editor implements Component, Focusable {
 		if (!this.autocompleteState) {
 			if (char === "/" && this.isAtStartOfMessage()) {
 				this.tryTriggerAutocomplete();
-			}
-			else if (this.autocompleteTriggerCharacters.includes(char)) {
+			} else if (this.autocompleteTriggerCharacters.includes(char)) {
 				const currentLine = this.state.lines[this.state.cursorLine] || "";
 				const textBeforeCursor = currentLine.slice(0, this.state.cursorCol);
 				if (this.autocompleteTriggerPattern.test(textBeforeCursor)) {
 					this.tryTriggerAutocomplete();
 				}
-			}
-			else if (/[a-zA-Z0-9.\-_]/.test(char) || cjkBreakRegex.test(char)) {
+			} else if (/[a-zA-Z0-9.\-_]/.test(char) || cjkBreakRegex.test(char)) {
 				const currentLine = this.state.lines[this.state.cursorLine] || "";
 				const textBeforeCursor = currentLine.slice(0, this.state.cursorCol);
 				if (this.isInSlashCommandContext(textBeforeCursor)) {
 					this.tryTriggerAutocomplete();
-				}
-				else if (this.autocompleteTriggerPattern.test(textBeforeCursor)) {
+				} else if (this.autocompleteTriggerPattern.test(textBeforeCursor)) {
 					this.tryTriggerAutocomplete();
 				}
 			}
@@ -1163,8 +1159,7 @@ export class Editor implements Component, Focusable {
 			const textBeforeCursor = currentLine.slice(0, this.state.cursorCol);
 			if (this.isInSlashCommandContext(textBeforeCursor)) {
 				this.tryTriggerAutocomplete();
-			}
-			else if (this.autocompleteTriggerPattern.test(textBeforeCursor)) {
+			} else if (this.autocompleteTriggerPattern.test(textBeforeCursor)) {
 				this.tryTriggerAutocomplete();
 			}
 		}
@@ -1462,8 +1457,7 @@ export class Editor implements Component, Focusable {
 			const textBeforeCursor = currentLine.slice(0, this.state.cursorCol);
 			if (this.isInSlashCommandContext(textBeforeCursor)) {
 				this.tryTriggerAutocomplete();
-			}
-			else if (this.autocompleteTriggerPattern.test(textBeforeCursor)) {
+			} else if (this.autocompleteTriggerPattern.test(textBeforeCursor)) {
 				this.tryTriggerAutocomplete();
 			}
 		}

@@ -1284,10 +1284,7 @@ export function convertMessages(
 	return params;
 }
 
-function convertTools(
-	tools: Tool[],
-	compat: ResolvedOpenAICompletionsCompat,
-): ChatCompletionTool[] {
+function convertTools(tools: Tool[], compat: ResolvedOpenAICompletionsCompat): ChatCompletionTool[] {
 	return tools.map((tool) => {
 		const grammar = resolveGrammarConstrainedSampling(tool, compat.supportsOpenAIGrammarTools);
 		if (grammar) {

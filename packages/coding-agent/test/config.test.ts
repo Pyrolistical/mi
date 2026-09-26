@@ -25,4 +25,3 @@ describe("findNodePackageDir", () => {
 		expect(findNodePackageDir(bundleDir)).toBe(tempDir);
 	});
 });
-

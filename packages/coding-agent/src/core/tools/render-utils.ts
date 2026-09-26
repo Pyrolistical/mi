@@ -62,7 +62,6 @@ export function getTextOutput(
 	return output;
 }
 
-
 export function invalidArgText(theme: Theme): string {
 	return theme.fg("error", "[invalid arg]");
 }

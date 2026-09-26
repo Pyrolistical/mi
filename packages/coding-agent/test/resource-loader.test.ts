@@ -205,7 +205,6 @@ Project skill`,
 			expect(extensionsResult.extensions[0].path).toBe(join(cwd, ".pi", "extensions", "shared.ts"));
 		});
 
-
 		it("should keep both extensions loaded when command names collide", async () => {
 			const userExtDir = join(agentDir, "extensions");
 			const projectExtDir = join(cwd, ".pi", "extensions");
@@ -378,7 +377,6 @@ Content`,
 
 			expect(loader.getSystemPrompt()).toBe("You are a helpful assistant.");
 		});
-
 
 		it("should discover APPEND_SYSTEM.md", async () => {
 			const piDir = join(cwd, ".pi");

@@ -70,8 +70,7 @@ describe("Cache Retention (MI_CACHE_RETENTION)", () => {
 				for await (const event of s) {
 					if (event.type === "error") break;
 				}
-			} catch {
-			}
+			} catch {}
 
 			expect(capturedPayload).not.toBeNull();
 			expect(capturedPayload.prompt_cache_key).toBe("session-completions");
@@ -94,8 +93,7 @@ describe("Cache Retention (MI_CACHE_RETENTION)", () => {
 				for await (const event of s) {
 					if (event.type === "error") break;
 				}
-			} catch {
-			}
+			} catch {}
 
 			expect(capturedPayload).not.toBeNull();
 			expect(capturedPayload.prompt_cache_key).toBeUndefined();

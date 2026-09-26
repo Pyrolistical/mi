@@ -358,7 +358,6 @@ describe("ModelRegistry", () => {
 			expect(openrouter.find((m) => m.id === "openai/gpt-oss-20b")?.promptCache).toBeUndefined();
 		});
 
-
 		test("model override with compat.openRouterRouting", async () => {
 			writeRawModelsJson({
 				openrouter: {
@@ -572,9 +571,9 @@ describe("ModelRegistry", () => {
 			});
 
 			const registry = await createModelRegistry(authStorage, modelsJsonPath);
-			expect(
-				getModelsForProvider(registry, "openrouter").find((m) => m.id === "openai/gpt-oss-120b")?.name,
-			).toBe("First Name");
+			expect(getModelsForProvider(registry, "openrouter").find((m) => m.id === "openai/gpt-oss-120b")?.name).toBe(
+				"First Name",
+			);
 
 			writeRawModelsJson({
 				openrouter: {
@@ -590,9 +589,9 @@ describe("ModelRegistry", () => {
 			});
 			await registry.refresh();
 
-			expect(
-				getModelsForProvider(registry, "openrouter").find((m) => m.id === "openai/gpt-oss-120b")?.name,
-			).toBe("Second Name");
+			expect(getModelsForProvider(registry, "openrouter").find((m) => m.id === "openai/gpt-oss-120b")?.name).toBe(
+				"Second Name",
+			);
 		});
 
 		test("removing model override restores defined values", async () => {
@@ -655,7 +654,6 @@ describe("ModelRegistry", () => {
 				],
 			});
 			expect(registry.getProviderDisplayName("named-provider")).toBe("Named Provider");
-
 		});
 
 		test("modelOverrides apply to dynamically registered provider models", async () => {

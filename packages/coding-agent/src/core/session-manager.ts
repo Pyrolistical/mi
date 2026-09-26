@@ -132,10 +132,7 @@ export interface CustomMessageEntry<T = unknown> extends SessionEntryBase {
 }
 
 export type ContextEditableContent =
-	| UserMessage["content"]
-	| AssistantMessage["content"]
-	| ToolResultMessage["content"]
-	| CustomMessage["content"];
+	UserMessage["content"] | AssistantMessage["content"] | ToolResultMessage["content"] | CustomMessage["content"];
 
 export interface ContextEditEntry extends SessionEntryBase {
 	type: "context_edit";
@@ -303,8 +300,7 @@ export function parseSessionEntries(content: string): FileEntry[] {
 		try {
 			const entry = JSON.parse(line) as FileEntry;
 			entries.push(entry);
-		} catch {
-		}
+		} catch {}
 	}
 
 	return entries;
@@ -473,15 +469,13 @@ export function buildSessionProjection(
 	for (const entry of contextEntries) {
 		if (entry.type === "context_edit") edits.set(entry.targetId, entry);
 	}
-	const projectedEntries = contextEntries.map(
-		(sourceEntry, index): ProjectedSessionEntry => ({
-			sourceEntry,
-			messages:
-				sourceEntry.type === "compaction" && index > 0
-					? []
-					: projectContextEntry(sourceEntry, edits.get(sourceEntry.id)),
-		}),
-	);
+	const projectedEntries = contextEntries.map((sourceEntry, index): ProjectedSessionEntry => ({
+		sourceEntry,
+		messages:
+			sourceEntry.type === "compaction" && index > 0
+				? []
+				: projectContextEntry(sourceEntry, edits.get(sourceEntry.id)),
+	}));
 	return {
 		entries: projectedEntries,
 		messages: projectedEntries.flatMap((entry) => entry.messages),
@@ -778,11 +772,7 @@ async function buildSessionInfo(
 	}
 }
 
-export type SessionListProgress = (
-	loaded: number,
-	total: number,
-	partialSessions?: readonly SessionInfo[],
-) => void;
+export type SessionListProgress = (loaded: number, total: number, partialSessions?: readonly SessionInfo[]) => void;
 
 const MAX_CONCURRENT_SESSION_INFO_LOADS = 10;
 const MAX_CONCURRENT_SESSION_DISCOVERY_LOADS = 64;
@@ -1617,8 +1607,7 @@ export class SessionManager {
 				if (filterCwd && !sessionCwdMatches(getSessionHeaderCwd(header), resolvedCwd)) continue;
 				return path;
 			}
-		} catch {
-		}
+		} catch {}
 		return undefined;
 	}
 
@@ -1671,7 +1660,9 @@ export class SessionManager {
 
 		try {
 			if (!existsSync(sessionsDir)) return [];
-			const entries = (await readdir(sessionsDir, { withFileTypes: true })).sort((a, b) => (a.name < b.name ? -1 : 1));
+			const entries = (await readdir(sessionsDir, { withFileTypes: true })).sort((a, b) =>
+				a.name < b.name ? -1 : 1,
+			);
 			const dirs = entries
 				.filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
 				.map((entry) => join(sessionsDir, entry.name));

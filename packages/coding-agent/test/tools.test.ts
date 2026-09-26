@@ -13,11 +13,7 @@ import {
 import { createEditToolDefinition } from "../src/core/tools/edit.ts";
 import { createReadToolDefinition } from "../src/core/tools/read.ts";
 import { createWriteToolDefinition } from "../src/core/tools/write.ts";
-import {
-	createEditTool,
-	createReadTool,
-	createWriteTool,
-} from "../src/index.ts";
+import { createEditTool, createReadTool, createWriteTool } from "../src/index.ts";
 import * as shellModule from "../src/utils/shell.ts";
 
 const readTool = createReadTool(process.cwd());
@@ -185,7 +181,6 @@ describe("Coding Agent Tools", () => {
 			expect((imageBlock?.data ?? "").length).toBeGreaterThan(0);
 		});
 
-
 		it("should treat files with image extension but non-image content as text", async () => {
 			const testFile = join(testDir, "not-an-image.png");
 			writeFileSync(testFile, "definitely not a png");
@@ -287,7 +282,6 @@ describe("Coding Agent Tools", () => {
 			expect(readFileSync(testFile, "utf-8")).toBe("ALPHA\nbeta\nGAMMA\ndelta\n");
 		});
 
-
 		it("should match edits against the original file, not incrementally", async () => {
 			const testFile = join(testDir, "edit-multi-original.txt");
 			writeFileSync(testFile, "foo\nbar\nbaz\n");
@@ -379,8 +373,6 @@ describe("Coding Agent Tools", () => {
 				}),
 			).rejects.toThrow("Could not edit file: broken.txt. Error: disk offline.");
 		});
-
-
 	});
 
 	describe("bash tool", () => {

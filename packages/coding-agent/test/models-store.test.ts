@@ -62,5 +62,4 @@ describe("FileModelsStore", () => {
 
 		expect(statSync(managedModelsPath).mode & 0o777).toBe(0o660);
 	});
-
 });

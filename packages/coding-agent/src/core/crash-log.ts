@@ -139,7 +139,6 @@ export function takeUnnotifiedCrash(path = crashLogPath(), now = Date.now()): Cr
 			records.map((record) => (record.notified ? record : { ...record, notified: true })),
 			path,
 		);
-	} catch {
-	}
+	} catch {}
 	return crash;
 }

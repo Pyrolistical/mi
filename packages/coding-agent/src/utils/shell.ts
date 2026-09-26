@@ -17,8 +17,7 @@ function findExecutableOnPath(executable: string): string | null {
 				return firstMatch;
 			}
 		}
-	} catch {
-	}
+	} catch {}
 	return null;
 }
 
@@ -96,7 +95,6 @@ export function killProcessTree(pid: number): void {
 	} catch {
 		try {
 			process.kill(pid, "SIGKILL");
-		} catch {
-		}
+		} catch {}
 	}
 }

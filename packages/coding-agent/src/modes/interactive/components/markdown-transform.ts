@@ -21,8 +21,7 @@ function applyMarkdownTransformers(
 			if (typeof transformed === "string") {
 				transformedMarkdown = transformed;
 			}
-		} catch {
-		}
+		} catch {}
 	}
 	return transformedMarkdown;
 }

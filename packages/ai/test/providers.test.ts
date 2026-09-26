@@ -4,11 +4,7 @@ import type { AuthContext } from "../src/auth/types.ts";
 import { createModels, createProvider } from "../src/models.ts";
 import { InMemoryModelsStore } from "../src/models-store.ts";
 import { fauxAssistantMessage, fauxProvider } from "../src/providers/faux.ts";
-import type {
-	Api,
-	Model,
-	ProviderStreams,
-} from "../src/types.ts";
+import type { Api, Model, ProviderStreams } from "../src/types.ts";
 import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 
@@ -41,7 +37,6 @@ describe("envApiKeyAuth", () => {
 
 		expect(await auth.resolve({ ctx: fakeAuthContext({}), signal: neverAbortedSignal })).toBeUndefined();
 	});
-
 });
 
 describe("createProvider", () => {
@@ -72,7 +67,6 @@ describe("createProvider", () => {
 			maxTokens: 1000,
 		};
 	}
-
 
 	it("dispatches on model.api for mixed-API providers", async () => {
 		const calls: string[] = [];
@@ -130,7 +124,6 @@ describe("createProvider", () => {
 		expect(capturedApiKey).toBe("request-key");
 		expect(capturedEnv).toEqual({ PROVIDER_ONLY: "provider", REQUEST_ONLY: "request", SHARED: "request" });
 	});
-
 
 	it("produces a stream error for a model whose api has no implementation", async () => {
 		const provider = createProvider({
@@ -204,6 +197,4 @@ describe("fauxProvider", () => {
 		expect(result.content).toEqual([{ type: "text", text: "hello from faux" }]);
 		expect(faux.state.callCount).toBe(1);
 	});
-
-
 });

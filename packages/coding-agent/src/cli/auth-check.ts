@@ -7,10 +7,7 @@ import { AuthCommandError, getAuthCredential, validateAuthCommandArgs } from "./
 
 type AuthCheckStatus = "ready" | "not_ready" | "invalid";
 type AuthCheckReason =
-	| "provider_not_found"
-	| "credentials_not_configured"
-	| "credential_not_available"
-	| "invalid_state";
+	"provider_not_found" | "credentials_not_configured" | "credential_not_available" | "invalid_state";
 
 export interface AuthCheckResult {
 	status: AuthCheckStatus;
@@ -45,7 +42,10 @@ export async function checkProviderAuth(args: Args, modelRuntime: ModelRuntime):
 	}
 }
 
-export async function getProviderCredential(providerId: string, modelRuntime: ModelRuntime): Promise<string | undefined> {
+export async function getProviderCredential(
+	providerId: string,
+	modelRuntime: ModelRuntime,
+): Promise<string | undefined> {
 	return getAuthCredential(await modelRuntime.getAuth(providerId));
 }
 

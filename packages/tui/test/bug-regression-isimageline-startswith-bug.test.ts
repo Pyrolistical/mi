@@ -107,11 +107,7 @@ describe("Bug regression: isImageLine() crash with image escape sequences", () =
 			const base64Char = "A".repeat(100);
 			const iterm2Sequence = "\x1b]1337;File=size=800,600;inline=1:";
 
-			const crashLine =
-				"Output: " +
-				iterm2Sequence +
-				base64Char.repeat(3040) +
-				" end of output";
+			const crashLine = "Output: " + iterm2Sequence + base64Char.repeat(3040) + " end of output";
 
 			assert(crashLine.length > 300000, "Test line should be > 300KB");
 

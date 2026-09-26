@@ -176,9 +176,7 @@ describe("SettingsManager", () => {
 		});
 	});
 
-	describe("project trust", () => {
-
-	});
+	describe("project trust", () => {});
 
 	describe("project settings directory creation", () => {
 		it("should not create .pi folder when only reading project settings", () => {
@@ -246,9 +244,7 @@ describe("SettingsManager", () => {
 		});
 	});
 
-	describe("httpIdleTimeoutMs", () => {
-
-	});
+	describe("httpIdleTimeoutMs", () => {});
 
 	describe("outputPad", () => {
 		it("should default to 1 and persist binary values", async () => {
@@ -273,9 +269,7 @@ describe("SettingsManager", () => {
 		});
 	});
 
-	describe("markdown.mermaid", () => {
-
-	});
+	describe("markdown.mermaid", () => {});
 
 	describe("shellCommandPrefix", () => {
 		it("should load shellCommandPrefix from settings", () => {

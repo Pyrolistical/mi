@@ -31,7 +31,6 @@ describe("blockImages setting", () => {
 			manager.setBlockImages(false);
 			expect(manager.getBlockImages()).toBe(false);
 		});
-
 	});
 
 	describe("Read tool", () => {

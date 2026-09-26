@@ -63,6 +63,5 @@ export function lazyApi(load: () => Promise<ProviderStreams>): ProviderStreams {
 			lazyStream(model, async () => (await load()).streamSimple(model, context, options)),
 	};
 
-
 	return api;
 }

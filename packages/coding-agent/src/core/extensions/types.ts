@@ -485,10 +485,7 @@ export interface CompactionEntryDraft {
 }
 
 export type SessionBoundaryDraft =
-	| CustomEntryDraft
-	| CustomMessageEntryDraft
-	| ContextEditEntryDraft
-	| CompactionEntryDraft;
+	CustomEntryDraft | CustomMessageEntryDraft | ContextEditEntryDraft | CompactionEntryDraft;
 
 export interface BoundaryContextPreview {
 	contextEntries: ProjectedSessionEntry[];
@@ -621,9 +618,7 @@ export interface InputEvent {
 }
 
 export type InputEventResult =
-	| { action: "continue" }
-	| { action: "transform"; text: string; images?: ImageContent[] }
-	| { action: "handled" };
+	{ action: "continue" } | { action: "transform"; text: string; images?: ImageContent[] } | { action: "handled" };
 
 interface ToolCallEventBase {
 	type: "tool_call";
@@ -656,11 +651,7 @@ export interface CustomToolCallEvent extends ToolCallEventBase {
 }
 
 export type ToolCallEvent =
-	| BashToolCallEvent
-	| ReadToolCallEvent
-	| EditToolCallEvent
-	| WriteToolCallEvent
-	| CustomToolCallEvent;
+	BashToolCallEvent | ReadToolCallEvent | EditToolCallEvent | WriteToolCallEvent | CustomToolCallEvent;
 
 interface ToolResultEventBase {
 	type: "tool_result";
@@ -697,11 +688,7 @@ interface CustomToolResultEvent extends ToolResultEventBase {
 }
 
 export type ToolResultEvent =
-	| BashToolResultEvent
-	| ReadToolResultEvent
-	| EditToolResultEvent
-	| WriteToolResultEvent
-	| CustomToolResultEvent;
+	BashToolResultEvent | ReadToolResultEvent | EditToolResultEvent | WriteToolResultEvent | CustomToolResultEvent;
 
 export function isBashToolResult(e: ToolResultEvent): e is BashToolResultEvent {
 	return e.toolName === "bash";

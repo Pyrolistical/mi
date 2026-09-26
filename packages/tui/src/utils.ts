@@ -1,4 +1,3 @@
-
 const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 const wordSegmenter = new Intl.Segmenter(undefined, { granularity: "word" });
 
@@ -517,8 +516,7 @@ class AnsiCodeTracker {
 				default:
 					if ((code >= 30 && code <= 37) || (code >= 90 && code <= 97)) {
 						this.fgColor = String(code);
-					}
-					else if ((code >= 40 && code <= 47) || (code >= 100 && code <= 107)) {
+					} else if ((code >= 40 && code <= 47) || (code >= 100 && code <= 107)) {
 						this.bgColor = String(code);
 					}
 					break;

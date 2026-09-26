@@ -8,8 +8,7 @@ export class DynamicBorder implements Component {
 		this.color = color;
 	}
 
-	invalidate(): void {
-	}
+	invalidate(): void {}
 
 	render(width: number): string[] {
 		return [this.color("─".repeat(Math.max(1, width)))];

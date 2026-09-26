@@ -692,7 +692,6 @@ describe("resolveCliModel", () => {
 });
 
 describe("default model selection", () => {
-
 	test("findInitialModel selects ai-gateway default when available", () => {
 		const aiGatewayModel: Model<"anthropic-messages"> = {
 			id: "anthropic/claude-opus-4-6",

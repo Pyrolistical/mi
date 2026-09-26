@@ -235,12 +235,10 @@ export class ModelRuntime implements Models {
 		const [available, checks, credentials] = await Promise.all([
 			this.models.getAvailable(undefined, { signal }),
 			Promise.all(
-				providers.map(
-					async (provider): Promise<[string, AuthCheck | undefined]> => [
-						provider.id,
-						await this.models.checkAuth(provider.id, { signal }),
-					],
-				),
+				providers.map(async (provider): Promise<[string, AuthCheck | undefined]> => [
+					provider.id,
+					await this.models.checkAuth(provider.id, { signal }),
+				]),
 			),
 			this.credentials.list({ signal }),
 		]);
@@ -584,9 +582,6 @@ export class ModelRuntime implements Models {
 		return this.streamSimple(model, context, options).result();
 	}
 
-
-
-
 	logout(providerId: string, options: AuthOperationOptions = {}): Promise<void> {
 		const signal = operationSignal(options.signal);
 		return this.enqueueCredentialOperation(providerId, signal, async () => {
@@ -628,8 +623,7 @@ export class ModelRuntime implements Models {
 		} else {
 			try {
 				await this.queueAvailabilityRefresh(options.signal);
-			} catch {
-			}
+			} catch {}
 		}
 		return { aborted: result.aborted || (options.signal?.aborted ?? false), errors };
 	}

@@ -3,13 +3,7 @@ import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "bun:test";
-import {
-	canonicalizePath,
-	getCwdRelativePath,
-	isLocalPath,
-	normalizePath,
-	resolvePath,
-} from "../src/utils/paths.ts";
+import { canonicalizePath, getCwdRelativePath, isLocalPath, normalizePath, resolvePath } from "../src/utils/paths.ts";
 
 let tempDir: string;
 

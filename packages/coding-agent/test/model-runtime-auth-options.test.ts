@@ -69,9 +69,6 @@ describe("ModelRuntime auth options", () => {
 		expect(runtime.getError()).toBeUndefined();
 	});
 
-
-
-
 	it("constructs an API key method for an extension API-key provider", async () => {
 		const runtime = await ModelRuntime.create({ credentials: AuthStorage.inMemory(), modelsPath: null });
 		runtime.registerProvider("extension-api-key", {
@@ -177,6 +174,4 @@ describe("ModelRuntime auth options", () => {
 			"x-transformed": "yes",
 		});
 	});
-
-
 });

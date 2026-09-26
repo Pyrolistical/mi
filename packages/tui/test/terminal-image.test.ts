@@ -108,11 +108,7 @@ describe("isImageLine", () => {
 			const base64Char = "A".repeat(100);
 			const imageSequence = "\x1b]1337;File=size=800,600;inline=1:";
 
-			const longLine =
-				"Text prefix " +
-				imageSequence +
-				base64Char.repeat(3000) +
-				" suffix";
+			const longLine = "Text prefix " + imageSequence + base64Char.repeat(3000) + " suffix";
 
 			assert.strictEqual(longLine.length > 300000, true);
 			assert.strictEqual(isImageLine(longLine), true);

@@ -12,8 +12,7 @@ export class TruncatedText implements Component {
 		this.paddingY = paddingY;
 	}
 
-	invalidate(): void {
-	}
+	invalidate(): void {}
 
 	render(width: number): string[] {
 		const result: string[] = [];

@@ -424,7 +424,7 @@ export function composeModelProvider(
 						await context.publish({
 							update: () => {
 								if (refreshed) {
-									applyExtension(providerId, applyModelsJson(providerId, (base?.getModels() ?? []), config), {
+									applyExtension(providerId, applyModelsJson(providerId, base?.getModels() ?? [], config), {
 										...extension,
 										models: refreshed,
 									});

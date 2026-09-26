@@ -66,8 +66,7 @@ export class SelectList implements Component {
 		this.selectedIndex = Math.max(0, Math.min(index, this.filteredItems.length - 1));
 	}
 
-	invalidate(): void {
-	}
+	invalidate(): void {}
 
 	render(width: number): string[] {
 		const lines: string[] = [];
@@ -103,18 +102,15 @@ export class SelectList implements Component {
 		if (kb.matches(keyData, "tui.select.up")) {
 			this.selectedIndex = this.selectedIndex === 0 ? this.filteredItems.length - 1 : this.selectedIndex - 1;
 			this.notifySelectionChange();
-		}
-		else if (kb.matches(keyData, "tui.select.down")) {
+		} else if (kb.matches(keyData, "tui.select.down")) {
 			this.selectedIndex = this.selectedIndex === this.filteredItems.length - 1 ? 0 : this.selectedIndex + 1;
 			this.notifySelectionChange();
-		}
-		else if (kb.matches(keyData, "tui.select.confirm")) {
+		} else if (kb.matches(keyData, "tui.select.confirm")) {
 			const selectedItem = this.filteredItems[this.selectedIndex];
 			if (selectedItem && this.onSelect) {
 				this.onSelect(selectedItem);
 			}
-		}
-		else if (kb.matches(keyData, "tui.select.cancel")) {
+		} else if (kb.matches(keyData, "tui.select.cancel")) {
 			if (this.onCancel) {
 				this.onCancel();
 			}

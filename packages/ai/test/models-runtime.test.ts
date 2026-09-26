@@ -175,7 +175,6 @@ describe("Models runtime", () => {
 		}
 	});
 
-
 	it("swallows provider source failures for both all-provider and single-provider listing", () => {
 		const models = createModels();
 		models.setProvider(

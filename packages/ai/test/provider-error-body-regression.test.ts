@@ -90,6 +90,4 @@ describe("provider error body passthrough (per-tier regression)", () => {
 		const occurrences = output.errorMessage?.match(/upstream WAF blocked policy XYZ/g) ?? [];
 		expect(occurrences).toHaveLength(1);
 	});
-
-
 });

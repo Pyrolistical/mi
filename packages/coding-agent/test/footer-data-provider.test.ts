@@ -16,11 +16,7 @@ const execFileMock = vi.fn(
 		if (args[1] === "symbolic-ref") {
 			setTimeout(
 				() =>
-					callback(
-						resolvedBranch ? null : new Error("detached"),
-						resolvedBranch ? `${resolvedBranch}\n` : "",
-						"",
-					),
+					callback(resolvedBranch ? null : new Error("detached"), resolvedBranch ? `${resolvedBranch}\n` : "", ""),
 				0,
 			);
 			return;

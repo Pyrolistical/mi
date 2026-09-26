@@ -266,8 +266,7 @@ export class AuthStorage implements CredentialStore {
 				return { result: undefined };
 			});
 			this.updateReadState(this.parseStorageData(content), revision);
-		} catch {
-		}
+		} catch {}
 	}
 
 	private async reloadFromStorageAsync(options?: AuthOperationOptions): Promise<AuthStorageData> {

@@ -1016,8 +1016,7 @@ export class AgentSession {
 			this.abortBranchSummary();
 			this.abortBash();
 			this.agent.abort();
-		} catch {
-		}
+		} catch {}
 
 		this._extensionRunner.invalidate(
 			"This extension ctx is stale after session replacement or reload. Do not use a captured pi or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().",
@@ -2038,8 +2037,7 @@ export class AgentSession {
 			const estimatedTokensAfter = estimateMessagesTokens(this.sessionManager.buildSessionProjection().messages);
 
 			const savedCompactionEntry = newEntries.find((e) => e.type === "compaction" && e.summary === summary) as
-				| CompactionEntry
-				| undefined;
+				CompactionEntry | undefined;
 
 			if (this._extensionRunner && savedCompactionEntry) {
 				await this._extensionRunner.emit({
@@ -2313,8 +2311,7 @@ export class AgentSession {
 			const estimatedTokensAfter = estimateMessagesTokens(this.sessionManager.buildSessionProjection().messages);
 
 			const savedCompactionEntry = newEntries.find((e) => e.type === "compaction" && e.summary === summary) as
-				| CompactionEntry
-				| undefined;
+				CompactionEntry | undefined;
 
 			if (this._extensionRunner && savedCompactionEntry) {
 				await this._extensionRunner.emit({

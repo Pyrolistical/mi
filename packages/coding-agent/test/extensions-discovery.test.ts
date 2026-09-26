@@ -4,7 +4,6 @@ import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { discoverAndLoadExtensions } from "../src/core/extensions/loader.ts";
 
-
 describe("extensions discovery", () => {
 	let tempDir: string;
 	let extensionsDir: string;
@@ -100,7 +99,6 @@ describe("extensions discovery", () => {
 		expect(result.extensions[0].commands.has("host-module")).toBe(true);
 		expect(result.warnings).toEqual([]);
 	});
-
 
 	it("discovers direct .js files in extensions/", async () => {
 		fs.writeFileSync(path.join(extensionsDir, "foo.js"), extensionCode);
@@ -248,7 +246,6 @@ describe("extensions discovery", () => {
 		expect(result.extensions).toHaveLength(1);
 		expect(result.extensions[0].path).toContain("my-ext.ts");
 	});
-
 
 	it("registers message and entry renderers", async () => {
 		const extCode = `

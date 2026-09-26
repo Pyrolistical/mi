@@ -18,5 +18,5 @@
 			"@earendil-works/pi-tui/*": ["./packages/tui/src/*"]
 		}
 	},
-	"include": ["test-support/**/*", "packages/*/src/**/*", "packages/*/test/**/*"]
+	"include": ["scripts/**/*", "packages/*/src/**/*", "packages/*/test/**/*"]
 }

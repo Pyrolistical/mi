@@ -64,7 +64,6 @@ export interface ModelsRequestTransforms {
 export type ModelsApiStreamOptions<TApi extends Api> = ApiStreamOptions<TApi> & ModelsRequestTransforms;
 export type ModelsSimpleStreamOptions = SimpleStreamOptions & ModelsRequestTransforms;
 
-
 export interface Provider<TApi extends Api = Api> {
 	readonly id: string;
 	readonly name: string;
@@ -211,18 +210,14 @@ class ModelsImpl implements MutableModels {
 		for (const entry of this.providers.values()) {
 			try {
 				models.push(...entry.getModels());
-			} catch {
-			}
+			} catch {}
 		}
 		return models;
 	}
 
-
-
 	getModel(provider: string, id: string): Model<Api> | undefined {
 		return this.getModels(provider).find((model) => model.id === id);
 	}
-
 
 	private supersedeProviderRefresh(providerId: string): number {
 		const generation = (this.refreshGenerations.get(providerId) ?? 0) + 1;
@@ -543,9 +538,6 @@ class ModelsImpl implements MutableModels {
 	): Promise<AssistantMessage> {
 		return this.streamSimple(model, context, options).result();
 	}
-
-
-
 }
 
 export function createModels(options?: CreateModelsOptions): MutableModels {
@@ -579,9 +571,7 @@ export function createProvider<TApi extends Api = Api>(input: CreateProviderOpti
 	const currentModels = (): readonly Model<TApi>[] => {
 		const merged = [...baselineModels];
 		for (const model of dynamicModels) {
-			const index = merged.findIndex(
-				(entry) => entry.id === model.id,
-			);
+			const index = merged.findIndex((entry) => entry.id === model.id);
 			if (index >= 0) merged[index] = model;
 			else merged.push(model);
 		}

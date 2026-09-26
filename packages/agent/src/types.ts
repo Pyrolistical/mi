@@ -124,8 +124,7 @@ export interface AgentLoopConfig extends SimpleStreamOptions {
 
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
-export interface CustomAgentMessages {
-}
+export interface CustomAgentMessages {}
 
 export type AgentMessage = Message | CustomAgentMessages[keyof CustomAgentMessages];
 

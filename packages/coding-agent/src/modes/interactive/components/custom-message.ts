@@ -71,8 +71,7 @@ export class CustomMessageComponent extends Container {
 					this.addChild(component);
 					return;
 				}
-			} catch {
-			}
+			} catch {}
 		}
 
 		this.addChild(this.box);

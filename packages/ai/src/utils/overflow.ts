@@ -27,12 +27,7 @@ const OVERFLOW_PATTERNS = [
 	/token limit exceeded/i,
 ];
 
-
-const NON_OVERFLOW_PATTERNS = [
-	/^(Throttling error|Service unavailable):/i,
-	/rate limit/i,
-	/too many requests/i,
-];
+const NON_OVERFLOW_PATTERNS = [/^(Throttling error|Service unavailable):/i, /rate limit/i, /too many requests/i];
 
 export function isContextOverflow(message: AssistantMessage, contextWindow?: number): boolean {
 	if (message.stopReason === "error" && message.errorMessage) {

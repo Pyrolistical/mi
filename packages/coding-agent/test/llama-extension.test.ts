@@ -40,13 +40,7 @@ afterEach(async () => {
 describe("llama.cpp extension", () => {
 	it("registers a native provider", async () => {
 		const runtime = createExtensionRuntime();
-		await loadExtensionFromFactory(
-			llamaExtension,
-			process.cwd(),
-			createEventBus(),
-			runtime,
-			"<inline:llama.cpp>",
-		);
+		await loadExtensionFromFactory(llamaExtension, process.cwd(), createEventBus(), runtime, "<inline:llama.cpp>");
 
 		expect(runtime.pendingNativeProviderRegistrations.map((entry) => entry.provider.id)).toEqual([LLAMA_PROVIDER_ID]);
 	});

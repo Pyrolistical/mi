@@ -13,6 +13,5 @@ export function restoreSandboxEnv(): void {
 				process.env[entry.slice(0, idx)] = entry.slice(idx + 1);
 			}
 		}
-	} catch {
-	}
+	} catch {}
 }

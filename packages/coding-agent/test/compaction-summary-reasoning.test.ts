@@ -242,8 +242,6 @@ describe("generateSummary reasoning options", () => {
 		expect(completeSimpleMock.mock.calls[0][2]).not.toHaveProperty("reasoning");
 	});
 
-
-
 	it("clamps compaction summary maxTokens to the model output cap", async () => {
 		const preparation: CompactionPreparation = {
 			firstKeptEntryId: "entry-keep",

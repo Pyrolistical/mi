@@ -39,7 +39,6 @@ afterEach(() => {
 });
 
 describe("fetch stream option", () => {
-
 	it("passes fetch through streamSimple to OpenAI adapters", async () => {
 		const adapters = [
 			() =>
@@ -57,5 +56,4 @@ describe("fetch stream option", () => {
 		expect(fallback).not.toHaveBeenCalled();
 		expect<unknown>(globalThis.fetch).toBe(fallback);
 	});
-
 });

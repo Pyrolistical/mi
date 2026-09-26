@@ -119,7 +119,6 @@ describe("ExtensionRunner", () => {
 		});
 	});
 
-
 	describe("shortcut conflicts", () => {
 		it("warns when extension shortcut conflicts with built-in", async () => {
 			const extCode = `
@@ -515,7 +514,6 @@ describe("ExtensionRunner", () => {
 		});
 
 		it("exposes hasUI true when a UI context is provided", async () => {
-
 			const result = await discoverAndLoadExtensions([], tempDir, tempDir);
 			const runner = new ExtensionRunner(result.extensions, result.runtime, tempDir, sessionManager, modelRegistry);
 			runner.bindCore(extensionActions, extensionContextActions);

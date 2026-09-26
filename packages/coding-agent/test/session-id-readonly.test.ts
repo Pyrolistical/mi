@@ -45,8 +45,7 @@ function hasSessionWithId(root: string, sessionId: string): boolean {
 			const firstLine = readFileSync(path, "utf8").split("\n", 1)[0];
 			const header = JSON.parse(firstLine) as { type?: string; id?: string };
 			if (header.type === "session" && header.id === sessionId) return true;
-		} catch {
-		}
+		} catch {}
 	}
 	return false;
 }

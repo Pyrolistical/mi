@@ -58,7 +58,6 @@ async function runtimeWithProvider(
 }
 
 describe("ModelRuntime credential synchronization", () => {
-
 	it("reports cancellation that occurs during provider-scoped availability", async () => {
 		let blockAvailability = false;
 		let markStarted: (() => void) | undefined;
@@ -124,5 +123,4 @@ describe("ModelRuntime credential synchronization", () => {
 		finish?.();
 		await first;
 	});
-
 });

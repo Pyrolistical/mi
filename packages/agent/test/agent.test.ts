@@ -1,4 +1,11 @@
-import { type AssistantMessage, type AssistantMessageEvent, EventStream, getCurrentSystemMessage, toToolDeclaration, type UserMessage } from "@earendil-works/pi-ai/compat";
+import {
+	type AssistantMessage,
+	type AssistantMessageEvent,
+	EventStream,
+	getCurrentSystemMessage,
+	toToolDeclaration,
+	type UserMessage,
+} from "@earendil-works/pi-ai/compat";
 import { Type } from "typebox";
 import { describe, expect, it } from "bun:test";
 import {

@@ -50,9 +50,7 @@ describe("credential print commands", () => {
 			await main(["auth", "check", "--provider", "openrouter", "--credentails"]);
 			const stderr = errorSpy.mock.calls.map(([message]) => String(message)).join("\n");
 			expect(stderr).toContain('Unknown option --credentails for "auth check".');
-			expect(stderr).toContain(
-				'Use "mi --help" or "mi auth check --provider <provider> [--json] [--credentials]".',
-			);
+			expect(stderr).toContain('Use "mi --help" or "mi auth check --provider <provider> [--json] [--credentials]".');
 			expect<unknown>(process.exitCode).toBe(1);
 		} finally {
 			process.exitCode = originalExitCode ?? 0;

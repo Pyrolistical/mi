@@ -12,11 +12,11 @@ import { createTestResourceLoader } from "../utilities.ts";
 import { createHarness, getMessageText, type Harness } from "./harness.ts";
 
 const processImage = vi.fn(async (_bytes: Uint8Array, mimeType: string) => ({
-		ok: true as const,
-		data: Buffer.from("normalized").toString("base64"),
-		mimeType,
-		hints: [],
-	}));
+	ok: true as const,
+	data: Buffer.from("normalized").toString("base64"),
+	mimeType,
+	hints: [],
+}));
 vi.mock("../../src/utils/image-process.ts", () => ({ processImage }));
 
 describe("AgentSession prompt characterization", () => {

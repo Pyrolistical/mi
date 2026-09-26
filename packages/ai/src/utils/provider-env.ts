@@ -20,8 +20,7 @@ function getBunSandboxEnvValue(name: string): string | undefined {
 					procEnvCache.set(entry.slice(0, idx), entry.slice(idx + 1));
 				}
 			}
-		} catch {
-		}
+		} catch {}
 	}
 
 	return procEnvCache.get(name);

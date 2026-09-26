@@ -170,10 +170,7 @@ type SessionBeforeEvent = Extract<
 >;
 
 type SessionBeforeEventResult =
-	| SessionBeforeSwitchResult
-	| SessionBeforeForkResult
-	| SessionBeforeCompactResult
-	| SessionBeforeTreeResult;
+	SessionBeforeSwitchResult | SessionBeforeForkResult | SessionBeforeCompactResult | SessionBeforeTreeResult;
 
 type RunnerEmitResult<TEvent extends RunnerEmitEvent> = TEvent extends { type: "session_before_switch" }
 	? SessionBeforeSwitchResult | undefined

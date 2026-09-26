@@ -569,28 +569,22 @@ class SessionList implements Component, Focusable {
 		this.selectionTouched = true;
 		if (kb.matches(keyData, "tui.select.up")) {
 			this.selectedIndex = Math.max(0, this.selectedIndex - 1);
-		}
-		else if (kb.matches(keyData, "tui.select.down")) {
+		} else if (kb.matches(keyData, "tui.select.down")) {
 			this.selectedIndex = Math.min(this.filteredSessions.length - 1, this.selectedIndex + 1);
-		}
-		else if (kb.matches(keyData, "tui.select.pageUp")) {
+		} else if (kb.matches(keyData, "tui.select.pageUp")) {
 			this.selectedIndex = Math.max(0, this.selectedIndex - this.maxVisible);
-		}
-		else if (kb.matches(keyData, "tui.select.pageDown")) {
+		} else if (kb.matches(keyData, "tui.select.pageDown")) {
 			this.selectedIndex = Math.min(this.filteredSessions.length - 1, this.selectedIndex + this.maxVisible);
-		}
-		else if (kb.matches(keyData, "tui.select.confirm")) {
+		} else if (kb.matches(keyData, "tui.select.confirm")) {
 			const selected = this.filteredSessions[this.selectedIndex];
 			if (selected && this.onSelect) {
 				this.onSelect(selected.session.path);
 			}
-		}
-		else if (kb.matches(keyData, "tui.select.cancel")) {
+		} else if (kb.matches(keyData, "tui.select.cancel")) {
 			if (this.onCancel) {
 				this.onCancel();
 			}
-		}
-		else {
+		} else {
 			this.searchInput.handleInput(keyData);
 			this.filterSessions(this.searchInput.getValue());
 		}

@@ -99,8 +99,7 @@ describe("session selector path/delete interactions", () => {
 		setKeybindings(new KeybindingsManager());
 	});
 
-	beforeAll(() => {
-	});
+	beforeAll(() => {});
 	it("does not treat Ctrl+Backspace as delete when search query is non-empty", async () => {
 		const sessions = [makeSession({ id: "a" }), makeSession({ id: "b" })];
 

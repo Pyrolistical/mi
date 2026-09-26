@@ -611,7 +611,6 @@ describe("Markdown component", () => {
 
 			assert.deepStrictEqual(lines, [`""`]);
 		});
-
 	});
 
 	describe("Pre-styled text (thinking traces)", () => {
@@ -636,7 +635,6 @@ describe("Markdown component", () => {
 			const hasCodeColor = joinedOutput.includes("\x1b[33m");
 			assert.ok(hasCodeColor, "Should style inline code");
 		});
-
 	});
 
 	describe("Spacing after code blocks", () => {
@@ -1024,11 +1022,9 @@ bar`,
 			const precedingChunk = joinedOutput.slice(Math.max(0, afterCodeIndex - 40), afterCodeIndex);
 			assert.ok(precedingChunk.includes("\x1b[36m"), `Should re-apply cyan for h1: ${precedingChunk}`);
 		});
-
 	});
 
 	describe("Strikethrough syntax", () => {
-
 		it("should keep ~text~ as plain text", () => {
 			const markdown = new Markdown("Use ~strikethrough~ literally", 0, 0, defaultMarkdownTheme);
 

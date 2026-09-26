@@ -248,10 +248,7 @@ export class SettingsManager {
 		return SettingsManager.fromStorageWithPaths(storage);
 	}
 
-	private static fromStorageWithPaths(
-		storage: SettingsStorage,
-		settingsPaths: SettingsPaths = {},
-	): SettingsManager {
+	private static fromStorageWithPaths(storage: SettingsStorage, settingsPaths: SettingsPaths = {}): SettingsManager {
 		const globalLoad = SettingsManager.tryLoadFromStorage(storage, "global");
 		const projectLoad = SettingsManager.tryLoadFromStorage(storage, "project");
 		const initialErrors: SettingsError[] = [];

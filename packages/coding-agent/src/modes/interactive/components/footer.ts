@@ -37,11 +37,9 @@ export class FooterComponent implements Component {
 		this.autoCompactEnabled = enabled;
 	}
 
-	invalidate(): void {
-	}
+	invalidate(): void {}
 
-	dispose(): void {
-	}
+	dispose(): void {}
 
 	render(width: number): string[] {
 		const state = this.session.state;

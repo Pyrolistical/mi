@@ -1,11 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-	InMemoryModelsStore,
-	type Model,
-	type Provider,
-} from "@earendil-works/pi-ai";
+import { InMemoryModelsStore, type Model, type Provider } from "@earendil-works/pi-ai";
 import { describe, expect, it } from "bun:test";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { ModelRegistry } from "../src/core/model-registry.ts";
@@ -79,7 +75,6 @@ describe("extension provider model lifecycle", () => {
 		registry.unregisterProvider("extension-native");
 		expect(registry.getProvider("extension-native")).toBeUndefined();
 	});
-
 
 	it("applies models.json overrides above native providers", async () => {
 		const tempDir = mkdtempSync(join(tmpdir(), "pi-native-provider-"));
@@ -157,5 +152,4 @@ describe("extension provider model lifecycle", () => {
 		expect(runtime.getModel("extension-dynamic", "live")).toBeDefined();
 		expect(await modelsStore.read("extension-dynamic")).toBeUndefined();
 	});
-
 });

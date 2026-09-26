@@ -38,8 +38,7 @@ describe("path-utils", () => {
 					unlinkSync(join(tempDir, file));
 				}
 				rmdirSync(tempDir);
-			} catch {
-			}
+			} catch {}
 		});
 
 		it("should resolve existing file path", () => {

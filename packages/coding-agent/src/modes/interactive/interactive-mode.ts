@@ -38,12 +38,7 @@ import {
 	visibleWidth,
 } from "@earendil-works/pi-tui";
 import { spawn } from "child_process";
-import {
-	APP_NAME,
-	APP_TITLE,
-	getAgentDir,
-	getDebugLogPath,
-} from "../../config.ts";
+import { APP_NAME, APP_TITLE, getAgentDir, getDebugLogPath } from "../../config.ts";
 import { type AgentSession, type AgentSessionEvent, parseSkillBlock } from "../../core/agent-session.ts";
 import type { AgentSessionRuntime } from "../../core/agent-session-runtime.ts";
 import type { AgentSessionRuntimeDiagnostic } from "../../core/agent-session-services.ts";
@@ -72,17 +67,10 @@ import type {
 import { FooterDataProvider, type ReadonlyFooterDataProvider } from "../../core/footer-data-provider.ts";
 import { type AppKeybinding, KeybindingsManager } from "../../core/keybindings.ts";
 import { createCompactionSummaryMessage, createCustomMessage } from "../../core/messages.ts";
-import {
-	findExactModelReferenceMatch,
-	resolveModelScopeFromModels,
-} from "../../core/model-resolver.ts";
+import { findExactModelReferenceMatch, resolveModelScopeFromModels } from "../../core/model-resolver.ts";
 import type { ResourceDiagnostic } from "../../core/resource-loader.ts";
 import { formatMissingSessionCwdPrompt, MissingSessionCwdError } from "../../core/session-cwd.ts";
-import {
-	type SessionEntry,
-	SessionManager,
-	sessionEntryToContextMessages,
-} from "../../core/session-manager.ts";
+import { type SessionEntry, SessionManager, sessionEntryToContextMessages } from "../../core/session-manager.ts";
 import { BUILTIN_SLASH_COMMANDS } from "../../core/slash-commands.ts";
 import type { SourceInfo } from "../../core/source-info.ts";
 import { withBuiltInRenderers } from "../../core/tools/renderers/index.ts";
@@ -1989,8 +1977,7 @@ export class InteractiveMode {
 				resolve(result);
 				try {
 					component?.dispose?.();
-				} catch {
-				}
+				} catch {}
 			};
 
 			Promise.resolve(factory(this.ui, theme, this.keybindings, close))
@@ -2124,8 +2111,7 @@ export class InteractiveMode {
 				this.editor.insertTextAtCursor?.(text);
 				this.ui.requestRender();
 			}
-		} catch {
-		}
+		} catch {}
 	}
 
 	private handleStartupSubmit(text: string): void {
@@ -3081,8 +3067,7 @@ export class InteractiveMode {
 		this.isShuttingDown = true;
 		try {
 			this.unregisterSignalHandlers();
-		} catch {
-		}
+		} catch {}
 		try {
 			killTrackedDetachedChildren();
 		} catch {}
@@ -3186,8 +3171,7 @@ export class InteractiveMode {
 			await this.session.prompt(text, { streamingBehavior: "followUp" });
 			this.updatePendingMessagesDisplay();
 			this.ui.requestRender();
-		}
-		else if (this.editor.onSubmit) {
+		} else if (this.editor.onSubmit) {
 			this.editor.setText("");
 			this.editor.onSubmit(text);
 		}
@@ -4527,8 +4511,7 @@ export class InteractiveMode {
 
 		try {
 			await this.session.compact(customInstructions);
-		} catch {
-		}
+		} catch {}
 	}
 
 	stop(): void {

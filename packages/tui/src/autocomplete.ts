@@ -622,8 +622,7 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 					try {
 						const fullPath = join(searchDir, entry.name);
 						isDirectory = statSync(fullPath).isDirectory();
-					} catch {
-					}
+					} catch {}
 				}
 
 				let relativePath: string;

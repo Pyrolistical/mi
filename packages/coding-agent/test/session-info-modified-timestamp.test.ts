@@ -37,7 +37,6 @@ function createSessionFile(path: string): void {
 }
 
 describe("SessionInfo.modified", () => {
-
 	afterEach(() => {
 		vi.restoreAllMocks();
 	});

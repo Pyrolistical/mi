@@ -1,11 +1,6 @@
 export { type Args, parseArgs } from "./cli/args.ts";
 
-export {
-	CONFIG_DIR_NAME,
-	getAgentDir,
-	getPackageDir,
-	VERSION,
-} from "./config.ts";
+export { CONFIG_DIR_NAME, getAgentDir, getPackageDir, VERSION } from "./config.ts";
 export {
 	AgentSession,
 	type AgentSessionConfig,

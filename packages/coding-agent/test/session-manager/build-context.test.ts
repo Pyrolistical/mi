@@ -278,10 +278,7 @@ describe("buildSessionContext", () => {
 		});
 
 		it("handles orphaned entries gracefully", () => {
-			const entries: SessionEntry[] = [
-				msg("1", null, "user", "hello"),
-				msg("2", "missing", "assistant", "orphan"),
-			];
+			const entries: SessionEntry[] = [msg("1", null, "user", "hello"), msg("2", "missing", "assistant", "orphan")];
 			const ctx = buildSessionContext(entries, "2");
 			expect(ctx.messages).toHaveLength(1);
 		});

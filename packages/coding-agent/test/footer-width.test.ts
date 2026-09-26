@@ -192,8 +192,6 @@ describe("FooterComponent width handling", () => {
 		expect(statsLine).toContain("CH25.0%");
 	});
 
-
-
 	it("does not mark generic OAuth sign-in as a subscription", () => {
 		const session = createSession({
 			sessionName: "",

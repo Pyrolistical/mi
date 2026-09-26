@@ -42,11 +42,9 @@ describe("readClipboardImage", () => {
 		);
 		expect(await readClipboardImage({ platform: "linux", env: { DISPLAY: ":0" } })).toBeNull();
 		expect(mocks.command).toHaveBeenCalledTimes(1);
-		expect(mocks.command).toHaveBeenCalledWith(
-			"xclip",
-			["-selection", "clipboard", "-t", "TARGETS", "-o"],
-			{ timeoutMs: 1000 },
-		);
+		expect(mocks.command).toHaveBeenCalledWith("xclip", ["-selection", "clipboard", "-t", "TARGETS", "-o"], {
+			timeoutMs: 1000,
+		});
 	});
 
 	test("X11 does not probe unadvertised image types", async () => {

@@ -37,7 +37,10 @@ function isBlockNode(node: MarkdownNode): boolean {
 }
 
 function parseMarkdown(text: string): MarkdownNode[] {
-	const root = Bun.markdown.react(text, undefined, { autolinks: true, strikethrough: false }) as unknown as MarkdownElement;
+	const root = Bun.markdown.react(text, undefined, {
+		autolinks: true,
+		strikethrough: false,
+	}) as unknown as MarkdownElement;
 	return childrenOf(root);
 }
 
@@ -507,7 +510,9 @@ export class Markdown implements Component {
 		const rowsOf = (section: string): MarkdownNode[][][] =>
 			childrenOf(table)
 				.filter((child): child is MarkdownElement => isElement(child, section))
-				.flatMap((sectionNode) => childrenOf(sectionNode).filter((row): row is MarkdownElement => isElement(row, "tr")))
+				.flatMap((sectionNode) =>
+					childrenOf(sectionNode).filter((row): row is MarkdownElement => isElement(row, "tr")),
+				)
 				.map((row) =>
 					childrenOf(row)
 						.filter((cell): cell is MarkdownElement => isElement(cell))

@@ -20,17 +20,15 @@ export function restoreLineEndings(text: string, ending: "\r\n" | "\n"): string 
 }
 
 function normalizeForFuzzyMatch(text: string): string {
-	return (
-		text
-			.normalize("NFKC")
-			.split("\n")
-			.map((line) => line.trimEnd())
-			.join("\n")
-			.replace(/[\u2018\u2019\u201A\u201B]/g, "'")
-			.replace(/[\u201C\u201D\u201E\u201F]/g, '"')
-			.replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]/g, "-")
-			.replace(/[\u00A0\u2002-\u200A\u202F\u205F\u3000]/g, " ")
-	);
+	return text
+		.normalize("NFKC")
+		.split("\n")
+		.map((line) => line.trimEnd())
+		.join("\n")
+		.replace(/[\u2018\u2019\u201A\u201B]/g, "'")
+		.replace(/[\u201C\u201D\u201E\u201F]/g, '"')
+		.replace(/[\u2010\u2011\u2012\u2013\u2014\u2015\u2212]/g, "-")
+		.replace(/[\u00A0\u2002-\u200A\u202F\u205F\u3000]/g, " ");
 }
 
 function splitLinesWithEndings(content: string): string[] {
@@ -229,11 +227,7 @@ function getNoChangeError(path: string, totalEdits: number): Error {
 	return new Error(`No changes made to ${path}. The replacements produced identical content.`);
 }
 
-export function applyEditsToNormalizedContent(
-	normalizedContent: string,
-	edits: Edit[],
-	path: string,
-): string {
+export function applyEditsToNormalizedContent(normalizedContent: string, edits: Edit[], path: string): string {
 	const normalizedEdits = edits.map((edit) => ({
 		oldText: normalizeToLF(edit.oldText),
 		newText: normalizeToLF(edit.newText),

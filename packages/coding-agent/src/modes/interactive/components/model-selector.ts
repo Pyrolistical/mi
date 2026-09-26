@@ -101,7 +101,8 @@ export class ModelSelectorComponent extends Container implements Focusable {
 			this.scopeHintText = new Text(this.getScopeHintText(), 0, 0);
 			this.addChild(this.scopeHintText);
 		} else {
-			const hintText = "Only showing models from configured providers. Add API keys to auth.json or the environment.";
+			const hintText =
+				"Only showing models from configured providers. Add API keys to auth.json or the environment.";
 			this.addChild(new Text(theme.fg("warning", hintText), 0, 0));
 		}
 		this.addChild(new Spacer(1));
@@ -355,30 +356,25 @@ export class ModelSelectorComponent extends Container implements Focusable {
 			if (this.filteredModels.length === 0) return;
 			this.selectedIndex = this.selectedIndex === 0 ? this.filteredModels.length - 1 : this.selectedIndex - 1;
 			this.updateList();
-		}
-		else if (kb.matches(keyData, "tui.select.down")) {
+		} else if (kb.matches(keyData, "tui.select.down")) {
 			if (this.filteredModels.length === 0) return;
 			this.selectedIndex = this.selectedIndex === this.filteredModels.length - 1 ? 0 : this.selectedIndex + 1;
 			this.updateList();
-		}
-		else if (kb.matches(keyData, "tui.select.confirm")) {
+		} else if (kb.matches(keyData, "tui.select.confirm")) {
 			const selectedModel = this.filteredModels[this.selectedIndex];
 			if (selectedModel) {
 				this.handleSelect(selectedModel.model);
 			}
-		}
-		else if (kb.matches(keyData, "tui.select.cancel")) {
+		} else if (kb.matches(keyData, "tui.select.cancel")) {
 			this.dispose();
 			this.onCancelCallback();
-		}
-		else if (kb.matches(keyData, "app.models.save") && this.onSelectAsDefaultCallback) {
+		} else if (kb.matches(keyData, "app.models.save") && this.onSelectAsDefaultCallback) {
 			const selectedModel = this.filteredModels[this.selectedIndex];
 			if (selectedModel) {
 				this.dispose();
 				this.onSelectAsDefaultCallback(selectedModel.model);
 			}
-		}
-		else {
+		} else {
 			this.searchInput.handleInput(keyData);
 			this.filterModels(this.searchInput.getValue());
 		}

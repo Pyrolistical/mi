@@ -5,8 +5,15 @@
 	"workspaces": [
 		"packages/*"
 	],
+	"scripts": {
+		"test": "bun scripts/run-tests.ts",
+		"mi": "bun packages/coding-agent/src/cli.ts",
+		"typecheck": "tsc --noEmit",
+		"format": "prettier --write ."
+	},
 	"devDependencies": {
 		"@types/bun": "^1.4.0",
+		"prettier": "^3.9.6",
 		"typescript": "6.0.3"
 	},
 	"engines": {

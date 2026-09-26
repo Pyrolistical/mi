@@ -19,7 +19,6 @@ async function expectResponseId<TApi extends Api>(model: Model<TApi>, options: S
 }
 
 describe("responseId E2E Tests", () => {
-
 	describe.skipIf(!process.env.OPENAI_API_KEY)("OpenAI Completions Provider", () => {
 		const { compat: _compat, ...baseModel } = openaiModel("gpt-4o-mini");
 		void _compat;

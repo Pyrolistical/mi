@@ -113,7 +113,6 @@ const ModelPromptCacheSchema = Type.Object({
 	long: Type.Optional(Type.Number({ exclusiveMinimum: 0 })),
 });
 
-
 const ModelDefinitionSchema = Type.Object({
 	id: Type.String({ minLength: 1 }),
 	name: Type.Optional(Type.String({ minLength: 1 })),

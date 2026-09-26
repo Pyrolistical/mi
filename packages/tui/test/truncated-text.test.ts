@@ -4,7 +4,6 @@ import { TruncatedText } from "../src/components/truncated-text.ts";
 import { visibleWidth } from "../src/utils.ts";
 import { blue, red } from "./ansi.ts";
 
-
 describe("TruncatedText component", () => {
 	it("pads output lines to exactly match width", () => {
 		const text = new TruncatedText("Hello world", 1, 0);

@@ -1,6 +1,6 @@
 import { performance } from "node:perf_hooks";
 import { isKeyRelease, matchesKey } from "./keys.ts";
-import type { Terminal } from "./terminal.ts";
+import { MOUSE_DISABLE_SEQUENCE, MOUSE_ENABLE_SEQUENCE, type Terminal } from "./terminal.ts";
 import { getCapabilities, isImageLine, setCellDimensions } from "./terminal-image.ts";
 import { extractSegments, normalizeTerminalOutput, sliceByColumn, sliceWithWidth, visibleWidth } from "./utils.ts";
 
@@ -8,6 +8,8 @@ export interface Component {
 	render(width: number): string[];
 
 	handleInput?(data: string): void;
+
+	handleClickFromCursor?(rowOffset: number, colOffset: number): void;
 
 	wantsKeyRelease?: boolean;
 
@@ -26,6 +28,20 @@ export function isFocusable(component: Component | null): component is Component
 }
 
 export const CURSOR_MARKER = "\x1b_pi:c\x07";
+
+const CLICK_TARGET_START = "\x1b_pi:k:";
+const CLICK_TARGET_END = "\x1b_pi:k\x07";
+
+export function clickTarget(id: string, text: string): string {
+	return `${CLICK_TARGET_START}${id}\x07${text}${CLICK_TARGET_END}`;
+}
+
+interface ClickTarget {
+	id: string;
+	row: number;
+	startCol: number;
+	endCol: number;
+}
 
 export type OverlayAnchor =
 	| "center"
@@ -211,11 +227,18 @@ export interface TUI extends Component {
 	requestRender(force?: boolean): void;
 	addInputListener(listener: TuiInputListener): () => void;
 	removeInputListener(listener: TuiInputListener): void;
+	addClickHandler(id: string, handler: () => void): () => void;
 }
 
 export abstract class TuiBase extends Container implements TUI {
 	public terminal: Terminal;
 	private focusedComponent: Component | null = null;
+	private pendingClick: { row: number; col: number } | undefined;
+	private mouseReporting = true;
+	protected cursorAtMarker = false;
+	private renderedCursor: { row: number; col: number } | null = null;
+	private clickTargets: ClickTarget[] = [];
+	private readonly clickHandlers = new Map<string, () => void>();
 	private inputListeners = new Set<TuiInputListener>();
 
 	public onDebug?: () => void;
@@ -580,6 +603,13 @@ export abstract class TuiBase extends Container implements TUI {
 		};
 	}
 
+	addClickHandler(id: string, handler: () => void): () => void {
+		this.clickHandlers.set(id, handler);
+		return () => {
+			if (this.clickHandlers.get(id) === handler) this.clickHandlers.delete(id);
+		};
+	}
+
 	removeInputListener(listener: TuiInputListener): void {
 		this.inputListeners.delete(listener);
 	}
@@ -661,6 +691,14 @@ export abstract class TuiBase extends Container implements TUI {
 	}
 
 	private handleTerminalInput(data: string): void {
+		if (this.consumeMouseInput(data)) {
+			return;
+		}
+		if (!this.mouseReporting) {
+			this.mouseReporting = true;
+			this.terminal.write(MOUSE_ENABLE_SEQUENCE);
+		}
+
 		if (this.inputListeners.size > 0) {
 			let current = data;
 			for (const listener of this.inputListeners) {
@@ -719,6 +757,42 @@ export abstract class TuiBase extends Container implements TUI {
 			this.focusedComponent.handleInput(data);
 			this.requestImmediateRender();
 		}
+	}
+
+	private consumeMouseInput(data: string): boolean {
+		const mouse = data.match(/^\x1b\[<(\d+);(\d+);(\d+)([Mm])$/);
+		if (mouse) {
+			const wheel = (Number(mouse[1]) & 192) === 64;
+			const leftPress = mouse[1] === "0" && mouse[4] === "M";
+			if (wheel || leftPress) {
+				this.mouseReporting = false;
+				this.terminal.write(MOUSE_DISABLE_SEQUENCE);
+			}
+			if (
+				leftPress &&
+				this.cursorAtMarker &&
+				(this.clickTargets.length > 0 || this.focusedComponent?.handleClickFromCursor)
+			) {
+				this.pendingClick = { row: Number(mouse[3]), col: Number(mouse[2]) };
+				this.terminal.write("\x1b[6n");
+			}
+			return true;
+		}
+		if (!this.pendingClick) return false;
+		const report = data.match(/^\x1b\[(\d+);(\d+)R$/);
+		if (!report) return false;
+		const click = this.pendingClick;
+		this.pendingClick = undefined;
+		const rowOffset = click.row - Number(report[1]);
+		const colOffset = click.col - Number(report[2]);
+		const handler = this.clickHandlerAt(rowOffset, colOffset);
+		if (handler) {
+			handler();
+		} else {
+			this.focusedComponent?.handleClickFromCursor?.(rowOffset, colOffset);
+		}
+		this.requestImmediateRender();
+		return true;
 	}
 
 	private consumeCellSizeResponse(data: string): boolean {
@@ -927,6 +1001,36 @@ export abstract class TuiBase extends Container implements TUI {
 		return compositeTuiLine(baseLine, overlayLine, startCol, overlayWidth, totalWidth);
 	}
 
+	private clickHandlerAt(rowOffset: number, colOffset: number): (() => void) | undefined {
+		if (!this.renderedCursor) return undefined;
+		const row = this.renderedCursor.row + rowOffset;
+		const col = this.renderedCursor.col + colOffset;
+		const target = this.clickTargets.find(
+			(candidate) => candidate.row === row && col >= candidate.startCol && col < candidate.endCol,
+		);
+		return target && this.clickHandlers.get(target.id);
+	}
+
+	protected extractClickTargets(lines: string[]): void {
+		this.clickTargets = [];
+		for (let row = 0; row < lines.length; row++) {
+			let line = lines[row];
+			let start = line.indexOf(CLICK_TARGET_START);
+			while (start !== -1) {
+				const idEnd = line.indexOf("\x07", start);
+				const endMarker = line.indexOf(CLICK_TARGET_END, idEnd);
+				const end = endMarker === -1 ? line.length : endMarker;
+				const id = line.slice(start + CLICK_TARGET_START.length, idEnd);
+				const text = line.slice(idEnd + 1, end);
+				const startCol = visibleWidth(line.slice(0, start));
+				this.clickTargets.push({ id, row, startCol, endCol: startCol + visibleWidth(text) });
+				line = line.slice(0, start) + text + line.slice(endMarker === -1 ? end : end + CLICK_TARGET_END.length);
+				start = line.indexOf(CLICK_TARGET_START, start);
+			}
+			lines[row] = line;
+		}
+	}
+
 	protected extractCursorPosition(lines: string[], height: number): { row: number; col: number } | null {
 		const viewportTop = Math.max(0, lines.length - height);
 		for (let row = lines.length - 1; row >= viewportTop; row--) {
@@ -938,9 +1042,11 @@ export abstract class TuiBase extends Container implements TUI {
 
 				lines[row] = line.slice(0, markerIndex) + line.slice(markerIndex + CURSOR_MARKER.length);
 
-				return { row, col };
+				this.renderedCursor = { row, col };
+				return this.renderedCursor;
 			}
 		}
+		this.renderedCursor = null;
 		return null;
 	}
 }

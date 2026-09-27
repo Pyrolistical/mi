@@ -83,6 +83,7 @@ export {
 	type Component,
 	Container,
 	CURSOR_MARKER,
+	clickTarget,
 	compositeTuiLine,
 	type Focusable,
 	isFocusable,

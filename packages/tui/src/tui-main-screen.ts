@@ -220,6 +220,7 @@ export class TuiMainScreen extends TuiBase implements TUI {
 		}
 
 		const cursorPos = this.extractCursorPosition(newLines, height);
+		this.extractClickTargets(newLines);
 
 		newLines = this.applyLineResets(newLines);
 
@@ -533,6 +534,7 @@ export class TuiMainScreen extends TuiBase implements TUI {
 	}
 
 	private positionHardwareCursor(cursorPos: { row: number; col: number } | null, totalLines: number): void {
+		this.cursorAtMarker = cursorPos !== null && totalLines > 0;
 		if (!cursorPos || totalLines <= 0) {
 			this.terminal.hideCursor();
 			return;

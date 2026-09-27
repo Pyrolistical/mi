@@ -6,6 +6,8 @@ import { StdinBuffer } from "./stdin-buffer.ts";
 const TERMINAL_PROGRESS_KEEPALIVE_MS = 1000;
 const TERMINAL_PROGRESS_ACTIVE_SEQUENCE = "\x1b]9;4;3\x07";
 const TERMINAL_PROGRESS_CLEAR_SEQUENCE = "\x1b]9;4;0\x07";
+export const MOUSE_ENABLE_SEQUENCE = "\x1b[?1000h\x1b[?1006h";
+export const MOUSE_DISABLE_SEQUENCE = "\x1b[?1000l\x1b[?1006l";
 const DESIRED_KITTY_KEYBOARD_PROTOCOL_FLAGS = 7;
 const KEYBOARD_PROTOCOL_RESPONSE_FRAGMENT_TIMEOUT_MS = 150;
 const KITTY_KEYBOARD_PROTOCOL_QUERY = `\x1b[>${DESIRED_KITTY_KEYBOARD_PROTOCOL_FLAGS}u\x1b[?u\x1b[c`;
@@ -122,6 +124,7 @@ export class ProcessTerminal implements Terminal {
 		process.stdin.resume();
 
 		process.stdout.write("\x1b[?2004h");
+		process.stdout.write(MOUSE_ENABLE_SEQUENCE);
 
 		process.stdout.on("resize", this.resizeHandler);
 
@@ -272,6 +275,7 @@ export class ProcessTerminal implements Terminal {
 			setKittyProtocolActive(false);
 		}
 		this.disableModifyOtherKeys();
+		process.stdout.write(MOUSE_DISABLE_SEQUENCE);
 
 		const previousHandler = this.inputHandler;
 		this.inputHandler = undefined;
@@ -304,6 +308,7 @@ export class ProcessTerminal implements Terminal {
 		}
 
 		process.stdout.write("\x1b[?2004l");
+		process.stdout.write(MOUSE_DISABLE_SEQUENCE);
 
 		const shouldDisableKittyProtocol = this.keyboardProtocolPushed || this._kittyProtocolActive;
 		this.clearKeyboardProtocolNegotiationBuffer();

@@ -243,6 +243,10 @@ export class Editor implements Component, Focusable {
 	private paddingX: number = 0;
 
 	private lastWidth: number = 80;
+	private lastPaddingX: number = 0;
+	private lastVisibleLineCount: number = 0;
+	private lastCursorRenderRow: number = 0;
+	private lastCursorRenderCol: number = 0;
 
 	private scrollOffset: number = 0;
 
@@ -431,6 +435,7 @@ export class Editor implements Component, Focusable {
 		const layoutWidth = Math.max(1, contentWidth - (paddingX ? 0 : 1));
 
 		this.lastWidth = layoutWidth;
+		this.lastPaddingX = paddingX;
 
 		const layoutLines = this.layoutText(layoutWidth);
 
@@ -450,6 +455,7 @@ export class Editor implements Component, Focusable {
 		this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, maxScrollOffset));
 
 		const visibleLines = layoutLines.slice(this.scrollOffset, this.scrollOffset + maxVisibleLines);
+		this.lastVisibleLineCount = visibleLines.length;
 
 		const result: string[] = [];
 		const leftPadding = " ".repeat(paddingX);
@@ -467,6 +473,8 @@ export class Editor implements Component, Focusable {
 			if (layoutLine.hasCursor && layoutLine.cursorPos !== undefined) {
 				const before = displayText.slice(0, layoutLine.cursorPos);
 				const after = displayText.slice(layoutLine.cursorPos);
+				this.lastCursorRenderRow = result.length;
+				this.lastCursorRenderCol = paddingX + visibleWidth(before);
 
 				const marker = emitCursorMarker ? CURSOR_MARKER : "";
 
@@ -505,6 +513,40 @@ export class Editor implements Component, Focusable {
 		}
 
 		return result;
+	}
+
+	handleClickFromCursor(rowOffset: number, colOffset: number): void {
+		const row = this.lastCursorRenderRow + rowOffset;
+		if (row <= 0 || row > this.lastVisibleLineCount) return;
+		const visualLines = this.buildVisualLineMap(this.lastWidth);
+		const visualLineIndex = this.scrollOffset + row - 1;
+		const visualLine = visualLines[visualLineIndex];
+		if (!visualLine) return;
+		const logicalLine = this.state.lines[visualLine.logicalLine] ?? "";
+		const chunk = logicalLine.slice(visualLine.startCol, visualLine.startCol + visualLine.length);
+		const targetColumn = Math.max(0, this.lastCursorRenderCol + colOffset - this.lastPaddingX);
+		let visibleColumn = 0;
+		let targetIndex = chunk.length;
+		let lastGraphemeIndex = 0;
+		for (const grapheme of this.segment(chunk, "grapheme")) {
+			const nextColumn = visibleColumn + visibleWidth(grapheme.segment);
+			lastGraphemeIndex = grapheme.index;
+			if (targetColumn < nextColumn) {
+				targetIndex = grapheme.index;
+				break;
+			}
+			visibleColumn = nextColumn;
+		}
+		const isLastSegment =
+			visualLineIndex === visualLines.length - 1 ||
+			visualLines[visualLineIndex + 1]?.logicalLine !== visualLine.logicalLine;
+		if (!isLastSegment && targetIndex === chunk.length && chunk.length > 0) targetIndex = lastGraphemeIndex;
+
+		this.state.cursorLine = visualLine.logicalLine;
+		this.setCursorCol(visualLine.startCol + targetIndex);
+		this.lastAction = null;
+		this.exitHistoryBrowsing();
+		if (this.autocompleteState) this.updateAutocomplete();
 	}
 
 	handleInput(data: string): void {

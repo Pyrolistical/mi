@@ -102,14 +102,21 @@ describe("createAgentSession session manager defaults", () => {
 		const bashTool = session.agent.state.tools.find((tool) => tool.name === "bash");
 		expect(bashTool).toBeTruthy();
 		const result = await bashTool!.execute("test", {
-			command: `printf '%s\\n' "$MI_SESSION_ID" "$MI_PROVIDER" "$MI_MODEL" "$MI_REASONING_LEVEL"`,
+			command: `printf '%s\\n' "$MI_SESSION_ID" "$MI_SESSION_ID_SIGNATURE" "$MI_SESSION_DIR" "$MI_PROVIDER" "$MI_MODEL" "$MI_REASONING_LEVEL"`,
 		});
 		const output = result.content
 			.filter((item): item is { type: "text"; text: string } => item.type === "text")
 			.map((item) => item.text)
 			.join("");
 
-		expect(output.trim().split("\n")).toEqual([session.sessionId, model!.provider, model!.id, session.thinkingLevel]);
+		expect(output.trim().split("\n")).toEqual([
+			session.sessionId,
+			session.sessionManager.getSessionIdSignature()!,
+			session.sessionManager.getSessionDir(),
+			model!.provider,
+			model!.id,
+			session.thinkingLevel,
+		]);
 
 		session.dispose();
 	});

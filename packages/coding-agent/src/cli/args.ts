@@ -204,6 +204,13 @@ Usage:
 Commands:
   ${APP_NAME} auth <command>            Print credentials or check provider readiness
   ${APP_NAME} auth --help               Show help for auth
+  ${APP_NAME} create-callback           Print instructions for the agent on creating a callback
+  ${APP_NAME} create-callback <origin>
+                                 Print a callback command for the session running this bash command
+  ${APP_NAME} callback --session-dir <dir> <address>
+                                 Queue stdin as a message to the session that created the
+                                 callback; it is delivered when the session is live, or when
+                                 it next resumes
 
 Options:
   --provider <name>              Provider name (default: first configured provider)

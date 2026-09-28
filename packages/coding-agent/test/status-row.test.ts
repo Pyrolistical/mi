@@ -33,19 +33,38 @@ describe("StatusRowComponent", () => {
 		]);
 	});
 
-	it("shares the row with update counts", () => {
+	it("follows the background job count with the callback count", () => {
 		const component = new StatusRowComponent();
 		component.setBackgroundJobs(2);
-		component.setUpdateCounts({ mi: 3, pi: 12 });
+		component.setCallbacks(1);
 
-		expect(component.render(40).map(stripAnsi)).toEqual([
-			`${clickTarget(BACKGROUND_JOBS_CLICK_TARGET, "background 2")}                  mi 3 pi 12`,
+		expect(component.render(30).map(stripAnsi)).toEqual([
+			`${clickTarget(BACKGROUND_JOBS_CLICK_TARGET, "background 2")} callback 1       `,
 		]);
 	});
 
-	it("truncates the background job count before update counts", () => {
+	it("shows the callback count without a button when no background job runs", () => {
+		const component = new StatusRowComponent();
+		component.setCallbacks(3);
+
+		expect(component.render(20).map(stripAnsi)).toEqual(["callback 3          "]);
+	});
+
+	it("shares the row with update counts", () => {
 		const component = new StatusRowComponent();
 		component.setBackgroundJobs(2);
+		component.setCallbacks(1);
+		component.setUpdateCounts({ mi: 3, pi: 12 });
+
+		expect(component.render(40).map(stripAnsi)).toEqual([
+			`${clickTarget(BACKGROUND_JOBS_CLICK_TARGET, "background 2")} callback 1       mi 3 pi 12`,
+		]);
+	});
+
+	it("truncates the counts on the left before update counts", () => {
+		const component = new StatusRowComponent();
+		component.setBackgroundJobs(2);
+		component.setCallbacks(1);
 		component.setUpdateCounts({ mi: 3, pi: 12 });
 
 		expect(component.render(20).map(stripAnsi)).toEqual([

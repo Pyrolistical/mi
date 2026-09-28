@@ -18,6 +18,7 @@ import {
 	printAuthCommandHelp,
 	validateAuthCommandArgs,
 } from "./cli/auth-command.ts";
+import { runCallbackCommand, runCreateCallbackCommand } from "./cli/callback-command.ts";
 import { resolveCredentialForPrint } from "./cli/credential-print.ts";
 import { processFileArguments } from "./cli/file-processor.ts";
 import { buildInitialMessage } from "./cli/initial-message.ts";
@@ -460,6 +461,16 @@ export async function main(args: string[], options?: MainOptions) {
 	}
 
 	if (await runAuthCommand(args)) {
+		return;
+	}
+
+	if (args[0] === "create-callback") {
+		runCreateCallbackCommand(args.slice(1));
+		return;
+	}
+
+	if (args[0] === "callback") {
+		await runCallbackCommand(args.slice(1));
 		return;
 	}
 

@@ -364,6 +364,7 @@ export class InteractiveMode {
 		});
 		this.runtimeHost.setRebindSession(async () => {
 			await this.rebindCurrentSession({ renderBeforeBind: true });
+			this.session.openMailbox();
 		});
 		this.ui = new TuiMainScreen(options.terminal ?? new ProcessTerminal(), getAgentDir());
 		this.ui.setClearOnShrink(this.settingsManager.getClearOnShrink());
@@ -681,6 +682,8 @@ export class InteractiveMode {
 				}
 			}
 		}
+
+		this.session.openMailbox();
 
 		while (true) {
 			const userInput = await this.getUserInput();
@@ -2250,6 +2253,7 @@ export class InteractiveMode {
 
 	private subscribeToAgent(): void {
 		this.statusRow.setBackgroundJobs(this.session.backgroundJobs.length);
+		this.statusRow.setCallbacks(this.session.pendingCallbacks);
 		this.unsubscribe = this.session.subscribe(async (event) => {
 			await this.handleEvent(event);
 		});
@@ -2447,6 +2451,11 @@ export class InteractiveMode {
 
 			case "background_commands_update":
 				this.statusRow.setBackgroundJobs(event.running);
+				this.ui.requestRender();
+				break;
+
+			case "callbacks_update":
+				this.statusRow.setCallbacks(event.pending);
 				this.ui.requestRender();
 				break;
 

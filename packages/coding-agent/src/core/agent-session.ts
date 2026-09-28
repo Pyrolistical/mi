@@ -105,6 +105,13 @@ import {
 	type NormalizedBuildSystemPromptOptions,
 	normalizeBuildSystemPromptOptions,
 } from "./system-prompt.ts";
+import {
+	formatMailboxMessage,
+	MAILBOX_CUSTOM_TYPE,
+	type Mailbox,
+	type MailboxMessage,
+	mailboxMessageDetails,
+} from "./mailbox.ts";
 import { type BackgroundCommandResult, BackgroundCommands, type BackgroundJob } from "./tools/background-commands.ts";
 import { type BashOperations, createLocalBashOperations } from "./tools/bash.ts";
 import { createAllToolDefinitions } from "./tools/index.ts";
@@ -171,7 +178,8 @@ export type AgentSessionEvent =
 	  }
 	| { type: "summarization_retry_finished" }
 	| { type: "bash_execution_update"; id?: string; delta: string }
-	| { type: "background_commands_update"; running: number };
+	| { type: "background_commands_update"; running: number }
+	| { type: "callbacks_update"; pending: number };
 
 function backgroundCommandMessage(result: BackgroundCommandResult) {
 	return {
@@ -301,6 +309,7 @@ export class AgentSession {
 		(result) => void this._deliverBackgroundCommand(result),
 		(running) => this._emit({ type: "background_commands_update", running }),
 	);
+	private _mailbox: Mailbox | undefined;
 
 	private _extensionRunner!: ExtensionRunner;
 	private _turnIndex = 0;
@@ -1029,6 +1038,7 @@ export class AgentSession {
 			this.abortCompaction();
 			this.abortBranchSummary();
 			this.abortBash();
+			this._mailbox?.close();
 			this.agent.abort();
 		} catch {}
 
@@ -1728,6 +1738,37 @@ export class AgentSession {
 		while (this._backgroundCommands.size > 0) {
 			await this._backgroundCommands.next();
 			await this.waitForIdle();
+		}
+	}
+
+	openMailbox(): void {
+		this._mailbox ??= this.sessionManager.openMailbox(
+			(message) => void this._deliverMailboxMessage(message),
+			(pending) => this._emit({ type: "callbacks_update", pending }),
+		);
+	}
+
+	get pendingCallbacks(): number {
+		return this._mailbox?.pending ?? 0;
+	}
+
+	private async _deliverMailboxMessage(message: MailboxMessage): Promise<void> {
+		try {
+			await this.sendCustomMessage(
+				{
+					customType: MAILBOX_CUSTOM_TYPE,
+					content: formatMailboxMessage(message),
+					display: true,
+					details: mailboxMessageDetails(message),
+				},
+				{ triggerTurn: true, deliverAs: "steer" },
+			);
+		} catch (err) {
+			this._extensionRunner.emitError({
+				extensionPath: "<runtime>",
+				event: "mailbox",
+				error: err instanceof Error ? err.message : String(err),
+			});
 		}
 	}
 

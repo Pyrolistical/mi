@@ -3,6 +3,15 @@ import { existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Message, TextContent } from "@earendil-works/pi-ai";
 import { resolvePath } from "../utils/paths.ts";
+import {
+	formatMailboxAddress,
+	MAILBOX_CUSTOM_TYPE,
+	type MailboxMessage,
+	type MailboxMessageDetails,
+	parseMailboxAddress,
+	signSessionId,
+	verifySessionId,
+} from "./mailbox.ts";
 import type { SessionEntry, SessionHeader, SessionInfo } from "./session-manager.ts";
 
 const SESSION_DB_FILE = "sessions.db";
@@ -45,6 +54,54 @@ CREATE VIRTUAL TABLE IF NOT EXISTS entry_text USING fts5(
 	tokenize = 'unicode61 remove_diacritics 2',
 	prefix = '2 3'
 );
+
+CREATE TABLE IF NOT EXISTS callback (
+	id INTEGER PRIMARY KEY,
+	session_id TEXT NOT NULL,
+	origin TEXT NOT NULL,
+	created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS ix_callback_session ON callback(session_id);
+
+CREATE TRIGGER IF NOT EXISTS callback_session_exists
+BEFORE INSERT ON callback
+WHEN NOT EXISTS (
+	SELECT 1
+	FROM sessions
+	WHERE id = NEW.session_id
+)
+BEGIN
+	SELECT RAISE(ABORT, 'no such session');
+END;
+
+CREATE TABLE IF NOT EXISTS callback_message (
+	id INTEGER PRIMARY KEY,
+	callback_id INTEGER NOT NULL,
+	body TEXT NOT NULL,
+	sent_at INTEGER NOT NULL,
+	delivered_at INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS ix_callback_message_callback ON callback_message(callback_id);
+
+CREATE TRIGGER IF NOT EXISTS callback_message_callback_exists
+BEFORE INSERT ON callback_message
+WHEN NOT EXISTS (
+	SELECT 1
+	FROM callback
+	WHERE id = NEW.callback_id
+)
+BEGIN
+	SELECT RAISE(ABORT, 'no such session');
+END;
+
+CREATE TABLE IF NOT EXISTS mailbox_key (
+	id INTEGER PRIMARY KEY CHECK (id = 1),
+	key BLOB NOT NULL
+);
+
+INSERT OR IGNORE INTO mailbox_key (id, key) VALUES (1, randomblob(32));
 `;
 
 interface EntrySummary {
@@ -160,11 +217,13 @@ export class SessionStore {
 	}
 
 	private readonly db: Database;
+	private readonly mailboxKey: Uint8Array;
 	readonly path: string;
 
 	private constructor(db: Database, path: string) {
 		this.db = db;
 		this.path = path;
+		this.mailboxKey = db.query<{ key: Uint8Array }, []>(`SELECT key FROM mailbox_key`).get()!.key;
 	}
 
 	has(id: string): boolean {
@@ -398,6 +457,59 @@ export class SessionStore {
 		return { sessionId, cwd: session.cwd, name: session.name ?? undefined, prompts };
 	}
 
+	sessionIdSignature(sessionId: string): string {
+		return signSessionId(this.mailboxKey, sessionId);
+	}
+
+	createMailboxAddress(sessionId: string, sessionIdSignature: string, origin: string, createdAt: number): string {
+		verifySessionId(this.mailboxKey, sessionId, sessionIdSignature);
+		const callbackId = this.db
+			.query<{ id: number }, [string, string, number]>(
+				`INSERT INTO callback (session_id, origin, created_at)
+				VALUES (?, ?, ?)
+				RETURNING id`,
+			)
+			.get(sessionId, origin, createdAt)!.id;
+		return formatMailboxAddress(this.mailboxKey, callbackId);
+	}
+
+	sendMessage(address: string, body: string, sentAt: number): void {
+		this.db
+			.query(
+				`INSERT INTO callback_message (callback_id, body, sent_at)
+				VALUES (?, ?, ?)`,
+			)
+			.run(parseMailboxAddress(this.mailboxKey, address), body, sentAt);
+	}
+
+	undeliveredMessages(sessionId: string): MailboxMessage[] {
+		return this.db
+			.query<MailboxMessage, [string]>(
+				`SELECT m.id, c.origin, m.body, m.sent_at AS sentAt
+				FROM callback_message m
+				JOIN callback c ON c.id = m.callback_id
+				WHERE c.session_id = ?
+					AND m.delivered_at IS NULL
+				ORDER BY m.id`,
+			)
+			.all(sessionId);
+	}
+
+	pendingCallbacks(sessionId: string): number {
+		return this.db
+			.query<{ pending: number }, [string]>(
+				`SELECT COUNT(*) AS pending
+				FROM callback c
+				WHERE c.session_id = ?
+					AND NOT EXISTS (
+						SELECT 1
+						FROM callback_message m
+						WHERE m.callback_id = c.id
+					)`,
+			)
+			.get(sessionId)!.pending;
+	}
+
 	private insertEntry(sessionId: string, entry: SessionEntry, summary: EntrySummary): void {
 		const result = this.db
 			.query(
@@ -405,6 +517,22 @@ export class SessionStore {
 				VALUES (?, ?)`,
 			)
 			.run(sessionId, JSON.stringify(entry));
+		if (entry.type === "custom_message" && entry.customType === MAILBOX_CUSTOM_TYPE) {
+			const details = entry.details as MailboxMessageDetails;
+			this.db
+				.query(
+					`UPDATE callback_message
+					SET delivered_at = ?
+					WHERE id = ?
+						AND delivered_at IS NULL
+						AND callback_id IN (
+							SELECT id
+							FROM callback
+							WHERE session_id = ?
+						)`,
+				)
+				.run(Date.now(), details.id, sessionId);
+		}
 		if (!summary.text || !summary.role) return;
 		this.db
 			.query(
@@ -415,6 +543,22 @@ export class SessionStore {
 	}
 
 	private deleteRows(id: string): void {
+		this.db
+			.query(
+				`DELETE FROM callback_message
+				WHERE callback_id IN (
+					SELECT id
+					FROM callback
+					WHERE session_id = ?
+				)`,
+			)
+			.run(id);
+		this.db
+			.query(
+				`DELETE FROM callback
+				WHERE session_id = ?`,
+			)
+			.run(id);
 		this.db
 			.query(
 				`DELETE FROM entry_text

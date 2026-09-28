@@ -23,6 +23,7 @@ import {
 	createCompactionSummaryMessage,
 	createCustomMessage,
 } from "./messages.ts";
+import { Mailbox, type MailboxMessage } from "./mailbox.ts";
 import { type SessionPrompts, SessionStore, type StoredPrompt } from "./session-store.ts";
 export const CURRENT_SESSION_VERSION = 3;
 
@@ -183,6 +184,7 @@ export type ReadonlySessionManager = Pick<
 	| "getCwd"
 	| "getSessionDir"
 	| "getSessionId"
+	| "getSessionIdSignature"
 	| "getLeafId"
 	| "getLeafEntry"
 	| "getEntry"
@@ -605,6 +607,18 @@ export class SessionManager {
 
 	getSessionId(): string {
 		return this.sessionId;
+	}
+
+	getSessionIdSignature(): string | undefined {
+		return this.store?.sessionIdSignature(this.sessionId);
+	}
+
+	openMailbox(
+		deliver: (message: MailboxMessage) => void,
+		pendingChanged: (pending: number) => void,
+	): Mailbox | undefined {
+		if (!this.store) return undefined;
+		return new Mailbox(this.store, () => this.sessionId, deliver, pendingChanged);
 	}
 
 	private _hasConversation(): boolean {
@@ -1118,6 +1132,14 @@ export class SessionManager {
 		return SessionStore.open(resolveSessionDir(sessionDir)).has(id);
 	}
 
+	static createMailboxAddress(id: string, idSignature: string, origin: string, sessionDir?: string): string {
+		return SessionStore.open(resolveSessionDir(sessionDir)).createMailboxAddress(id, idSignature, origin, Date.now());
+	}
+
+	static sendMessage(address: string, body: string, sessionDir?: string): void {
+		SessionStore.open(resolveSessionDir(sessionDir)).sendMessage(address, body, Date.now());
+	}
+
 	static delete(id: string, sessionDir?: string): void {
 		SessionStore.open(resolveSessionDir(sessionDir)).delete(id);
 	}
@@ -1140,7 +1162,7 @@ export class SessionManager {
 }
 
 function resolveSessionDir(sessionDir: string | undefined): string {
-	return sessionDir ? normalizePath(sessionDir) : getDefaultSessionDir();
+	return sessionDir ? resolvePath(sessionDir) : getDefaultSessionDir();
 }
 
 export function importLegacyJsonlSessions(sessionDir: string): number {

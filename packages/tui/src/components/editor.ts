@@ -476,17 +476,16 @@ export class Editor implements Component, Focusable {
 				this.lastCursorRenderRow = result.length;
 				this.lastCursorRenderCol = paddingX + visibleWidth(before);
 
-				const marker = emitCursorMarker ? CURSOR_MARKER : "";
+				const cursorCell = (grapheme: string) =>
+					emitCursorMarker ? CURSOR_MARKER + grapheme : `\x1b[7m${grapheme}\x1b[0m`;
 
 				if (after.length > 0) {
 					const afterGraphemes = [...this.segment(after, "grapheme")];
 					const firstGrapheme = afterGraphemes[0]?.segment || "";
 					const restAfter = after.slice(firstGrapheme.length);
-					const cursor = `\x1b[7m${firstGrapheme}\x1b[0m`;
-					displayText = before + marker + cursor + restAfter;
+					displayText = before + cursorCell(firstGrapheme) + restAfter;
 				} else {
-					const cursor = "\x1b[7m \x1b[0m";
-					displayText = before + marker + cursor;
+					displayText = before + cursorCell(" ");
 					lineVisibleWidth = lineVisibleWidth + 1;
 					if (lineVisibleWidth > contentWidth && paddingX > 0) {
 						cursorInPadding = true;

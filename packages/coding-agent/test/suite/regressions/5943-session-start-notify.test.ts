@@ -98,7 +98,6 @@ type ReloadCommandContext = {
 		getOutputPad: () => 0 | 1;
 		getEditorPaddingX: () => number;
 		getAutocompleteMaxVisible: () => number;
-		getShowHardwareCursor: () => boolean;
 		getClearOnShrink: () => boolean;
 	};
 	keybindings: { reload: () => void };
@@ -108,7 +107,6 @@ type ReloadCommandContext = {
 	ui: {
 		setFocus: (component: unknown) => void;
 		requestRender: (force?: boolean) => void;
-		setShowHardwareCursor: (enabled: boolean) => void;
 		setClearOnShrink: (enabled: boolean) => void;
 	};
 	editor: unknown;
@@ -170,7 +168,6 @@ function createReloadCommandContext(overrides: ReloadCommandContextOverrides = {
 			getOutputPad: () => 1,
 			getEditorPaddingX: () => 1,
 			getAutocompleteMaxVisible: () => 10,
-			getShowHardwareCursor: () => false,
 			getClearOnShrink: () => false,
 			...overrides.settingsManager,
 		},
@@ -179,7 +176,6 @@ function createReloadCommandContext(overrides: ReloadCommandContextOverrides = {
 		ui: {
 			setFocus: () => {},
 			requestRender: () => {},
-			setShowHardwareCursor: () => {},
 			setClearOnShrink: () => {},
 			...overrides.ui,
 		},

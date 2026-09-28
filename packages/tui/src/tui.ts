@@ -213,8 +213,6 @@ export interface TUI extends Component {
 	addChild(component: Component): void;
 	removeChild(component: Component): void;
 	clear(): void;
-	getShowHardwareCursor(): boolean;
-	setShowHardwareCursor(enabled: boolean): void;
 	getClearOnShrink(): boolean;
 	setClearOnShrink(enabled: boolean): void;
 	setFocus(component: Component | null): void;
@@ -247,7 +245,6 @@ export abstract class TuiBase extends Container implements TUI {
 	private renderTimer: NodeJS.Timeout | undefined;
 	private lastRenderAt = 0;
 	private static readonly MIN_RENDER_INTERVAL_MS = 16;
-	private showHardwareCursor = false;
 	private clearOnShrink = false;
 	protected fullRedrawCount = 0;
 	protected stopped = false;
@@ -261,13 +258,10 @@ export abstract class TuiBase extends Container implements TUI {
 	}
 	private overlayFocusRestore: OverlayFocusRestoreState = { status: "inactive" };
 
-	constructor(terminal: Terminal, showHardwareCursor?: boolean, logDirectory?: string) {
+	constructor(terminal: Terminal, logDirectory?: string) {
 		super();
 		this.terminal = terminal;
 		this.logDirectory = logDirectory;
-		if (showHardwareCursor !== undefined) {
-			this.showHardwareCursor = showHardwareCursor;
-		}
 	}
 
 	protected abstract doRender(): void;
@@ -284,19 +278,6 @@ export abstract class TuiBase extends Container implements TUI {
 
 	get fullRedraws(): number {
 		return this.fullRedrawCount;
-	}
-
-	getShowHardwareCursor(): boolean {
-		return this.showHardwareCursor;
-	}
-
-	setShowHardwareCursor(enabled: boolean): void {
-		if (this.showHardwareCursor === enabled) return;
-		this.showHardwareCursor = enabled;
-		if (!enabled) {
-			this.hideTerminalCursor();
-		}
-		this.requestRender();
 	}
 
 	getClearOnShrink(): boolean {

@@ -101,7 +101,6 @@ export interface Settings {
 	editorPaddingX?: number;
 	outputPad?: 0 | 1;
 	autocompleteMaxVisible?: number;
-	showHardwareCursor?: boolean;
 	markdown?: MarkdownSettings;
 	warnings?: WarningSettings;
 	sessionDir?: string;
@@ -948,16 +947,6 @@ export class SettingsManager {
 	setTreeFilterMode(mode: "default" | "no-tools" | "user-only" | "labeled-only" | "all"): void {
 		this.globalSettings.treeFilterMode = mode;
 		this.markModified("treeFilterMode");
-		this.save();
-	}
-
-	getShowHardwareCursor(): boolean {
-		return this.settings.showHardwareCursor ?? process.env.MI_HARDWARE_CURSOR === "1";
-	}
-
-	setShowHardwareCursor(enabled: boolean): void {
-		this.globalSettings.showHardwareCursor = enabled;
-		this.markModified("showHardwareCursor");
 		this.save();
 	}
 

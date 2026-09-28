@@ -363,9 +363,10 @@ export class Input implements Component, Focusable {
 			const graphemes = [...segmenter.segment(placeholder)];
 			const atCursor = graphemes[0]?.segment ?? " ";
 			const afterCursor = placeholder.slice(atCursor.length);
-			const marker = this.focused ? CURSOR_MARKER : "";
-			const cursorChar = `\x1b[7m${this.placeholderStyle(atCursor)}\x1b[27m`;
-			const textWithCursor = marker + cursorChar + this.placeholderStyle(afterCursor);
+			const cursorChar = this.focused
+				? CURSOR_MARKER + this.placeholderStyle(atCursor)
+				: `\x1b[7m${this.placeholderStyle(atCursor)}\x1b[27m`;
+			const textWithCursor = cursorChar + this.placeholderStyle(afterCursor);
 			const padding = " ".repeat(Math.max(0, availableWidth - visibleWidth(textWithCursor)));
 			return [this.prompt + textWithCursor + padding];
 		}
@@ -408,10 +409,8 @@ export class Input implements Component, Focusable {
 		const atCursor = cursorGrapheme?.segment ?? " ";
 		const afterCursor = visibleText.slice(cursorDisplay + atCursor.length);
 
-		const marker = this.focused ? CURSOR_MARKER : "";
-
-		const cursorChar = `\x1b[7m${atCursor}\x1b[27m`;
-		const textWithCursor = beforeCursor + marker + cursorChar + afterCursor;
+		const cursorChar = this.focused ? CURSOR_MARKER + atCursor : `\x1b[7m${atCursor}\x1b[27m`;
+		const textWithCursor = beforeCursor + cursorChar + afterCursor;
 
 		const visualLength = visibleWidth(textWithCursor);
 		const padding = " ".repeat(Math.max(0, availableWidth - visualLength));

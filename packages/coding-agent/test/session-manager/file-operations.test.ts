@@ -348,3 +348,27 @@ describe("SessionManager.sessionPrompts", () => {
 		});
 	});
 });
+
+describe("SessionManager.promptHistory", () => {
+	let tempDir: string;
+
+	beforeEach(() => {
+		tempDir = mkdtempSync(join(tmpdir(), "session-test-"));
+	});
+
+	afterEach(() => {
+		rmSync(tempDir, { recursive: true, force: true });
+	});
+
+	it("lists user prompts of every session in the cwd, most recent first", () => {
+		const first = SessionManager.create("/tmp/project-a", tempDir);
+		persistExchange(first, "first", "ok", 1000);
+		const other = SessionManager.create("/tmp/project-b", tempDir);
+		persistExchange(other, "other", "ok", 2000);
+		persistExchange(first, "second", "ok", 3000);
+		const third = SessionManager.create("/tmp/project-a", tempDir);
+		persistExchange(third, "third", "ok", 4000);
+
+		expect(SessionManager.promptHistory("/tmp/project-a", 2, tempDir)).toEqual(["third", "second"]);
+	});
+});

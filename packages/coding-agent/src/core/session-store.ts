@@ -457,6 +457,22 @@ export class SessionStore {
 		return { sessionId, cwd: session.cwd, name: session.name ?? undefined, prompts };
 	}
 
+	promptHistory(cwd: string, limit: number): string[] {
+		return this.db
+			.query<{ text: string }, [string, number]>(
+				`SELECT t.text
+				FROM sessions s
+				JOIN entries e ON e.session_id = s.id
+				JOIN entry_text t ON t.rowid = e.seq
+				WHERE s.cwd = ?
+					AND t.role = 'user'
+				ORDER BY e.seq DESC
+				LIMIT ?`,
+			)
+			.all(cwd, limit)
+			.map((row) => row.text);
+	}
+
 	sessionIdSignature(sessionId: string): string {
 		return signSessionId(this.mailboxKey, sessionId);
 	}

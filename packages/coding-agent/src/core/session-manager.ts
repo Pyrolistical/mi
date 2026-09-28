@@ -1156,6 +1156,10 @@ export class SessionManager {
 		return SessionStore.open(resolveSessionDir(sessionDir)).searchPrompts(query, limit);
 	}
 
+	static promptHistory(cwd: string, limit: number, sessionDir?: string): string[] {
+		return SessionStore.open(resolveSessionDir(sessionDir)).promptHistory(resolvePath(cwd), limit);
+	}
+
 	static sessionPrompts(sessionId: string, sessionDir?: string): SessionPrompts {
 		return SessionStore.open(resolveSessionDir(sessionDir)).sessionPrompts(sessionId);
 	}

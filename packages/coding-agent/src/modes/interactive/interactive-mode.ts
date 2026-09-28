@@ -189,6 +189,7 @@ function isUsageSessionEntry(item: RenderSessionItem): item is Extract<SessionEn
 }
 
 const DEAD_TERMINAL_ERROR_CODES = new Set(["EIO", "EPIPE", "ENOTCONN"]);
+const PROMPT_HISTORY_LIMIT = 100;
 
 function isDeadTerminalError(error: unknown): boolean {
 	if (!error || typeof error !== "object" || !("code" in error)) {
@@ -388,6 +389,7 @@ export class InteractiveMode {
 			autocompleteMaxVisible,
 			embedWorkingStatus: true,
 		});
+		this.loadPromptHistory(this.defaultEditor);
 		this.editor = this.defaultEditor;
 		this.editorContainer = new Container();
 		this.editorContainer.addChild(this.editor as Component);
@@ -1873,6 +1875,7 @@ export class InteractiveMode {
 			newEditor.onChange = this.defaultEditor.onChange;
 
 			newEditor.setText(currentText);
+			this.loadPromptHistory(newEditor);
 
 			if (newEditor.borderColor !== undefined) {
 				newEditor.borderColor = this.defaultEditor.borderColor;
@@ -2688,7 +2691,7 @@ export class InteractiveMode {
 		this.chatContainer.addChild(component);
 	}
 
-	private addMessageToChat(message: AgentMessage, options?: { populateHistory?: boolean }): void {
+	private addMessageToChat(message: AgentMessage): void {
 		switch (message.role) {
 			case "bashExecution": {
 				const component = new BashExecutionComponent(message.command, this.ui, message.excludeFromContext);
@@ -2767,9 +2770,6 @@ export class InteractiveMode {
 						);
 						this.chatContainer.addChild(userComponent);
 					}
-					if (options?.populateHistory) {
-						this.editor.addToHistory?.(textContent);
-					}
 				}
 				break;
 			}
@@ -2794,10 +2794,7 @@ export class InteractiveMode {
 		}
 	}
 
-	private renderSessionItems(
-		items: readonly RenderSessionItem[],
-		options: { updateFooter?: boolean; populateHistory?: boolean } = {},
-	): void {
+	private renderSessionItems(items: readonly RenderSessionItem[], options: { updateFooter?: boolean } = {}): void {
 		this.pendingTools.clear();
 		const renderedPendingTools = new Map<string, ToolExecutionComponent>();
 		const cacheMisses = this.settingsManager.getShowCacheMissNotices()
@@ -2870,7 +2867,7 @@ export class InteractiveMode {
 					renderedPendingTools.delete(message.toolCallId);
 				}
 			} else {
-				this.addMessageToChat(message, options);
+				this.addMessageToChat(message);
 			}
 		}
 
@@ -2880,10 +2877,7 @@ export class InteractiveMode {
 		this.ui.requestRender();
 	}
 
-	private renderSessionEntries(
-		entries: SessionEntry[],
-		options: { updateFooter?: boolean; populateHistory?: boolean } = {},
-	): void {
+	private renderSessionEntries(entries: SessionEntry[], options: { updateFooter?: boolean } = {}): void {
 		const items = entries.flatMap((entry): RenderSessionItem[] => {
 			if (entry.type === "custom" || (entry.type === "usage" && entry.kind === "cache_warm")) {
 				return [entry];
@@ -2975,10 +2969,7 @@ export class InteractiveMode {
 
 	renderInitialMessages(): void {
 		const entries = this.sessionManager.buildContextEntries();
-		this.renderSessionEntries(entries, {
-			updateFooter: true,
-			populateHistory: true,
-		});
+		this.renderSessionEntries(entries, { updateFooter: true });
 
 		const allEntries = this.sessionManager.getEntries();
 		const compactionCount = allEntries.filter((e) => e.type === "compaction").length;
@@ -3341,6 +3332,15 @@ export class InteractiveMode {
 			void this.session.abort();
 		}
 		return allQueued.length;
+	}
+
+	private loadPromptHistory(editor: EditorComponent): void {
+		const history = SessionManager.promptHistory(
+			this.sessionManager.getCwd(),
+			PROMPT_HISTORY_LIMIT,
+			this.sessionManager.getSessionDir(),
+		);
+		for (const text of history.reverse()) editor.addToHistory?.(text);
 	}
 
 	private queueCompactionMessage(text: string, mode: "steer" | "followUp"): void {

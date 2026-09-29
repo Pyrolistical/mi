@@ -94,6 +94,7 @@ export interface SimpleStreamOptions extends StreamOptions {
 	toolChoice?: ToolChoice;
 	reasoning?: ThinkingLevel;
 	thinkingBudgets?: ThinkingBudgets;
+	contextTokens?: number;
 }
 
 export type StreamFunction<TApi extends Api = Api, TOptions extends StreamOptions = StreamOptions> = (

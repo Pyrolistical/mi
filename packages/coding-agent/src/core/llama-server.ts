@@ -1,5 +1,6 @@
 import {
 	type AuthResult,
+	type CountTokensOptions,
 	createProvider,
 	type InputModality,
 	type Model,
@@ -29,8 +30,10 @@ const PropsSchema = Type.Object({
 	chat_template: Type.String(),
 	chat_template_caps: Type.Object({ supports_reasoning_effort: Type.Optional(Type.Boolean()) }),
 });
+const TokenizeSchema = Type.Object({ tokens: Type.Array(Type.Unknown()) });
 const modelListValidator = Compile(ModelListSchema);
 const propsValidator = Compile(PropsSchema);
+const tokenizeValidator = Compile(TokenizeSchema);
 
 type LlamaServerModelInfo = Static<typeof ModelListSchema>["data"][number];
 type LlamaServerProps = Static<typeof PropsSchema>;
@@ -64,6 +67,25 @@ async function getJson(url: string, apiKey: string | undefined, signal: AbortSig
 	});
 	if (!response.ok) throw new Error(`llama-server ${url} returned HTTP ${response.status}: ${await response.text()}`);
 	return response.json();
+}
+
+async function countTokens(
+	model: Model<"openai-completions">,
+	text: string,
+	options: CountTokensOptions,
+): Promise<number> {
+	const url = `${llamaServerRootUrl(model.baseUrl)}/tokenize`;
+	const response = await fetch(url, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+			...(options.apiKey ? { Authorization: `Bearer ${options.apiKey}` } : {}),
+		},
+		body: JSON.stringify({ model: model.id, content: text, add_special: false }),
+		signal: options.signal,
+	});
+	if (!response.ok) throw new Error(`llama-server ${url} returned HTTP ${response.status}: ${await response.text()}`);
+	return tokenizeValidator.Parse(await response.json()).tokens.length;
 }
 
 function toModel(
@@ -157,6 +179,7 @@ export function createLlamaServerProvider(
 		},
 		models: [],
 		fetchModels: (context) => discoverModels(providerId, rootUrl, modelIds, context.credential?.key, context.signal),
+		countTokens,
 		api: openAICompletionsApi(),
 	});
 }

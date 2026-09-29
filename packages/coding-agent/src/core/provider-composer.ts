@@ -443,6 +443,7 @@ export function composeModelProvider(
 		filterModels: base?.filterModels
 			? (models, credential: Credential | undefined) => base.filterModels!(models, credential)
 			: undefined,
+		countTokens: base?.countTokens,
 		stream: (model, context, options) => streamWith(model, context, options, false),
 		streamSimple: (model, context, options) => streamWith(model, context, options, true),
 	};

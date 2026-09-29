@@ -1993,6 +1993,10 @@ export class AgentSession {
 		env: Record<string, string> | undefined,
 		reason: "manual" | "threshold" | "overflow",
 	): Promise<CompactionResult> {
+		const provider = this._modelRuntime.getProvider(requestModel.provider);
+		const countTokens = provider?.countTokens
+			? (text: string) => provider.countTokens!(requestModel, text, { apiKey, signal })
+			: undefined;
 		return compact(
 			preparation,
 			requestModel,
@@ -2006,6 +2010,7 @@ export class AgentSession {
 			this.settingsManager.getRetrySettings(),
 			this._summarizationRetryCallbacks({ source: "compaction", reason }),
 			undefined,
+			countTokens,
 		);
 	}
 

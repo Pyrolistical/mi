@@ -83,6 +83,10 @@ export function startFakeLlamaServer(port = 0): FakeLlamaServer {
 					chat_template_caps: {},
 				});
 			}
+			if (url.pathname === "/tokenize") {
+				const { content } = (await request.json()) as { content: string };
+				return Response.json({ tokens: [...content].map((char) => char.codePointAt(0)) });
+			}
 			if (url.pathname === "/v1/chat/completions") {
 				requests.push((await request.json()) as FakeChatRequest);
 				const step = steps.shift() ?? { text: "ok" };

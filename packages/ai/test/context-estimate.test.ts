@@ -69,4 +69,12 @@ describe("context token estimation", () => {
 
 		expect(estimateContextTokens(context)).toBe(2_001);
 	});
+
+	it("clamps max tokens with the measured context tokens instead of the estimate", () => {
+		const context = normalizeContext({
+			messages: [{ role: "user", content: "x".repeat(4_000), timestamp: 100 }],
+		});
+
+		expect(buildBaseOptions(model, context, { contextTokens: 5_000 }).maxTokens).toBe(904);
+	});
 });

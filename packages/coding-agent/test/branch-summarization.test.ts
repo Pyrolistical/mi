@@ -129,7 +129,7 @@ describe("branch summarization", () => {
 		});
 
 		expect(result.error).toBe(
-			"Branch summarization failed: generation hit the token cap and the summary is incomplete",
+			"Branch summarization failed: generation hit the token cap after 0 output tokens and the summary is incomplete",
 		);
 	});
 });

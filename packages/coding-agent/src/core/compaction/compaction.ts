@@ -16,6 +16,7 @@ import type {
 	TranscriptContext,
 	Usage,
 } from "@earendil-works/pi-ai/compat";
+import { CONTEXT_SAFETY_TOKENS } from "@earendil-works/pi-ai/api/simple-options";
 import { completeSimple } from "@earendil-works/pi-ai/compat";
 import { convertToLlm } from "../messages.ts";
 import {
@@ -33,7 +34,8 @@ import {
 	type FileOperations,
 	formatFileOperations,
 	SUMMARIZATION_SYSTEM_PROMPT,
-	serializeConversation,
+	serializeConversationParts,
+	takeConversationChunk,
 } from "./utils.ts";
 
 interface CompactionDetails {
@@ -499,7 +501,7 @@ export function getSummarizationFailure(response: AssistantMessage, label: strin
 		return `${label} failed: ${response.errorMessage || "Unknown error"}`;
 	}
 	if (response.stopReason === "length") {
-		return `${label} failed: generation hit the token cap and the summary is incomplete`;
+		return `${label} failed: generation hit the token cap after ${response.usage.output} output tokens and the summary is incomplete`;
 	}
 	return undefined;
 }
@@ -556,6 +558,7 @@ export async function generateSummary(
 	retry?: RetryPolicy,
 	callbacks?: RetryCallbacks,
 	sessionId?: string,
+	countTokens?: CountTokens,
 ): Promise<string> {
 	return (
 		await generateSummaryWithUsage(
@@ -573,6 +576,7 @@ export async function generateSummary(
 			retry,
 			callbacks,
 			sessionId,
+			countTokens,
 		)
 	).text;
 }
@@ -605,25 +609,24 @@ export async function generateSummaryWithUsage(
 	retry?: RetryPolicy,
 	callbacks?: RetryCallbacks,
 	sessionId?: string,
+	countTokens?: CountTokens,
 ): Promise<{ text: string; usage: Usage }> {
 	const maxTokens = Math.min(
 		Math.floor(0.8 * reserveTokens),
 		model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY,
 	);
 
-	let basePrompt = previousSummary ? UPDATE_SUMMARIZATION_PROMPT : SUMMARIZATION_PROMPT;
-	if (customInstructions) {
-		basePrompt = `${basePrompt}\n\nAdditional focus: ${customInstructions}`;
-	}
-
-	const llmMessages = convertToLlm(currentMessages);
-	const conversationText = serializeConversation(llmMessages);
-
-	let promptText = `<conversation>\n${conversationText}\n</conversation>\n\n`;
-	if (previousSummary) {
-		promptText += `<previous-summary>\n${previousSummary}\n</previous-summary>\n\n`;
-	}
-	promptText += basePrompt;
+	const buildPrompt = (conversationText: string, summary: string | undefined): string => {
+		let basePrompt = summary ? UPDATE_SUMMARIZATION_PROMPT : SUMMARIZATION_PROMPT;
+		if (customInstructions) {
+			basePrompt = `${basePrompt}\n\nAdditional focus: ${customInstructions}`;
+		}
+		let promptText = `<conversation>\n${conversationText}\n</conversation>\n\n`;
+		if (summary) {
+			promptText += `<previous-summary>\n${summary}\n</previous-summary>\n\n`;
+		}
+		return promptText + basePrompt;
+	};
 
 	const completionOptions = createSummarizationOptions(
 		model,
@@ -636,26 +639,90 @@ export async function generateSummaryWithUsage(
 		sessionId,
 	);
 
-	const response = await completeSummarization(
+	return summarizeInChunks(
+		"Summarization",
+		serializeConversationParts(convertToLlm(currentMessages)),
 		model,
-		buildSummarizationContext(promptText),
-		completionOptions,
-		streamFn,
-		retry,
-		callbacks,
+		maxTokens,
+		countTokens,
+		previousSummary,
+		buildPrompt,
+		(promptText, promptTokens) =>
+			completeSummarization(
+				model,
+				buildSummarizationContext(promptText),
+				{ ...completionOptions, contextTokens: promptTokens },
+				streamFn,
+				retry,
+				callbacks,
+			),
 	);
+}
 
-	const failure = getSummarizationFailure(response, "Summarization");
-	if (failure) {
-		throw new Error(failure);
+export type CountTokens = (text: string) => Promise<number>;
+
+const INITIAL_CHARS_PER_TOKEN = 4;
+const CHUNK_SHRINK_FACTOR = 0.9;
+
+async function takeFittingChunk(
+	parts: string[],
+	roomTokens: number,
+	charsPerToken: number,
+	countTokens: CountTokens,
+): Promise<{ text: string; rest: string[]; tokens: number; charsPerToken: number }> {
+	for (;;) {
+		const chunk = takeConversationChunk(parts, Math.floor(roomTokens * charsPerToken));
+		const tokens = await countTokens(chunk.text);
+		if (tokens <= roomTokens) {
+			return { ...chunk, tokens, charsPerToken: tokens > 0 ? chunk.text.length / tokens : charsPerToken };
+		}
+		charsPerToken = (chunk.text.length / tokens) * CHUNK_SHRINK_FACTOR;
 	}
-	if (response.content.some((block) => block.type === "toolCall")) {
-		throw new Error("Summarization attempted to call a tool");
-	}
+}
 
-	const textContent = contentText(response.content);
-
-	return { text: textContent, usage: response.usage };
+async function summarizeInChunks(
+	label: string,
+	parts: string[],
+	model: Model<any>,
+	maxTokens: number,
+	countTokens: CountTokens | undefined,
+	previousSummary: string | undefined,
+	buildPrompt: (conversationText: string, summary: string | undefined) => string,
+	request: (promptText: string, promptTokens: number | undefined) => Promise<AssistantMessage>,
+): Promise<{ text: string; usage: Usage }> {
+	let rest = parts;
+	let summary = previousSummary;
+	let usage: Usage | undefined;
+	let charsPerToken = INITIAL_CHARS_PER_TOKEN;
+	do {
+		let chunk: { text: string; rest: string[] };
+		let promptTokens: number | undefined;
+		if (countTokens && model.contextWindow > 0) {
+			const overheadTokens = await countTokens(SUMMARIZATION_SYSTEM_PROMPT + buildPrompt("", summary));
+			const roomTokens = model.contextWindow - maxTokens - overheadTokens - CONTEXT_SAFETY_TOKENS;
+			if (roomTokens <= 0) {
+				throw new Error(`${label} failed: the summarization prompt does not fit in the model context window`);
+			}
+			const fitted = await takeFittingChunk(rest, roomTokens, charsPerToken, countTokens);
+			charsPerToken = fitted.charsPerToken;
+			promptTokens = overheadTokens + fitted.tokens;
+			chunk = fitted;
+		} else {
+			chunk = takeConversationChunk(rest, Number.POSITIVE_INFINITY);
+		}
+		const response = await request(buildPrompt(chunk.text, summary), promptTokens);
+		const failure = getSummarizationFailure(response, label);
+		if (failure) {
+			throw new Error(failure);
+		}
+		if (response.content.some((block) => block.type === "toolCall")) {
+			throw new Error(`${label} attempted to call a tool`);
+		}
+		summary = contentText(response.content);
+		usage = usage ? combineUsage(usage, response.usage) : response.usage;
+		rest = chunk.rest;
+	} while (rest.length > 0);
+	return { text: summary, usage };
 }
 
 export interface CompactionPreparation {
@@ -824,6 +891,21 @@ Create a concise checkpoint of the user's request and the progress shown above. 
 
 Only summarize information explicitly present above. Do not infer or recreate later messages.`;
 
+const TURN_PREFIX_UPDATE_SUMMARIZATION_PROMPT = `The messages above continue earlier context from an ongoing conversation. The earlier part of this context is checkpointed in <previous-checkpoint> tags. Later messages are stored separately and do not need to be reconstructed.
+
+Update the checkpoint with the user's request and the progress shown above. PRESERVE all information from the previous checkpoint and use the same format:
+
+## Original Request
+[What did the user ask for?]
+
+## Progress So Far
+- [Key decisions and work completed in the previous checkpoint and these messages]
+
+## Context Needed to Continue
+- [Information from the previous checkpoint and these messages needed to understand the later work]
+
+Only summarize information explicitly present above or in the previous checkpoint. Do not infer or recreate later messages.`;
+
 export async function compact(
 	preparation: CompactionPreparation,
 	model: Model<any>,
@@ -837,6 +919,7 @@ export async function compact(
 	retry?: RetryPolicy,
 	callbacks?: RetryCallbacks,
 	sessionId?: string,
+	countTokens?: CountTokens,
 ): Promise<CompactionResult> {
 	const {
 		firstKeptEntryId,
@@ -871,6 +954,7 @@ export async function compact(
 				retry,
 				callbacks,
 				sessionId,
+				countTokens,
 			);
 			historyText = historyResult.text;
 			historyUsage = historyResult.usage;
@@ -888,6 +972,7 @@ export async function compact(
 			retry,
 			callbacks,
 			sessionId,
+			countTokens,
 		);
 		summary = `${historyText}\n\n---\n\n**Turn Context (split turn):**\n\n${turnPrefixResult.text}`;
 		summaryUsage = historyUsage ? combineUsage(historyUsage, turnPrefixResult.usage) : turnPrefixResult.usage;
@@ -907,6 +992,7 @@ export async function compact(
 			retry,
 			callbacks,
 			sessionId,
+			countTokens,
 		);
 		summary = result.text;
 		summaryUsage = result.usage;
@@ -941,34 +1027,43 @@ async function generateTurnPrefixSummary(
 	retry?: RetryPolicy,
 	callbacks?: RetryCallbacks,
 	sessionId?: string,
+	countTokens?: CountTokens,
 ): Promise<{ text: string; usage: Usage }> {
 	const maxTokens = Math.min(
 		Math.floor(0.5 * reserveTokens),
 		model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY,
 	);
-	const llmMessages = convertToLlm(messages);
-	const conversationText = serializeConversation(llmMessages);
-	const promptText = `# Conversation\n${conversationText}\n\n# Instructions\n${TURN_PREFIX_SUMMARIZATION_PROMPT}`;
-
-	const response = await completeSummarization(
+	const buildPrompt = (conversationText: string, checkpoint: string | undefined): string =>
+		checkpoint
+			? `# Conversation\n${conversationText}\n\n<previous-checkpoint>\n${checkpoint}\n</previous-checkpoint>\n\n# Instructions\n${TURN_PREFIX_UPDATE_SUMMARIZATION_PROMPT}`
+			: `# Conversation\n${conversationText}\n\n# Instructions\n${TURN_PREFIX_SUMMARIZATION_PROMPT}`;
+	const completionOptions = createSummarizationOptions(
 		model,
-		buildSummarizationContext(promptText),
-		createSummarizationOptions(model, maxTokens, apiKey, headers, env, signal, thinkingLevel, sessionId),
-		streamFn,
-		retry,
-		callbacks,
+		maxTokens,
+		apiKey,
+		headers,
+		env,
+		signal,
+		thinkingLevel,
+		sessionId,
 	);
 
-	const failure = getSummarizationFailure(response, "Turn prefix summarization");
-	if (failure) {
-		throw new Error(failure);
-	}
-	if (response.content.some((block) => block.type === "toolCall")) {
-		throw new Error("Turn prefix summarization attempted to call a tool");
-	}
-
-	return {
-		text: contentText(response.content),
-		usage: response.usage,
-	};
+	return summarizeInChunks(
+		"Turn prefix summarization",
+		serializeConversationParts(convertToLlm(messages)),
+		model,
+		maxTokens,
+		countTokens,
+		undefined,
+		buildPrompt,
+		(promptText, promptTokens) =>
+			completeSummarization(
+				model,
+				buildSummarizationContext(promptText),
+				{ ...completionOptions, contextTokens: promptTokens },
+				streamFn,
+				retry,
+				callbacks,
+			),
+	);
 }

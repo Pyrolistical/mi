@@ -64,6 +64,11 @@ export interface ModelsRequestTransforms {
 export type ModelsApiStreamOptions<TApi extends Api> = ApiStreamOptions<TApi> & ModelsRequestTransforms;
 export type ModelsSimpleStreamOptions = SimpleStreamOptions & ModelsRequestTransforms;
 
+export interface CountTokensOptions {
+	apiKey?: string;
+	signal?: AbortSignal;
+}
+
 export interface Provider<TApi extends Api = Api> {
 	readonly id: string;
 	readonly name: string;
@@ -78,6 +83,8 @@ export interface Provider<TApi extends Api = Api> {
 	refreshModels?(context: RefreshModelsContext): Promise<void>;
 
 	filterModels?(models: readonly Model<TApi>[], credential: Credential | undefined): readonly Model<TApi>[];
+
+	countTokens?(model: Model<TApi>, text: string, options: CountTokensOptions): Promise<number>;
 
 	stream<T extends TApi>(
 		model: Model<T>,
@@ -553,6 +560,7 @@ export interface CreateProviderOptions<TApi extends Api = Api> {
 	models: readonly Model<TApi>[];
 	fetchModels?: (context: RefreshModelsContext) => Promise<readonly Model<TApi>[]>;
 	filterModels?: (models: readonly Model<TApi>[], credential: Credential | undefined) => readonly Model<TApi>[];
+	countTokens?: (model: Model<TApi>, text: string, options: CountTokensOptions) => Promise<number>;
 	api: ProviderStreams | Partial<Record<TApi, ProviderStreams>>;
 }
 
@@ -627,6 +635,7 @@ export function createProvider<TApi extends Api = Api>(input: CreateProviderOpti
 				}
 			: undefined,
 		filterModels: input.filterModels,
+		countTokens: input.countTokens,
 		stream: (model, context, options) => dispatch(model, (streams) => streams.stream(model, context, options)),
 		streamSimple: (model, context, options) =>
 			dispatch(model, (streams) => streams.streamSimple(model, context, options)),

@@ -203,4 +203,36 @@ describe("llama-server models.json api", () => {
 			["qwen", "openai-completions", 32768],
 		]);
 	});
+
+	it("counts tokens with the model's /tokenize endpoint", async () => {
+		const tokenizeRequests: { authorization: string | undefined; body: unknown }[] = [];
+		const url = await listen(async (request, response) => {
+			if (request.url === "/v1/models") {
+				json(response, { data: [{ id: "qwen" }] });
+				return;
+			}
+			if (request.url === "/tokenize") {
+				let body = "";
+				for await (const chunk of request) body += chunk;
+				tokenizeRequests.push({ authorization: request.headers.authorization, body: JSON.parse(body) });
+				json(response, { tokens: [9707, 1879, 0] });
+				return;
+			}
+			json(response, {
+				default_generation_settings: { n_ctx: 32768 },
+				modalities: { vision: false, video: false },
+				chat_template: "",
+				chat_template_caps: {},
+			});
+		});
+		const runtime = await createRuntime({ local: { baseUrl: `${url}/v1` } });
+		const model = runtime.getModel("local", "qwen")!;
+
+		const tokens = await runtime.getProvider("local")!.countTokens!(model, "hello world!", { apiKey: "secret" });
+
+		expect(tokens).toBe(3);
+		expect(tokenizeRequests).toEqual([
+			{ authorization: "Bearer secret", body: { model: "qwen", content: "hello world!", add_special: false } },
+		]);
+	});
 });

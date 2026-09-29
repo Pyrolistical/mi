@@ -9,12 +9,17 @@ import type {
 } from "../types.ts";
 import { estimateContextTokens } from "../utils/estimate.ts";
 
-const CONTEXT_SAFETY_TOKENS = 4096;
+export const CONTEXT_SAFETY_TOKENS = 4096;
 const MIN_MAX_TOKENS = 1;
 
-export function clampMaxTokensToContext(model: Model<Api>, context: TranscriptContext, maxTokens: number): number {
+export function clampMaxTokensToContext(
+	model: Model<Api>,
+	context: TranscriptContext,
+	maxTokens: number,
+	contextTokens = estimateContextTokens(context),
+): number {
 	if (model.contextWindow <= 0) return Math.max(MIN_MAX_TOKENS, maxTokens);
-	const available = model.contextWindow - estimateContextTokens(context) - CONTEXT_SAFETY_TOKENS;
+	const available = model.contextWindow - contextTokens - CONTEXT_SAFETY_TOKENS;
 	return Math.min(maxTokens, Math.max(MIN_MAX_TOKENS, available));
 }
 
@@ -27,7 +32,7 @@ export function buildBaseOptions(
 	return {
 		temperature: options?.temperature,
 		samplingParams: options?.samplingParams,
-		maxTokens: clampMaxTokensToContext(model, context, options?.maxTokens ?? model.maxTokens),
+		maxTokens: clampMaxTokensToContext(model, context, options?.maxTokens ?? model.maxTokens, options?.contextTokens),
 		signal: options?.signal,
 		apiKey: apiKey || options?.apiKey,
 		fetch: options?.fetch,

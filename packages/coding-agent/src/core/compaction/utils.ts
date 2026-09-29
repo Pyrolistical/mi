@@ -71,7 +71,13 @@ function truncateForSummary(text: string, maxChars: number): string {
 	return `${text.slice(0, maxChars)}\n\n[... ${truncatedChars} more characters truncated]`;
 }
 
+const CONVERSATION_PART_SEPARATOR = "\n\n";
+
 export function serializeConversation(messages: Message[]): string {
+	return serializeConversationParts(messages).join(CONVERSATION_PART_SEPARATOR);
+}
+
+export function serializeConversationParts(messages: Message[]): string[] {
 	const parts: string[] = [];
 
 	for (const msg of messages) {
@@ -111,7 +117,22 @@ export function serializeConversation(messages: Message[]): string {
 		}
 	}
 
-	return parts.join("\n\n");
+	return parts;
+}
+
+export function takeConversationChunk(parts: string[], maxChars: number): { text: string; rest: string[] } {
+	const [first, ...others] = parts;
+	if (first === undefined) return { text: "", rest: [] };
+	if (first.length > maxChars) return { text: first.slice(0, maxChars), rest: [first.slice(maxChars), ...others] };
+	let text = first;
+	let taken = 1;
+	for (const part of others) {
+		const next = text + CONVERSATION_PART_SEPARATOR + part;
+		if (next.length > maxChars) break;
+		text = next;
+		taken++;
+	}
+	return { text, rest: parts.slice(taken) };
 }
 
 export const SUMMARIZATION_SYSTEM_PROMPT = `You are a context summarization assistant. Your task is to read a conversation between a user and an AI assistant, then produce a structured summary following the exact format specified.
